@@ -1,0 +1,6 @@
+{
+  "name": "stage0-probe",
+  "version": "0.0.1",
+  "author": { "name": "DelOps" },
+  "description": "Throwaway plugin for the stage-0 runtime probes in tests/stage0/README.md. Loaded for the probes only, never beside a client record, and removed when stage 0 is done."
+}

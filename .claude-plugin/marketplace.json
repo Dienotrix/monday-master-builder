@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "delops",
+  "description": "The DelOps plugin marketplace. One plugin: monday Master Builder.",
+  "owner": {
+    "name": "DelOps"
+  },
+  "plugins": [
+    {
+      "name": "monday-master-builder",
+      "description": "Runs a monday.com consulting engagement from the first call to a signed-off, documented solution in the client's own account: call and document intake, discovery grading, solution blueprint, an approved account build with read-back on every write, an independent audit, demo scripts, a progressive SOP and a two-level close-out, all from one record per client.",
+      "author": {
+        "name": "DelOps"
+      },
+      "source": "./plugins/monday-master-builder"
+    }
+  ]
+}

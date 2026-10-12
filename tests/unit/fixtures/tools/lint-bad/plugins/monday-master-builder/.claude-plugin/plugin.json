@@ -1,0 +1,6 @@
+{
+  "name": "monday-master-builder",
+  "displayName": "monday Master Builder",
+  "version": "0.0.0",
+  "description": "A synthetic manifest for the lint fixture with deliberate faults elsewhere."
+}

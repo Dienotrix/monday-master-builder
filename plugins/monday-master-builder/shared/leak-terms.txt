@@ -1,0 +1,198 @@
+# shared/leak-terms.txt
+# The global denylist read by scripts/leak_lint.py (ARCHITECTURE 9.6). It holds the
+# terms that must never reach client-facing material: the consultancy's name in its
+# renderings, the plugin and assistant names, method vocabulary, pain and record ids,
+# evidence markers and id patterns. Client-derived figures, quotes, objection text,
+# stakeholder assessments and other clients' names are per-record and are built by the
+# lint from the record, not listed here. Reserved monday column ids are not leak terms;
+# they live in native-objects.md.
+#
+# Where this file applies: planned names at the blueprint stage; every monday text payload
+# before its write; everything in drafts/, sop/ and deliverables/; the text and document
+# properties of rendered Word and PDF files; the doc-copy text read back; live object names
+# during the audit; and SUMMARY.md under the copied-run and quote-length rules. Internal
+# files (the record, shared/, skills) legitimately contain these terms.
+#
+# Syntax. One term per line. A line starting with # is a comment; blank lines are ignored.
+#   term               a literal, matched case-insensitively wherever the characters on
+#                      either side are not letters or digits
+#   class: <name>      every line below, until the next class:, belongs to this class,
+#                      and the lint reports the class beside each hit
+#   re: <pattern>      a Python regular expression, matched case-insensitively
+#   phonetic: <term>   the term is also matched by the phonetic-variant rule of 9.6,
+#                      which catches renderings this list does not spell out
+#   whitelist: <term>  a legitimate use the phonetic rule directly above it never blocks;
+#                      the test suite asserts no false positive on it
+# The per-client allowlist may clear a row of class method only. Rows of every other class
+# are never cleared by an allowlist (9.6). A term that is also the client's own vocabulary
+# survives with a caution rather than being removed.
+
+class: firm
+# The consultancy, in the renderings a transcript or a document property might carry.
+# The firm's name is a near-homophone of a common word, so the phonetic rule carries the
+# renderings this list cannot enumerate, and the whitelist keeps the ordinary word usable.
+phonetic: delops
+whitelist: develops
+whitelist: devops
+whitelist: dev ops
+del ops
+del-ops
+dell ops
+delops.dev
+# The GitHub owner of the archive repositories.
+dienotrix
+
+class: plugin
+monday master builder
+master builder
+monday-master-builder
+re: \bMMB\b
+re: \bmmb_[a-z]+\b
+MMB_HOME
+
+class: assistant
+claude
+claude code
+cowork
+anthropic
+
+class: method
+# Internal vocabulary (method 0 and 7). "callback" and "seed" are ordinary words a client
+# may use; a per-client allowlist row keeps them with a caution, never silently.
+bleed
+upside
+callback
+exit ramp
+exit-ramp
+seed data
+seed row
+seed rows
+readiness
+excavated
+discovery rubric
+discovery readiness
+gap question
+gap questions
+gate status
+stage gate
+stage gates
+verdict
+discovery complete
+nearly ready
+not ready
+fit risk
+fit question
+support-call check
+short support-call instrument
+confirmation ledger
+named check-in
+open check-in
+structure inventory
+skipped-step map
+cost-of-waiting
+cost of waiting
+deadline anchor
+commitment question
+run-sheet
+prep block
+if-asked list
+numbers we do not have
+never-say
+claims store
+claims ledger
+deferred-answer register
+client-safe block
+change table
+approval card
+strand
+met-with-residual
+not-obtainable
+# Criterion names R1 to R12, the five gates and the per-pain check names, as the fixtures
+# spell them (sales-method.md is the home of the list; this file blocks them).
+current state mapped
+pain made concrete
+why now
+bleed number
+upside number
+desired outcome
+decision process mapped
+priority and timing
+blockers surfaced
+next step committed
+solution confirmed
+scope agreed verbally
+solution blueprint
+first demo (v0.1)
+pricing or proposal prep
+v1.0 sign-off
+# Grades and check names are ordinary words on their own; they are blocked only beside a
+# criterion, pain or check id or another grade, in either order.
+re: \b(Met|Partial|Missing)\b[^\n]{0,40}\b(R1[0-2]|R[1-9]|P\d{1,2})\b
+re: \b(R1[0-2]|R[1-9]|P\d{1,2})\b[^\n]{0,40}\b(Met|Partial|Missing)\b
+re: \b(Stated|Concrete|Workaround|Reach|Cost inputs|Trajectory)\b\s*[:=—–-]\s*(Met|Partial|Missing|advisory)\b
+
+class: pain-ids
+# Record ids: pains P#, numbers N#, stakeholders S# (also source keys), objections O#,
+# commitments C#, criteria R1 to R12. Known collision: an IT service desk client may write
+# "P1" for an incident priority; the lint blocks it and the user decides in the record.
+# Support tiers written L1 and L2 are kept clear by the citation regex in class markers.
+re: \bP\d{1,2}\b
+re: \bN\d{1,2}\b
+re: \bS\d{1,2}\b
+re: \bO\d{1,2}\b
+re: \bC\d{1,2}\b
+re: \bR(1[0-2]|[1-9])\b
+# Element keys outside a strand (001:B1), and fully qualified versions (001/v0.1).
+re: \b\d{3}:(W|F|B|D|DB|A|PF|PJ|U|SOP)\d*(\.(G|C|V|FM|W)\d+|\.SUB|\.doc)?\b
+re: \b\d{3}/v\d+\.\d+\b
+
+class: markers
+# The eight evidence markers of 7.5, the method's two names for them, the status markers,
+# transcript artefact markers, and citation locations.
+[Q]
+[Q?]
+[Q/side]
+[Q/recon]
+[Q/doc]
+[X]
+[E]
+[I]
+[found]
+[inferred]
+[pre-read]
+[unpriced]
+[inaudible]
+[laughs]
+[crosstalk]
+re: \[(live|doc)\b[^\]]*\]
+re: @\d{2}:\d{2}:\d{2}\b
+re: \bcues? \d+(-\d+)?\b
+re: \bL\d{2,4}(-\d{1,4})?\b
+
+class: id-patterns
+# Record paths, HTML comments, raw monday ids of eight or more digits outside links, hashes
+# and the design's own tags. The lint strips URLs before this class runs, so an id inside a
+# link is exempt (9.6). Paths are regexes because a path may be followed by a digit.
+re: ~/DelOps/
+re: \bclients/[a-z0-9-]+/
+re: \.work/
+re: \bcalls/
+re: \bstrands/
+re: \binputs/
+re: \b\d{3}-[a-z0-9-]{1,24}/
+CLIENT.md
+STRAND.md
+SUMMARY.md
+discovery.md
+blueprint.md
+log.md
+account.json
+build.json
+live-map.md
+re: <!--
+re: (?<![\w/=?&#.-])\d{8,}(?![\w-])
+re: \b[0-9a-f]{64}\b
+re: \b(G|S0|U|V)-\d{1,2}\b
+re: \bP-\d{1,2}\b
+re: \[A\d{1,2}(-\d)?\]
+re: \[L1[4-8]\]

@@ -1,0 +1,19 @@
+# monday Master Builder repository.
+#
+# Only scratch and generated files are ignored. tests/ and tools/ are tracked:
+# they never ship with the plugin, but they are part of the repository.
+
+# Per-record scratch (ARCHITECTURE 7.1): leases, backups, intake reports,
+# rendered output, script copies. Never archived and never shipped. Fixture
+# record trees under tests/ keep theirs, because record.py check and the hook
+# guard are tested against synthetic lock files.
+.work/
+!tests/**/.work/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# macOS
+.DS_Store
