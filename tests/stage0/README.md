@@ -70,7 +70,7 @@ Changes WP13. Matters most because it decides whether the README may describe th
 
 ### S0-13 · Is `gh` present and signed in? — Claude Code on the Mac
 Type in a Mac terminal: `command -v gh && gh auth status`
-Yes: a path prints and the status shows the Dienotrix account logged in. No: `gh` missing or not logged in. Neither Cowork shell has `gh` (`cowork-capabilities.md` §8), which is why the archive runs on the Mac.
+Yes: a path prints and the status shows the user's account logged in. No: `gh` missing or not logged in. Neither Cowork shell has `gh` (`cowork-capabilities.md` §8), which is why the archive runs on the Mac.
 Changes WP12. Default on no: `archive_check.py prepare` still runs, the repo is created by hand or the push goes over HTTPS, and the local folder is never moved to the Trash until the clone compare passes (A§13).
 
 ### S0-14 · Can a PreToolUse hook read `tool_input`, raw GraphQL text included? — Claude Code on the Mac first, then Cowork; probe plugin loaded

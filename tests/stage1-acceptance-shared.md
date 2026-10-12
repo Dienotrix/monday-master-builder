@@ -250,7 +250,7 @@ At six words the scan reports nine runs (five in `monday-gotchas.md`, two in `na
 - `grep -n -i -w "consultant\|consultants" shared/*`: no match.
 - All-caps words of three or more letters outside code spans, with acronyms and enum values removed: `NOT` (line 104), `DON'T` (two headings), `ARCHITECTURE` (a document name), the rule ids `R-A` to `R-K`. Nothing else.
 - Capitalised word pairs shaped like a personal name, outside code spans, after removing ordinary title-case pairs: one, `Submission Viewer`, which is part of the platform's own view name "WorkForms Submission Viewer" in G-52.
-- A hand list of every organisation, person, place and product name in the 25 fixtures and in the design's examples, plus the user's name and the firm's names: the only hits are the firm's monday slug and account id in `sandbox-accounts.txt` and the firm's renderings in `leak-terms.txt`, both by design (note 9), and `Dienotrix` as the archive repository owner in `record-map.md` line 69, which A8 names.
+- A hand list of every organisation, person, place and product name in the 25 fixtures and in the design's examples, plus the user's name and the firm's names: the only hits are the firm's monday slug and account id in `sandbox-accounts.txt` and the firm's renderings in `leak-terms.txt`, both by design (note 9), and the user's GitHub handle as the archive repository owner in `record-map.md` line 69, since removed (D6, 2026-10-13).
 - Pronouns: no `he`, `she`, `his`, `her` or `him` in any of the nine files.
 
 ## 8. Notes

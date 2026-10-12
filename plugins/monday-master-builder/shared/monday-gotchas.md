@@ -394,7 +394,7 @@ Claim: `permissions` returned `"everyone"` on a native CRM board and on an ordin
 
 ## Never say
 
-A claims block, not a gotcha: the per-entry fields above do not apply to it. `demo-script` reads it at generation (A§3.5) and `house-style.md` links its DON'T list here; `call-intake` uses it when it writes the deferred-answer register. Each row is a claims rule tied to the probe evidence behind it, with the sentence that replaces the claim. Rows 8 to 12 are the five the calibration added (`REAL-CALL-LESSONS.md` C51); rows 13 to 15 are its three companion rules that name this file (C46, C92, C101).
+A claims block, not a gotcha: the per-entry fields above do not apply to it. `demo-script` reads it at generation (A§3.5) and `deferred/shared/house-style.md` (v2, not shipped) links its DON'T list here; `call-intake` uses it when it writes the deferred-answer register. Each row is a claims rule tied to the probe evidence behind it, with the sentence that replaces the claim. Rows 8 to 12 are the five the calibration added (`REAL-CALL-LESSONS.md` C51); rows 13 to 15 are its three companion rules that name this file (C46, C92, C101).
 
 1. Never describe a multi-object asynchronous setup as a one-time mapping. Instead: name the boards a portfolio or project creates, that they arrive seconds later, and that connecting deletes one of them [G-71, G-72, G-77].
 2. Never promise a dashboard or a view as working when its widgets cannot be read back. Instead: "the settings were accepted; someone looks at it before we call it done" [G-11, G-89, G-90].

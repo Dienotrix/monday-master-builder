@@ -1,11 +1,12 @@
 # shared/leak-terms.txt
 # The global denylist read by scripts/leak_lint.py (ARCHITECTURE 9.6). It holds the
-# terms that must never reach client-facing material: the consultancy's name in its
-# renderings, the plugin and assistant names, method vocabulary, pain and record ids,
-# evidence markers and id patterns. Client-derived figures, quotes, objection text,
-# stakeholder assessments and other clients' names are per-record and are built by the
-# lint from the record, not listed here. Reserved monday column ids are not leak terms;
-# they live in native-objects.md.
+# terms that must never reach client-facing material: the plugin and assistant names,
+# method vocabulary, pain and record ids, evidence markers and id patterns. The user's own
+# firm name and its renderings are per user and come from local/leak-terms.txt under
+# MMB_HOME, in this same syntax (see class: firm below). Client-derived figures, quotes,
+# objection text, stakeholder assessments and other clients' names are per-record and are
+# built by the lint from the record, not listed here. Reserved monday column ids are not
+# leak terms; they live in native-objects.md.
 #
 # Where this file applies: planned names at the blueprint stage; every monday text payload
 # before its write; everything in drafts/, sop/ and deliverables/; the text and document
@@ -28,19 +29,14 @@
 # survives with a caution rather than being removed.
 
 class: firm
-# The consultancy, in the renderings a transcript or a document property might carry.
-# The firm's name is a near-homophone of a common word, so the phonetic rule carries the
-# renderings this list cannot enumerate, and the whitelist keeps the ordinary word usable.
-phonetic: delops
-whitelist: develops
-whitelist: devops
-whitelist: dev ops
-del ops
-del-ops
-dell ops
-delops.dev
-# The GitHub owner of the archive repositories.
-dienotrix
+# Empty on purpose. The user's own firm name and its renderings (the spellings, the domain,
+# the near-homophones a transcript or a document property might carry, with any phonetic:
+# rule and the whitelist: lines that keep an ordinary word usable) come from
+# local/leak-terms.txt under MMB_HOME, which the first-run walkthrough writes from the firm
+# name in local/settings.json. Nothing user-specific ships in this file (plan decision D24,
+# A22), so the plugin works for whoever uses it. The user's other identifiers (the GitHub
+# account, monday account names and slugs) are not leak terms here either;
+# local/settings.json and local/sandbox-accounts.txt hold them.
 
 class: plugin
 monday master builder

@@ -98,7 +98,7 @@ plugins/.../shared/leak-terms.txt:31:  # The consultancy, in the renderings ...
 plugins/.../shared/safety.md:83:       ... the consultancy, plugin and assistant names; ...
 ```
 
-Personal names: a grep for the user's names, the Mac account name and the fixture's planted name found nothing under `plugins/`; the planted fictional name appears only in `tests/unit/fixtures/tools/lint-bad/` and in `tests/unit/test_lint_plugin.py`, where it is the test's own input. Every capitalised word pair in `plugins/` is a monday object, a product name or a heading (`Sales Targets`, `Service Contacts`, `Demo Build`, `Claude Code`, and so on). A word-bounded scan for `he`, `his`, `him`, `she`, `hers`, `himself`, `herself` over every `.md`, `.txt`, `.py`, `.json` and `.sh` file in the repo found nothing. `Dienotrix` appears in `plugin.json` (the `repository` field) and `record-map.md:69` (the archive repo naming), both placed by the design (A§2, A§7.1), and in the two stage-0 files where the design itself names the `gh` account. `DelOps` appears as the manifest author (A§2), as denylist entries in `leak-terms.txt`, and as the `~/DelOps` default root in `record-map.md:65` (A§5.3).
+Personal names: a grep for the user's names, the Mac account name and the fixture's planted name found nothing under `plugins/`; the planted fictional name appears only in `tests/unit/fixtures/tools/lint-bad/` and in `tests/unit/test_lint_plugin.py`, where it is the test's own input. Every capitalised word pair in `plugins/` is a monday object, a product name or a heading (`Sales Targets`, `Service Contacts`, `Demo Build`, `Claude Code`, and so on). A word-bounded scan for `he`, `his`, `him`, `she`, `hers`, `himself`, `herself` over every `.md`, `.txt`, `.py`, `.json` and `.sh` file in the repo found nothing. The user's GitHub handle appeared in `plugin.json` (the `repository` field) and `record-map.md:69` (the archive repo naming), both placed by the design (A§2, A§7.1), and in the two stage-0 files where the design itself named the `gh` account; on 2026-10-13 it was removed from every file except `plugin.json`, where it names the publisher (D6). `DelOps` appears as the manifest author (A§2), as denylist entries in `leak-terms.txt`, and as the `~/DelOps` default root in `record-map.md:65` (A§5.3).
 
 ---
 
@@ -130,7 +130,7 @@ Personal names: a grep for the user's names, the Mac account name and the fixtur
 | C22 | WP16 | the personal-name check exercised on the real tree | not checked | no `personal-names-index.json` under `~/DelOps`, so the lint warned and skipped; the hand sweep in 1.5 stands in for it |
 | C23 | WP0 | `.gitignore` keeps `tests/` and `tools/`, drops `.work/` | pass | 1.4 |
 | C24 | sweep | no "consultant" in a shipped file | pass | 1.5 |
-| C25 | sweep | no personal name in a shipped file (A12) | pass | 1.5; see note 10 on `Dienotrix` |
+| C25 | sweep | no personal name in a shipped file (A12) | pass | 1.5; see note 10 on the GitHub handle |
 
 ---
 
@@ -155,7 +155,7 @@ Personal names: a grep for the user's names, the Mac account name and the fixtur
 7. **Placeholders and a stray file inside the plugin folder.** `agents/`, `hooks/`, `scripts/`, `skills/`, `shared/` and both `templates/` folders hold a `.gitkeep`; `shared/.gitkeep` is already redundant. `plugins/monday-master-builder/.DS_Store` is on disk. Git ignores the second and keeps the first; an uploaded folder carries both. Neither is in A§2's file list.
 8. **Probe leftovers are not ignored.** `probe-plugin/hook-dump.jsonl` and `stage0-probe.docx` exist only while a probe runs, and the README asks the user to delete them; a line in `.gitignore` would make a forgotten one harmless.
 9. **Adjacent words, for the user's judgment.** "consultancy" three times in `leak-terms.txt` and `safety.md` (where it names the thing the denylist protects) and "consulting engagement" in both manifest descriptions. Neither is the word the lint refuses, and A12's target is the person, not the trade; the user may still want "the user's" or "the firm's" there.
-10. **`Dienotrix` in two shipped files** (`plugin.json` `repository`, `record-map.md:69`). Placed by the design (A§2, A§7.1) and a GitHub account name rather than a personal name in A12's sense; recorded here so it is a decision and not an oversight. The stage-0 files name it too, as `BUILD-PLAN.md` does for S0-13.
+10. **The user's GitHub handle in two shipped files** (`plugin.json` `repository`, `record-map.md:69`). Placed by the design (A§2, A§7.1) and a GitHub account name rather than a personal name in A12's sense; recorded here so it is a decision and not an oversight. The stage-0 files named it too, as `BUILD-PLAN.md` did for S0-13. Closed 2026-10-13 (D6): the handle is each user's own configuration and was removed from every file; only `plugin.json` keeps the plugin's own repository address, which names the publisher.
 11. **Loading the probe plugin in Cowork.** The README offers "add it as a marketplace, or upload the folder". A marketplace add needs a `.claude-plugin/marketplace.json` at the path given, and `probe-plugin/` has only a `plugin.json`; the repo's own marketplace lists the product plugin alone, as A§2 requires. "Upload the folder" is the route that matches what exists. The probe plugin itself passes `validate --strict` (1.1).
 
 ---

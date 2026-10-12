@@ -1,28 +1,12 @@
 # tools/
 
-Repo-only release tooling (BUILD-PLAN WP16). Nothing here ships with the plugin. Standard library only, Python 3.9 and later. Tests live in `tests/unit/test_cleanroom_scan.py` and `tests/unit/test_lint_plugin.py`, with synthetic fixtures under `tests/unit/fixtures/tools/`.
+Repo-only release tooling (BUILD-PLAN WP16). Nothing here ships with the plugin. Standard library only, Python 3.9 and later. Tests live in `tests/unit/test_lint_plugin.py`, with synthetic fixtures under `tests/unit/fixtures/tools/`.
 
-## `cleanroom_scan.py` (release check 8)
+## `cleanroom_scan.py` (release check 8)## The clean-room scan (retired 2026-10-13)
 
-Finds any run of eight or more consecutive prose words that appears both in the plugin tree and in a set of quarantined files, and reports the file, the line and the run.
+`cleanroom_scan.py`, its tests and their fixtures were retired on 2026-10-13 (stage 1b plan, decision D6). It compared the plugin tree against a quarantined corpus for any run of eight or more consecutive prose words, and that corpus no longer exists, so the scan had nothing left to compare against. The clean-room rule itself stands: nothing in the plugin is copied from any earlier plugin or from any real call. What the scan guarded is covered in stage 2 by the agnostic sweep, `tools/agnostic_sweep.py`, which becomes release check 8: it fails on a personal name from the local name index, a GitHub handle outside `plugin.json`, a long numeric id outside the template catalogue in `native-objects.md`, an earlier plugin's name, a firm name other than the publisher, and a reference to a retired file.
 
-```
-python3 tools/cleanroom_scan.py <quarantined file or folder>...
-python3 tools/cleanroom_scan.py --tree <folder> --words 8 <quarantined>...
-```
-
-`--tree` names what to scan (repeatable; default `plugins/monday-master-builder`), so the same scan runs over the fixtures workspace. Exit 0 clean, 1 findings, 3 could not run.
-
-How prose is told apart from identifier and enum lists, on both sides alike:
-
-- Fenced code blocks are skipped, and inline code spans are removed before a line is read.
-- A line is an enum list, and skipped, when it splits on commas, semicolons or pipes into three or more segments averaging at most two words each. Table rules are skipped too.
-- A token is identifier-like when it carries an underscore, a digit, an inner capital, a path separator or a dot inside it. A line where such tokens are at least half of all tokens is skipped; in a prose line they are dropped and the words either side still join.
-- What remains is lowercased and joined across the lines of a paragraph, so a copied sentence is found even when it wraps differently.
-
-## `lint_plugin.py` (release check 3)
-
-Every WP16 acceptance check that can be run against files on disk, one function each. Output is one line per finding — `error`, `warning` or `info` — with file, line and check name. Exit 0 with no errors, 1 with errors, 3 when it cannot run; warnings do not change the exit code. An input that does not exist yet is reported as `not present yet`, so the lint runs on a partial tree.
+very WP16 acceptance check that can be run against files on disk, one function each. Output is one line per finding — `error`, `warning` or `info` — with file, line and check name. Exit 0 with no errors, 1 with errors, 3 when it cannot run; warnings do not change the exit code. An input that does not exist yet is reported as `not present yet`, so the lint runs on a partial tree.
 
 ```
 python3 tools/lint_plugin.py [--root <repo>]
