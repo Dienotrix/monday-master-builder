@@ -1,6 +1,6 @@
 # Stage-1 acceptance: WP18, fixtures s11 to s25
 
-Run on 2026-09-20 against BUILD-PLAN.md WP18's acceptance list and section 4.2, over the fifteen folders in `/Users/caramelm4/DelOps/rebuild-workspace/fixtures/`. Nothing in the fixtures was changed. The one file edited is `fixtures/COVERAGE.md`, which now carries a row per fixture and the calibration totals (section 7). Every check below was run by a script written for this pass and kept in the session scratchpad; the field-order script and the quote-location checker are reproduced in the appendices so the run can be repeated.
+Run on 2026-09-20 against BUILD-PLAN.md WP18's acceptance list and section 4.2, over the fifteen folders in `~/DelOps/monday-master-builder-dev/rebuild-workspace/fixtures/`. Nothing in the fixtures was changed. The one file edited is `fixtures/COVERAGE.md`, which now carries a row per fixture and the calibration totals (section 7). Every check below was run by a script written for this pass and kept in the session scratchpad; the field-order script and the quote-location checker are reproduced in the appendices so the run can be repeated.
 
 **Verdict.** The set is in good shape: every key has the 25 fields in the s1 order plus `intake`; every located quote in every key (2,074 of them) sits at its cited location; every README count matches its key; the planted defects each section 4.2 row names are present; the clean-room scan and the identity sweeps are clean. Three things need a decision before the set is called accepted, and the user's review of each fixture is still pending (section 8).
 
@@ -181,7 +181,7 @@ fields in the s1 order, and that s11 to s25 add exactly one field, `intake`, aft
 Standard library only. Exit 0 when every key passes, 1 otherwise."""
 import collections, glob, json, os, sys
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else "/Users/caramelm4/DelOps/rebuild-workspace/fixtures"
+ROOT = sys.argv[1] if len(sys.argv) > 1 else "~/DelOps/monday-master-builder-dev/rebuild-workspace/fixtures"
 REVIEWED_ORDER = [
     "scenario_id", "call_type", "purpose_of_this_fixture", "transcript_format", "company",
     "attendees", "expected_monday_products", "rubric", "pains", "numbers", "vocabulary",
@@ -234,7 +234,7 @@ The location checker, as run. It walks every dict carrying a string `quote` and 
 then print a stratified 40-quote sample for the acceptance record. Standard library only."""
 import collections, glob, json, os, random, re, sys, zipfile, zlib
 
-ROOT = "/Users/caramelm4/DelOps/rebuild-workspace/fixtures"
+ROOT = "~/DelOps/monday-master-builder-dev/rebuild-workspace/fixtures"
 TS = re.compile(r"(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?)")
 
 def read(path):

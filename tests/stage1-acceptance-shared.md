@@ -287,9 +287,9 @@ Standard library, Python 3.9; reads the shared files, the architecture and the 2
 """WP1 name agreement: shared/ against ARCHITECTURE 8.3/7.1 and the 25 keys. Stdlib, 3.9."""
 import json, os, re
 from collections import Counter
-SH = "/Users/caramelm4/DelOps/monday-master-builder/plugins/monday-master-builder/shared"
-FX = "/Users/caramelm4/DelOps/rebuild-workspace/fixtures"
-AR = "/Users/caramelm4/DelOps/rebuild-workspace/design/ARCHITECTURE.md"
+SH = "~/DelOps/monday-master-builder-dev/monday-master-builder/plugins/monday-master-builder/shared"
+FX = "~/DelOps/monday-master-builder-dev/rebuild-workspace/fixtures"
+AR = "~/DelOps/monday-master-builder-dev/rebuild-workspace/design/ARCHITECTURE.md"
 rd = lambda p: open(p, encoding="utf-8").read()
 sm, rm, ar = rd(SH + "/sales-method.md"), rd(SH + "/record-map.md"), rd(AR)
 def between(t, a, b):

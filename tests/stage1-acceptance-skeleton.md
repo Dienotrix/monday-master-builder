@@ -8,7 +8,7 @@ Twenty-five checks: 21 pass, 2 fail, 1 partial, 1 not checked.
 
 ## 1. What was run
 
-Every command from the repo root, `/Users/caramelm4/DelOps/monday-master-builder`.
+Every command from the repo root, `~/DelOps/monday-master-builder-dev/monday-master-builder`.
 
 ### 1.1 Manifests (WP0)
 

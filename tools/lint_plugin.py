@@ -303,7 +303,7 @@ def name_hash(text):
 
 def check_personal_names(lint):
     """No word or adjacent word pair hashes to an entry of the personal-name list."""
-    index = os.path.join(os.environ.get("MMB_HOME") or os.path.expanduser("~/DelOps"), NAMES_INDEX)
+    index = os.path.join(os.environ.get("MMB_HOME") or os.path.join(os.path.expanduser("~"), "monday-builder"), NAMES_INDEX)
     if not os.path.exists(index):
         return lint.add("warning", NAMES_INDEX, 0, "personal-name",
                         "name list not found at %s; check not run" % index)

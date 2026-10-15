@@ -169,7 +169,8 @@ class: id-patterns
 # Record paths, HTML comments, raw monday ids of eight or more digits outside links, hashes
 # and the design's own tags. The lint strips URLs before this class runs, so an id inside a
 # link is exempt (9.6). Paths are regexes because a path may be followed by a digit.
-re: ~/DelOps/
+re: ~/
+re: (/Users/|/home/|\b[A-Za-z]:\\Users\\)
 re: \bclients/[a-z0-9-]+/
 re: \.work/
 re: \bcalls/
