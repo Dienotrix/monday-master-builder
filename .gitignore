@@ -17,3 +17,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Windows check results (tests/windows/README.md): sent back by the user, kept in the working notes, not here.
+tests/windows/windows-results-*.md

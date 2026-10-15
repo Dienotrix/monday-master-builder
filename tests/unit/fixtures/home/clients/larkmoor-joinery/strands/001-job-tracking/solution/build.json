@@ -1,0 +1,185 @@
+{
+  "schema": "build/2",
+  "client_slug": "larkmoor-joinery",
+  "strand": "001",
+  "account_ref": "../../../account.json",
+  "account_id_at_bind": "10000001",
+  "lease_epoch_at_run": 1,
+  "reads_live": [],
+  "updated_at": "2026-10-28T11:40:00Z",
+  "approvals": [
+    {
+      "version": "v0.1",
+      "qualified_version": "001/v0.1",
+      "revision": 1,
+      "frozen_file": "versions/v0.1/blueprint-r1.md",
+      "sha256": "5b81f6a0e45b1d00228dee8be00673f1dfb126c565bb1b6113f53467fe3062e1",
+      "approved_at": "2026-10-26T16:10:00Z",
+      "approved_words": "yes, build revision 1",
+      "approved_in_session": "blueprint session of 2026-10-26",
+      "element_count": 3,
+      "irreversible_listed": [],
+      "automations_listed": [],
+      "live_objects_touched": []
+    }
+  ],
+  "preflight": {
+    "at": "2026-10-28T09:22:00Z",
+    "version": "v0.1",
+    "daily_total": 1000,
+    "used_today": 40,
+    "client_reserve": 0,
+    "estimated_calls": [
+      10,
+      20
+    ],
+    "roster_ok": true,
+    "stale_gotchas": [],
+    "findings": []
+  },
+  "runs": [
+    {
+      "id": "run-2026-10-28-1",
+      "version": "v0.1",
+      "kind": "build",
+      "session_label": "20261028-0915-m3p8",
+      "lease_epoch": 1,
+      "another_build_running": "no, answered 09:18",
+      "started_at": "2026-10-28T09:20:00Z",
+      "heartbeat_at": "2026-10-28T11:35:00Z",
+      "ended_at": "2026-10-28T11:40:00Z",
+      "state": "ended",
+      "calls_estimated": [
+        10,
+        20
+      ],
+      "calls_used": 14,
+      "account_checks": [
+        {
+          "at": "2026-10-28T09:20:00Z",
+          "before": "run start",
+          "result": "match"
+        }
+      ]
+    }
+  ],
+  "objects": {
+    "W1": {
+      "type": "workspace",
+      "id": "40000001",
+      "name": "Larkmoor Joinery – Ops",
+      "parent_key": null,
+      "parent_id": null,
+      "origin": "created",
+      "source_strand": null,
+      "introduced_in": "v0.1",
+      "changed_in": [],
+      "state": "active",
+      "status": "verified",
+      "attempt": {
+        "run_id": "run-2026-10-28-1",
+        "started_at": "2026-10-28T09:24:00Z",
+        "intent_digest": "7d1f0a22"
+      },
+      "verify": {
+        "read": "workspace read: name, kind",
+        "at": "2026-10-28T09:25:00Z",
+        "result": "match",
+        "digest": "w1:3c5e9a10",
+        "note": null
+      },
+      "creator_user_id": "20000001",
+      "owner_user_ids": [
+        "20000001"
+      ],
+      "irreversible": false,
+      "sample_data": false,
+      "approval_ref": "v0.1r1",
+      "notifies": [],
+      "companions": {},
+      "role": null,
+      "prior_state": null,
+      "url": null,
+      "blueprint_ref": "v0.1r1#W1"
+    },
+    "B1": {
+      "type": "board",
+      "id": "50000001",
+      "name": "Jobs",
+      "parent_key": "W1",
+      "parent_id": "40000001",
+      "origin": "created",
+      "source_strand": null,
+      "introduced_in": "v0.1",
+      "changed_in": [],
+      "state": "active",
+      "status": "verified",
+      "attempt": {
+        "run_id": "run-2026-10-28-1",
+        "started_at": "2026-10-28T09:31:00Z",
+        "intent_digest": "c4e81b07"
+      },
+      "verify": {
+        "read": "board read: name, groups, columns",
+        "at": "2026-10-28T09:40:00Z",
+        "result": "match",
+        "digest": "b1:8a2d4f61",
+        "note": null
+      },
+      "creator_user_id": "20000001",
+      "owner_user_ids": [
+        "20000001"
+      ],
+      "irreversible": false,
+      "sample_data": false,
+      "approval_ref": "v0.1r1",
+      "notifies": [],
+      "companions": {},
+      "role": null,
+      "prior_state": null,
+      "url": null,
+      "blueprint_ref": "v0.1r1#B1"
+    },
+    "B1.V1": {
+      "type": "view",
+      "id": "60000001",
+      "name": "Jobs by stage",
+      "parent_key": "B1",
+      "parent_id": "50000001",
+      "origin": "created",
+      "source_strand": null,
+      "introduced_in": "v0.1",
+      "changed_in": [],
+      "state": "active",
+      "status": "verified",
+      "attempt": {
+        "run_id": "run-2026-10-28-1",
+        "started_at": "2026-10-28T11:02:00Z",
+        "intent_digest": "92b6f3d1"
+      },
+      "verify": {
+        "read": "view read: name, type, grouping",
+        "at": "2026-10-28T11:05:00Z",
+        "result": "match",
+        "digest": "v1:0e7b2c95",
+        "note": null
+      },
+      "creator_user_id": "20000001",
+      "owner_user_ids": [
+        "20000001"
+      ],
+      "irreversible": false,
+      "sample_data": false,
+      "approval_ref": "v0.1r1",
+      "notifies": [],
+      "companions": {},
+      "role": null,
+      "prior_state": null,
+      "url": null,
+      "blueprint_ref": "v0.1r1#B1.V1"
+    }
+  },
+  "irreversible_yes": [],
+  "departures": [],
+  "ui_steps": []
+}

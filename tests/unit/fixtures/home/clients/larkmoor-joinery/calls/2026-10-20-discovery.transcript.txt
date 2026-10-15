@@ -1,0 +1,14 @@
+Discovery call, 2026-10-20
+Participants: Owner (client), Workshop Lead (client), Consultant (ours)
+
+[00:00:04] Consultant: Thanks for making the time. What happens after a quote is accepted?
+[00:00:15] Owner: The job goes on the whiteboard in the office, and its cutting list goes in a folder on the bench.
+[00:00:31] Workshop Lead: The trouble is we lose track after the quote. Nobody knows which jobs are waiting on timber.
+[00:00:52] Consultant: How many jobs are open at once, roughly?
+[00:00:58] Owner: Between thirty and forty, from fitted kitchens to single doors.
+[00:01:12] Workshop Lead: What I want is one place where I can see every job and what stage it is at.
+[00:01:30] Consultant: When the last line of a cutting list is done, what happens next?
+[00:01:41] Workshop Lead: Then it is ready to install, but someone has to remember to tell the fitters.
+[00:02:05] Owner: Site visits we book on the phone. I would leave those out for now.
+[00:02:30] Owner: If you fill in examples, please don't use our real customers' names.
+[00:02:48] Consultant: Understood. I will put together a first version you can click through.

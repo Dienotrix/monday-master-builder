@@ -1,0 +1,3 @@
+# The record's .gitignore, placed only on the GitHub archive path.
+# Scratch, backups and the record mutex stay on the machine.
+.work/

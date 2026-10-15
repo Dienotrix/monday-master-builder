@@ -1,0 +1,23 @@
+{
+  "schema": "settings/1",
+  "created": "2026-10-16",
+  "plugin_version": "0.1.0",
+  "firm": {
+    "name": "Example Consulting",
+    "renderings": [
+      "Example Consulting",
+      "example-consulting"
+    ]
+  },
+  "default_build_account": {
+    "slug": "example-account",
+    "id": "10000001"
+  },
+  "never_show_workspaces": [
+    {
+      "id": "40000002",
+      "name": "Internal Planning"
+    }
+  ],
+  "archive": "local"
+}

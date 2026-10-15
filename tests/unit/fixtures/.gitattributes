@@ -1,0 +1,7 @@
+# The WP2 record tree is hashed byte for byte (raw inputs, the frozen blueprint,
+# the log baseline), crlf/ is CRLF on purpose, and plugin/ holds the stand-in
+# templates the scripts copy: no line-ending conversion on checkout, on any
+# system. tools/ is not affected.
+home/** -text
+crlf/** -text
+plugin/** -text

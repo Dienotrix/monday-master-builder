@@ -1,0 +1,149 @@
+{
+  "schema": "account/1",
+  "client_slug": "larkmoor-joinery",
+  "updated_at": "2026-10-28T11:40:00Z",
+  "account": {
+    "id": "10000001",
+    "slug": "example-account",
+    "name": "Example Account",
+    "kind": "own",
+    "build_target": "own-account",
+    "tier": "standard",
+    "bound_user_id": "20000001",
+    "bound_at": "2026-10-19T10:05:00Z",
+    "builder_role": "admin",
+    "products": [
+      {
+        "id": "30000001",
+        "kind": "core"
+      }
+    ]
+  },
+  "client_workspaces": {
+    "core": {
+      "id": "40000001",
+      "name": "Larkmoor Joinery – Ops",
+      "created_in": "001/v0.1"
+    }
+  },
+  "api": {
+    "connector_ring": "release_candidate 2026-10",
+    "execute_code_ring": "release_candidate 2026-10",
+    "read_at": "2026-10-28T09:20:00Z"
+  },
+  "change_check": {
+    "at": "2026-10-28T09:21:00Z",
+    "for_strand": "001",
+    "ring": "release_candidate 2026-10",
+    "versions_seen": [
+      "2026-07",
+      "2026-10"
+    ],
+    "release_notes_since": "not-read",
+    "roster_diff": {
+      "added": [],
+      "removed": [],
+      "renamed": []
+    },
+    "schema_diff": [],
+    "verdict": "no change affecting this build",
+    "approved_by_user": null
+  },
+  "native_map": {
+    "crm": {},
+    "service": {},
+    "portfolio": {}
+  },
+  "guard_index": {
+    "captured_at": "2026-10-28T09:20:00Z",
+    "ring": "release_candidate 2026-10",
+    "product_workspaces": {
+      "40000001": "core"
+    },
+    "account_products": [
+      {
+        "id": "30000001",
+        "kind": "core",
+        "default_workspace_id": "40000003"
+      }
+    ],
+    "native_board_index": {},
+    "native_board_ids_by_entity": {},
+    "template_source_ids": [],
+    "unreadable_intermediate_ids": [],
+    "template_view_ids": [],
+    "reserved_column_ids": {
+      "blank_default_exclusions": []
+    },
+    "native_default_names_and_terminology": [],
+    "portal_object_ids": {
+      "active": [],
+      "archived": []
+    },
+    "client_workspace_ids": [
+      "40000001"
+    ],
+    "build_targets_by_strand": {
+      "001": {
+        "workspace_ids": [
+          "40000001"
+        ],
+        "folder_ids": []
+      }
+    },
+    "lease": {
+      "strand": "001",
+      "epoch": 2,
+      "session_label": "20261105-1405-r2d6",
+      "heartbeat_at": "2026-11-05T14:20:00Z"
+    },
+    "record_provenance": {
+      "coverage": "workspaces read: the client's one workspace; no native objects in scope",
+      "staleness_budget_days": 14
+    }
+  },
+  "live_objects": {
+    "001:W1": {
+      "monday_id": "40000001",
+      "kind": "workspace",
+      "name_at_build": "Larkmoor Joinery – Ops",
+      "owner_strand": "001",
+      "introduced_in": "001/v0.1",
+      "state": "active",
+      "constraint": "change-with-own-yes",
+      "constraint_source": "pending strand close",
+      "digest": "w1:3c5e9a10",
+      "last_verified": "2026-10-28",
+      "dependants": []
+    },
+    "001:B1": {
+      "monday_id": "50000001",
+      "kind": "board",
+      "name_at_build": "Jobs",
+      "owner_strand": "001",
+      "introduced_in": "001/v0.1",
+      "state": "active",
+      "constraint": "change-with-own-yes",
+      "constraint_source": "pending strand close",
+      "digest": "b1:8a2d4f61",
+      "last_verified": "2026-10-28",
+      "dependants": [
+        "001:B1.V1"
+      ]
+    },
+    "001:B1.V1": {
+      "monday_id": "60000001",
+      "kind": "view",
+      "name_at_build": "Jobs by stage",
+      "owner_strand": "001",
+      "introduced_in": "001/v0.1",
+      "state": "active",
+      "constraint": "change-with-own-yes",
+      "constraint_source": "pending strand close",
+      "digest": "v1:0e7b2c95",
+      "last_verified": "2026-10-28",
+      "dependants": []
+    }
+  },
+  "prior_builds": []
+}

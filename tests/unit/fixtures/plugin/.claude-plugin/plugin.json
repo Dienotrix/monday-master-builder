@@ -1,0 +1,6 @@
+{
+  "name": "monday-master-builder",
+  "displayName": "monday Master Builder",
+  "version": "0.1.0",
+  "description": "A stand-in manifest for the WP2 unit tests."
+}

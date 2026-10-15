@@ -1,0 +1,54 @@
+{
+  "schema": "lock/2",
+  "kind": "build",
+  "epoch": 2,
+  "strand": "001",
+  "strand_title": "Job tracking",
+  "version": "v0.1",
+  "run_id": null,
+  "session_label": "20261105-1405-r2d6",
+  "taken_at": "2026-11-05T14:05:00Z",
+  "heartbeat_at": "2026-11-05T14:20:00Z",
+  "state": "held",
+  "history": [
+    {
+      "event": "taken",
+      "at": "2026-10-28T09:15:00Z",
+      "epoch": 1,
+      "strand": "001",
+      "version": "v0.1",
+      "session_label": "20261028-0915-m3p8",
+      "run_id": null,
+      "by": "20261028-0915-m3p8",
+      "choice": null,
+      "reconcile": null,
+      "note": null
+    },
+    {
+      "event": "released",
+      "at": "2026-10-28T11:40:00Z",
+      "epoch": 1,
+      "strand": "001",
+      "version": "v0.1",
+      "session_label": "20261028-0915-m3p8",
+      "run_id": "run-2026-10-28-1",
+      "by": "20261028-0915-m3p8",
+      "choice": null,
+      "reconcile": null,
+      "note": null
+    },
+    {
+      "event": "taken",
+      "at": "2026-11-05T14:05:00Z",
+      "epoch": 2,
+      "strand": "001",
+      "version": "v0.1",
+      "session_label": "20261105-1405-r2d6",
+      "run_id": null,
+      "by": "20261105-1405-r2d6",
+      "choice": null,
+      "reconcile": null,
+      "note": null
+    }
+  ]
+}
