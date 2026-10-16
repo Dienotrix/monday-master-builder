@@ -74,7 +74,8 @@ def trim(text, limit=TRIM):
     return text[:half] + "\n[... %d characters trimmed ...]\n" % (len(text) - limit) + text[-half:]
 
 def decode(data):
-    return (data or b"").decode("utf-8", "replace")
+    """A child's output as text with LF line endings: Windows children write CRLF, and the results file keeps one."""
+    return (data or b"").decode("utf-8", "replace").replace("\r\n", "\n").replace("\r", "\n")
 
 def utc(moment=None):
     return (moment or datetime.now(timezone.utc)).strftime(UTC)

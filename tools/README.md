@@ -13,6 +13,13 @@ python3 tools/lint_plugin.py [--root <repo>]
 python3 tools/lint_plugin.py --hash-name "<name>"
 ```
 
+On Windows, `python3` is often only the Microsoft Store alias, which runs nothing. Use the Python launcher there:
+
+```
+py -3 tools\lint_plugin.py [--root <repo>]
+py -3 tools\lint_plugin.py --hash-name "<name>"
+```
+
 Checks: description length and angle brackets (skills, agents, `plugin.json`); `name` equals its folder; `SKILL.md` and references at or under 190 lines; references one level deep; relative Markdown links and `${CLAUDE_PLUGIN_ROOT}` paths resolve; reserved names (monday's official skills); no literal `mcp__<server>__` tool name (`mcp__*` and regex matchers pass); all-caps emphasis words outside code; `G-` ids resolve to an entry line in `shared/monday-gotchas.md` and `templates/record|other/<file>` paths name a file; the word "consultant"; the fixed hand-off sentence in `templates/record/scope.md`; a copy of a shared file under a skill's `references/` is byte-identical; the pinned agreement below; and personal names.
 
 **Pinned agreement.** `shared/record-map.md` carries a heading `Pinned: call-type-vocabulary` and a heading `Pinned: permitted-constants`; each section runs to the next heading of the same or a higher level, and the tokens it pins are exactly the backticked spans inside it, for example `` `partner-led` `` or `` `min_units` `` and `` `12` ``. `scripts/transcript_prep.py` and `scripts/transcript_measure.py` each hold the matching region between a line `# pinned: <id>` and a line `# end pinned`; every string and number literal in that region, and every assigned name (lowercased), is the embedded copy. The lint reports a pinned token the script does not embed, and a literal the script embeds that is not pinned. Until both files exist it reports `not present yet`.
