@@ -1,0 +1,616 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "record-map.md live-map/1",
+      "record-map.md build/2",
+      "G-09",
+      "G-11",
+      "G-69",
+      "G-70",
+      "G-85",
+      "G-86",
+      "G-88",
+      "G-90",
+      "P-19",
+      "P-20",
+      "P-21"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string."
+  },
+  "strand": "001",
+  "version": "v0.2",
+  "objects": {
+    "W1": {
+      "type": "workspace",
+      "id": "90100000301",
+      "name": "Ambrel Studio",
+      "parent_key": null,
+      "parent_id": null,
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "w1:e38f34a2",
+        "note": null
+      }
+    },
+    "B1": {
+      "type": "board",
+      "id": "90300000301",
+      "name": "Ambrel Intake",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b1:f80e6f93",
+        "note": null
+      }
+    },
+    "B1.FM1": {
+      "type": "form",
+      "id": "90400030102",
+      "name": "Intake form",
+      "parent_key": "B1",
+      "parent_id": "90300000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b1.fm1:9a66e047",
+        "note": null
+      }
+    },
+    "B2": {
+      "type": "board",
+      "id": "90300000302",
+      "name": "Corvane Orders",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b2:821c3a81",
+        "note": null
+      }
+    },
+    "B3": {
+      "type": "board",
+      "id": "90300000303",
+      "name": "Delvarr Stock",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b3:498c6a7d",
+        "note": null
+      }
+    },
+    "B4": {
+      "type": "board",
+      "id": "90300000304",
+      "name": "Elvaine Jobs",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b4:bc40b892",
+        "note": null
+      }
+    },
+    "B5": {
+      "type": "board",
+      "id": "90300000305",
+      "name": "Fenmark Schedule",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b5:b2b6f787",
+        "note": null
+      }
+    },
+    "B6": {
+      "type": "board",
+      "id": "90300000306",
+      "name": "Garvenn Requests",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "b6:4d51230f",
+        "note": null
+      }
+    },
+    "D1": {
+      "type": "doc",
+      "id": "91300000301",
+      "name": "Ambrel Guide",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "d1:c306001d",
+        "note": null
+      },
+      "companions": {
+        "doc_container_board_id": "90300000307"
+      }
+    },
+    "DB1": {
+      "type": "dashboard",
+      "id": "91200000301",
+      "name": "Ambrel Overview",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "db1:04b98ed5",
+        "note": null
+      }
+    },
+    "AG1": {
+      "type": "agent",
+      "id": "90800000301",
+      "name": "Halvenn Assistant",
+      "parent_key": null,
+      "parent_id": null,
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "ag1:09b4a3a6",
+        "note": null
+      }
+    },
+    "AG2": {
+      "type": "agent",
+      "id": "90800000302",
+      "name": "Kelmoss Aide",
+      "parent_key": null,
+      "parent_id": null,
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "ag2:97066435",
+        "note": null
+      }
+    },
+    "WF1": {
+      "type": "workflow",
+      "id": "90300000308",
+      "name": "Corvane Approval Flow",
+      "parent_key": "W1",
+      "parent_id": "90100000301",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "wf1:088624da",
+        "note": null
+      }
+    },
+    "VB1": {
+      "type": "vibe_app",
+      "id": "90900000301",
+      "name": "Ambrel Board View",
+      "parent_key": null,
+      "parent_id": null,
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "vb1:6dfc531e",
+        "note": null
+      }
+    },
+    "A1": {
+      "type": "automation",
+      "id": "91100000301",
+      "name": "When status changes to Done notify the owner",
+      "parent_key": "B5",
+      "parent_id": "90300000305",
+      "origin": "created",
+      "introduced_in": "v0.2",
+      "state": "active",
+      "status": "verified",
+      "verify": {
+        "read": "identity fields in digest_fields",
+        "at": "2026-10-15T16:30:00Z",
+        "result": "match",
+        "digest": "a1:5141ec08",
+        "note": null
+      }
+    }
+  },
+  "live_objects": {
+    "002:B1": {
+      "monday_id": "90300000311",
+      "kind": "board",
+      "name_at_build": "Ivrel Ledger",
+      "workspace": "90100000301",
+      "owner_strand": "002",
+      "introduced_in": "002/v0.1",
+      "state": "active",
+      "constraint": "do-not-change",
+      "constraint_source": "pending strand close",
+      "digest": "b1:a5fd4249",
+      "last_verified": "2026-10-10",
+      "dependants": []
+    },
+    "002:B2": {
+      "monday_id": "90300000312",
+      "kind": "board",
+      "name_at_build": "Kelmoss Rota",
+      "workspace": "90100000301",
+      "owner_strand": "002",
+      "introduced_in": "002/v0.1",
+      "state": "active",
+      "constraint": "change-with-own-yes",
+      "constraint_source": "pending strand close",
+      "digest": "b2:1e555f1f",
+      "last_verified": "2026-10-10",
+      "dependants": []
+    },
+    "002:B3": {
+      "monday_id": "90300000313",
+      "kind": "board",
+      "name_at_build": "Lundrask Plans",
+      "workspace": "90100000301",
+      "owner_strand": "002",
+      "introduced_in": "002/v0.1",
+      "state": "active",
+      "constraint": "free",
+      "constraint_source": "pending strand close",
+      "digest": "b3:9a823b26",
+      "last_verified": "2026-10-10",
+      "dependants": []
+    }
+  },
+  "digest_fields": [
+    {
+      "at": [
+        "objects",
+        "W1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "w1",
+      "fields": {
+        "name": "Ambrel Studio",
+        "kind": "open"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b1",
+      "fields": {
+        "name": "Ambrel Intake",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B1.FM1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b1.fm1",
+      "fields": {
+        "name": "Intake form",
+        "type": "FormBoardView",
+        "settings": {
+          "form": "enabled"
+        }
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B2",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b2",
+      "fields": {
+        "name": "Corvane Orders",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B3",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b3",
+      "fields": {
+        "name": "Delvarr Stock",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B4",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b4",
+      "fields": {
+        "name": "Elvaine Jobs",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B5",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b5",
+      "fields": {
+        "name": "Fenmark Schedule",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "B6",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b6",
+      "fields": {
+        "name": "Garvenn Requests",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "D1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "d1",
+      "fields": {
+        "name": "Ambrel Guide",
+        "workspace_id": "90100000301"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "DB1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "db1",
+      "fields": {
+        "name": "Ambrel Overview",
+        "workspace_id": "90100000301",
+        "kind": "PUBLIC"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "AG1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "ag1",
+      "fields": {
+        "state": "ACTIVE",
+        "version_id": "vid-000001"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "AG2",
+        "verify",
+        "digest"
+      ],
+      "prefix": "ag2",
+      "fields": {
+        "state": "ACTIVE",
+        "version_id": "vid-000005"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "WF1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "wf1",
+      "fields": {
+        "name": "Corvane Approval Flow",
+        "state": "active"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "VB1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "vb1",
+      "fields": {
+        "status": "READY",
+        "is_published": false,
+        "code_version": "1"
+      }
+    },
+    {
+      "at": [
+        "objects",
+        "A1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "a1",
+      "fields": {
+        "active": true,
+        "updated_at": "2026-10-15T15:00:00Z"
+      }
+    },
+    {
+      "at": [
+        "live_objects",
+        "002:B1",
+        "digest"
+      ],
+      "prefix": "b1",
+      "fields": {
+        "name": "Ivrel Ledger",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "live_objects",
+        "002:B2",
+        "digest"
+      ],
+      "prefix": "b2",
+      "fields": {
+        "name": "Kelmoss Rota",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "live_objects",
+        "002:B3",
+        "digest"
+      ],
+      "prefix": "b3",
+      "fields": {
+        "name": "Lundrask Plans",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000301",
+        "board_folder_id": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,343 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "record-map.md build/2",
+      "record-map.md account/1",
+      "SF 5",
+      "SF 9",
+      "G-07",
+      "G-08",
+      "G-09",
+      "G-10",
+      "G-11",
+      "G-65",
+      "G-66",
+      "G-67",
+      "G-69",
+      "G-90",
+      "G-92",
+      "P-19",
+      "P-20",
+      "P-21"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string."
+  },
+  "schema": "live-inventory/1",
+  "strand": "001",
+  "read_at": "2026-10-16T10:30:00Z",
+  "ring": "release_candidate 2026-10",
+  "workspaces": [
+    {
+      "id": "90100000401",
+      "name": "Ambrel Works",
+      "kind": "open"
+    },
+    {
+      "id": "90100000402",
+      "name": "Corvane Sales",
+      "kind": "open"
+    },
+    {
+      "id": "90100000403",
+      "name": "Elvaine Hub",
+      "kind": "open"
+    }
+  ],
+  "boards": [
+    {
+      "id": "90300000401",
+      "name": "Ambrel Jobs",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-15T09:12:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000402",
+      "name": "Corvane Orders",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-15T09:20:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000403",
+      "name": "Delvarr Stock Old",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-15T09:25:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000405",
+      "name": "Fenmark Rota",
+      "type": "board",
+      "state": "deleted",
+      "created_at": "2026-10-15T09:30:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000410",
+      "name": "Ambrel Guide",
+      "type": "document",
+      "state": "active",
+      "created_at": "2026-10-15T09:40:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000412",
+      "name": "Nolvane Archive",
+      "type": "board",
+      "state": "archived",
+      "created_at": "2026-10-15T09:45:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000416",
+      "name": "Garvenn Intake",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-16T09:05:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000417",
+      "name": "Halvenn Log",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-16T09:06:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000418",
+      "name": "Halvenn Log",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-16T09:07:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000419",
+      "name": "Kelmoss Notes",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-16T08:30:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000421",
+      "name": "Ivrel Scratch",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-16T09:20:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000431",
+      "name": "Leads",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-09-01T08:00:00Z",
+      "workspace_id": "90100000402",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000432",
+      "name": "Kelmoss Rota",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-10T08:00:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000433",
+      "name": "Elvaine Board",
+      "type": "board",
+      "state": "active",
+      "created_at": "2026-10-16T09:22:00Z",
+      "workspace_id": "90100000403",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    },
+    {
+      "id": "90300000420",
+      "name": "Mossery Flow",
+      "type": "custom_object",
+      "state": "active",
+      "created_at": "2026-10-16T09:34:00Z",
+      "workspace_id": "90100000401",
+      "board_folder_id": null,
+      "object_type_unique_key": null,
+      "hierarchy_type": "classic"
+    }
+  ],
+  "folders": [
+    {
+      "id": "90200000401",
+      "name": "Ambrel Files",
+      "workspace_id": "90100000401",
+      "created_at": "2026-10-15T09:05:00Z"
+    }
+  ],
+  "docs": [
+    {
+      "id": "91300000401",
+      "object_id": "90300000410",
+      "name": "Ambrel Guide",
+      "workspace_id": "90100000401",
+      "created_at": "2026-10-15T09:40:00Z"
+    }
+  ],
+  "automations": [
+    {
+      "id": "91100000401",
+      "board_id": "90300000401",
+      "title": "When an item is created assign the person in the",
+      "active": true,
+      "created_at": "2026-10-16T09:10:00Z",
+      "updated_at": "2026-10-16T09:10:00Z"
+    },
+    {
+      "id": "91100000402",
+      "board_id": "90300000401",
+      "title": "When status changes to Done notify the owner",
+      "active": false,
+      "created_at": "2026-10-15T14:00:00Z",
+      "updated_at": "2026-10-16T09:40:00Z"
+    }
+  ],
+  "dashboards": {
+    "requested_ids": [
+      "91200000401",
+      "91200000402"
+    ],
+    "returned": [
+      {
+        "id": "91200000401",
+        "name": "Ambrel Overview",
+        "workspace_id": "90100000401",
+        "kind": "PUBLIC"
+      }
+    ],
+    "missing_ids": [
+      "91200000402"
+    ]
+  },
+  "agents": [
+    {
+      "id": "90800000401",
+      "name": "Halvenn Helper",
+      "state": "INACTIVE",
+      "version_id": "vid-000010",
+      "created_at": "2026-10-16T09:15:00Z"
+    },
+    {
+      "id": "90800000402",
+      "name": "Delvarr Aide",
+      "state": "ACTIVE",
+      "version_id": "vid-000004",
+      "created_at": "2026-10-14T11:00:00Z"
+    },
+    {
+      "id": "90800000403",
+      "name": "Garvenn Scout",
+      "state": "INACTIVE",
+      "version_id": "vid-000011",
+      "created_at": "2026-10-16T09:25:00Z"
+    }
+  ],
+  "vibe_apps": [
+    {
+      "id": "90900000401",
+      "name": "Ambrel Board View",
+      "status": "GENERATING",
+      "is_published": false,
+      "code_version": "1",
+      "board_ids": [
+        "90300000401"
+      ],
+      "created_at": "2026-10-15T15:00:00Z"
+    },
+    {
+      "id": "90900000402",
+      "name": "Lundrask View",
+      "status": "READY",
+      "is_published": false,
+      "code_version": "1",
+      "board_ids": [
+        "90300000401"
+      ],
+      "created_at": "2026-10-16T09:30:00Z"
+    },
+    {
+      "id": "90900000403",
+      "name": "Lundrask View",
+      "status": "READY",
+      "is_published": false,
+      "code_version": "1",
+      "board_ids": [
+        "90300000401"
+      ],
+      "created_at": "2026-10-16T09:31:00Z"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "90300000420",
+      "name": "Mossery Flow",
+      "state": "active",
+      "workspace_id": "90100000401",
+      "published": false,
+      "active": false
+    }
+  ]
+}

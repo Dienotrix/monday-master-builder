@@ -1,0 +1,871 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "record-map.md live-map/1",
+      "record-map.md build/2",
+      "G-09",
+      "G-11",
+      "G-69",
+      "G-70",
+      "G-85",
+      "G-86",
+      "G-88",
+      "G-90",
+      "P-19",
+      "P-20",
+      "P-21"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string."
+  },
+  "read_at": "2026-10-16T11:00:00Z",
+  "ring": "release_candidate 2026-10",
+  "inventory": [
+    {
+      "id": "90300000301",
+      "name": "Ambrel Intake",
+      "type": "board",
+      "state": "active",
+      "description": "Weekly intake and triage",
+      "updated_at": "2026-10-16T10:12:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000302",
+      "name": "Corvane Orders",
+      "type": "board",
+      "state": "archived",
+      "description": null,
+      "updated_at": "2026-10-16T10:20:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000303",
+      "name": "Delvarr Stock",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-16T10:25:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000304",
+      "name": "Elvaine Jobs",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-16T10:31:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000305",
+      "name": "Fenmark Schedule",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-15T16:00:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000306",
+      "name": "Garvenn Requests",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-16T10:40:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000307",
+      "name": "Ambrel Guide",
+      "type": "document",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-15T16:00:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000308",
+      "name": "Corvane Approval Flow",
+      "type": "custom_object",
+      "state": "archived",
+      "description": null,
+      "updated_at": "2026-10-16T10:50:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000309",
+      "name": "Halvenn Drafts",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-15T16:00:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000311",
+      "name": "Ivrel Ledger Old",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-14T10:00:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000312",
+      "name": "Kelmoss Rota",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-13T10:00:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    },
+    {
+      "id": "90300000313",
+      "name": "Lundrask Plans",
+      "type": "board",
+      "state": "active",
+      "description": null,
+      "updated_at": "2026-10-12T10:00:00Z",
+      "board_folder_id": null,
+      "board_kind": "public",
+      "workspace_id": "90100000301"
+    }
+  ],
+  "boards": [
+    {
+      "id": "90300000301",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030101",
+          "type": "TableBoardView",
+          "settings": {}
+        },
+        {
+          "id": "90400030102",
+          "type": "FormBoardView",
+          "settings": {
+            "form": "enabled"
+          }
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000302",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030201",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000303",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "text_mks1d2f3",
+          "title": "Supplier name",
+          "type": "text",
+          "revision": "r2",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030301",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000304",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030401",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001",
+        "90600000002"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000305",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030501",
+          "type": "TableBoardView",
+          "settings": {}
+        },
+        {
+          "id": "90400030502",
+          "type": "FormBoardView",
+          "settings": {
+            "form": "enabled"
+          }
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000306",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030601",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000309",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "numbers_mkh5j6k7",
+          "title": "Count",
+          "type": "numbers",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400030901",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000311",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400031101",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    },
+    {
+      "id": "90300000312",
+      "columns": [
+        {
+          "id": "name",
+          "title": "Name",
+          "type": "name",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "person",
+          "title": "Owner",
+          "type": "people",
+          "revision": "r1",
+          "settings": {}
+        },
+        {
+          "id": "status",
+          "title": "Status",
+          "type": "status",
+          "revision": "r2",
+          "settings": {
+            "labels": {
+              "1": "Done",
+              "0": "Working on it"
+            }
+          }
+        },
+        {
+          "id": "date4",
+          "title": "Due date",
+          "type": "date",
+          "revision": "r1",
+          "settings": {}
+        }
+      ],
+      "groups": [
+        {
+          "id": "topics",
+          "title": "Open",
+          "color": "#579bfc",
+          "position": "65536"
+        },
+        {
+          "id": "group_mkd2w3e4",
+          "title": "Done",
+          "color": "#00c875",
+          "position": "131072"
+        }
+      ],
+      "views": [
+        {
+          "id": "90400031201",
+          "type": "TableBoardView",
+          "settings": {}
+        }
+      ],
+      "owners": [
+        "90600000001"
+      ],
+      "subscribers": [
+        "90600000001"
+      ]
+    }
+  ],
+  "automations": [
+    {
+      "id": "91100000301",
+      "board_id": "90300000305",
+      "active": true,
+      "updated_at": "2026-10-15T15:00:00Z"
+    }
+  ],
+  "forms": [
+    {
+      "board_id": "90300000301",
+      "view_id": "90400030102",
+      "form": {
+        "title": "Ambrel Intake",
+        "questions": [
+          {
+            "id": "name",
+            "title": "Name",
+            "type": "name"
+          },
+          {
+            "id": "date4",
+            "title": "Due date",
+            "type": "date"
+          }
+        ]
+      }
+    }
+  ],
+  "docs": [
+    {
+      "id": "91300000301",
+      "block_count": 12
+    }
+  ],
+  "dashboards": [
+    {
+      "id": "91200000301",
+      "name": "Ambrel Overview",
+      "workspace_id": "90100000301",
+      "kind": "PUBLIC"
+    }
+  ],
+  "agents": [
+    {
+      "id": "90800000301",
+      "state": "ACTIVE",
+      "version_id": "vid-000002",
+      "plan": "Read each new intake item, write a short summary for the owner and flag anything overdue.",
+      "triggers": [
+        "When agent is assigned",
+        "When agent is mentioned",
+        "When item is created"
+      ],
+      "knowledge": [
+        {
+          "id": "90300000301",
+          "kind": "board",
+          "access": "READ"
+        }
+      ]
+    },
+    {
+      "id": "90800000302",
+      "state": "INACTIVE",
+      "version_id": "vid-000005",
+      "plan": "Read each new intake item and write a short summary for the owner.",
+      "triggers": [
+        "When agent is assigned",
+        "When agent is mentioned"
+      ],
+      "knowledge": []
+    }
+  ],
+  "workflows": [
+    {
+      "id": "90300000308",
+      "name": "Corvane Approval Flow",
+      "state": "archived"
+    }
+  ],
+  "vibe_apps": [
+    {
+      "id": "90900000301",
+      "status": "READY",
+      "is_published": false,
+      "code_version": "1"
+    }
+  ]
+}

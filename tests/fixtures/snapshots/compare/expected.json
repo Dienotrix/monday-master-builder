@@ -1,0 +1,327 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "record-map.md live-map/1",
+      "record-map.md build/2",
+      "G-09",
+      "G-11",
+      "G-69",
+      "G-70",
+      "G-85",
+      "G-86",
+      "G-88",
+      "G-90",
+      "P-19",
+      "P-20",
+      "P-21"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string.",
+    "answers_for": "compare/before.read.json, compare/after.read.json, compare/ledger-state.json, compare/appendix.md"
+  },
+  "scope": {
+    "boards": [
+      "90300000301",
+      "90300000302",
+      "90300000303",
+      "90300000304",
+      "90300000305",
+      "90300000306",
+      "90300000311",
+      "90300000312"
+    ],
+    "live_rows": [
+      "002:B1",
+      "002:B2"
+    ],
+    "dropped": [
+      "90300000309"
+    ]
+  },
+  "flags": [
+    {
+      "case": "description-change",
+      "field": "board:90300000301.description",
+      "before": "Weekly intake",
+      "after": "Weekly intake and triage",
+      "problem": "Weekly intake to Weekly intake and triage",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "A§9.7",
+        "G-70"
+      ]
+    },
+    {
+      "case": "archived-board",
+      "field": "board:90300000302.state",
+      "before": "active",
+      "after": "archived",
+      "problem": "active to archived",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "A§9.7",
+        "G-09"
+      ]
+    },
+    {
+      "case": "column-digest-change",
+      "field": "board:90300000303.columns_digest",
+      "before": "columns:d5e22944",
+      "after": "columns:bc67b9ab",
+      "problem": "columns:d5e22944 to columns:bc67b9ab",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "A§9.7",
+        "W73"
+      ]
+    },
+    {
+      "case": "owner-change",
+      "field": "board:90300000304.owners",
+      "before": [
+        "90600000001"
+      ],
+      "after": [
+        "90600000001",
+        "90600000002"
+      ],
+      "problem": "[\"90600000001\"] to [\"90600000001\",\"90600000002\"]",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "A§9.7"
+      ]
+    },
+    {
+      "case": "agent-version-id-moved",
+      "field": "agent:90800000301.version_id",
+      "before": "vid-000001",
+      "after": "vid-000002",
+      "problem": "vid-000001 to vid-000002",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "P-19",
+        "AI:21"
+      ]
+    },
+    {
+      "case": "agent-version-id-moved",
+      "field": "agent:90800000301.plan_digest",
+      "before": "plan:18ba9741",
+      "after": "plan:2c859f18",
+      "problem": "plan:18ba9741 to plan:2c859f18",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "P-19",
+        "AI:21"
+      ]
+    },
+    {
+      "case": "agent-state-moved",
+      "field": "agent:90800000302.state",
+      "before": "ACTIVE",
+      "after": "INACTIVE",
+      "problem": "ACTIVE to INACTIVE",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "P-19",
+        "AI:21"
+      ]
+    },
+    {
+      "case": "workflow-state-moved",
+      "field": "workflow:90300000308.state",
+      "before": "active",
+      "after": "archived",
+      "problem": "active to archived",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "P-21",
+        "G-69"
+      ]
+    },
+    {
+      "case": "workflow-state-moved",
+      "field": "board:90300000308.state",
+      "before": "active",
+      "after": "archived",
+      "problem": "active to archived",
+      "expected": "unchanged during the audit window",
+      "models": [
+        "G-10",
+        "G-69",
+        "A§9.7"
+      ]
+    }
+  ],
+  "changed_outside": [
+    {
+      "case": "protected-row-moved-before",
+      "key": "002:B1",
+      "monday_id": "90300000311",
+      "recorded_digest": "b1:a5fd4249",
+      "digest_at_snapshot": "b1:597a09cf",
+      "moved_in": [
+        "before",
+        "after"
+      ],
+      "problem": "b1:a5fd4249 to b1:597a09cf",
+      "expected": "a finding against the record, reported as changed outside this strand, never fixed here",
+      "models": [
+        "A§9.7",
+        "A§7.8",
+        "record-map.md live-map/1"
+      ]
+    }
+  ],
+  "not_flagged": [
+    {
+      "case": "control-unchanged-board",
+      "object": "board:90300000305",
+      "models": [
+        "W75"
+      ]
+    },
+    {
+      "case": "control-updated-at-only",
+      "object": "board:90300000306",
+      "models": [
+        "W75"
+      ]
+    },
+    {
+      "case": "control-unchanged-automation",
+      "object": "automation:91100000301",
+      "models": [
+        "W75",
+        "G-65"
+      ]
+    },
+    {
+      "case": "control-unchanged-form",
+      "object": "form:90400030102",
+      "models": [
+        "W75",
+        "G-88"
+      ]
+    },
+    {
+      "case": "control-unchanged-doc",
+      "object": "doc:91300000301",
+      "models": [
+        "W75"
+      ]
+    },
+    {
+      "case": "control-unchanged-dashboard",
+      "object": "dashboard:91200000301",
+      "models": [
+        "W75",
+        "G-90"
+      ]
+    },
+    {
+      "case": "control-unchanged-vibe-app",
+      "object": "vibe_app:90900000301",
+      "models": [
+        "W75",
+        "P-20"
+      ]
+    },
+    {
+      "case": "control-protected-row-unmoved",
+      "object": "board:90300000312",
+      "models": [
+        "W74"
+      ]
+    },
+    {
+      "case": "control-dropped-from-scope",
+      "object": "board:90300000309",
+      "models": [
+        "W74",
+        "K287"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "number": 1,
+      "case": "appendix-mutation",
+      "verdict": "refused",
+      "reason": "mutation",
+      "models": [
+        "W77",
+        "K303"
+      ]
+    },
+    {
+      "number": 2,
+      "case": "appendix-subscription",
+      "verdict": "refused",
+      "reason": "subscription",
+      "models": [
+        "W77",
+        "K304"
+      ]
+    },
+    {
+      "number": 3,
+      "case": "appendix-two-operations",
+      "verdict": "refused",
+      "reason": "more than one operation",
+      "models": [
+        "W77",
+        "K305"
+      ]
+    },
+    {
+      "number": 4,
+      "case": "appendix-clean-query",
+      "verdict": "pass",
+      "reason": "one query",
+      "models": [
+        "W77",
+        "K306"
+      ]
+    },
+    {
+      "number": 5,
+      "case": "appendix-word-in-string",
+      "verdict": "pass",
+      "reason": "one query",
+      "models": [
+        "W77",
+        "K307"
+      ]
+    },
+    {
+      "number": 6,
+      "case": "appendix-word-in-comment",
+      "verdict": "pass",
+      "reason": "one query",
+      "models": [
+        "W77",
+        "K307"
+      ]
+    },
+    {
+      "number": 7,
+      "case": "appendix-json-query-string",
+      "verdict": "pass",
+      "reason": "one query",
+      "models": [
+        "W77"
+      ]
+    }
+  ],
+  "exit_code": 1
+}

@@ -1,0 +1,1684 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "NO 2.6",
+      "NO 5",
+      "NO 7.1",
+      "NO 7.2",
+      "NO 7.3",
+      "NO 7.4",
+      "G-08",
+      "G-09",
+      "G-10",
+      "G-69",
+      "G-71",
+      "G-72",
+      "G-73",
+      "G-74",
+      "G-77",
+      "G-78",
+      "G-80",
+      "G-81",
+      "G-83",
+      "G-92",
+      "G-98",
+      "G-100"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string."
+  },
+  "captured_at": "2026-10-16T00:00:00Z",
+  "pages": [
+    {
+      "page": 1,
+      "kind": "boards_sweep",
+      "request": {
+        "document": "NO 2.6",
+        "variables": {
+          "ws": [
+            "90100000101"
+          ],
+          "p": 1
+        }
+      },
+      "response": {
+        "data": {
+          "version": {
+            "kind": "release_candidate",
+            "value": "2026-10"
+          },
+          "complexity": {
+            "after": 19949000
+          },
+          "portal_active": [],
+          "portal_archived": [],
+          "boards": [
+            {
+              "id": "90300000101",
+              "name": "Ambrel Handbook",
+              "type": "document",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 0,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                }
+              ],
+              "links": [],
+              "views": []
+            },
+            {
+              "id": "90300000102",
+              "name": "Ambrel Requests",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 14,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                },
+                {
+                  "id": "subitems",
+                  "type": "subtasks"
+                }
+              ],
+              "links": [
+                {
+                  "id": "subitems",
+                  "type": "subtasks",
+                  "settings": {
+                    "boardIds": [
+                      "90300000103"
+                    ]
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400010201",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000103",
+              "name": "Subitems of Ambrel Requests",
+              "type": "sub_items_board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 9,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date0",
+                  "type": "date"
+                }
+              ],
+              "links": [],
+              "views": []
+            },
+            {
+              "id": "90300000104",
+              "name": "Ambrel Intake Flow",
+              "type": "custom_object",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": "105719650",
+              "items_count": 0,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "person"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400010401",
+                  "type": "FeatureBoardView",
+                  "name": "Flow",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000114",
+              "name": "Fenmark Refresh",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": "work-management::portfolio-project",
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 6,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [],
+              "links": [],
+              "views": []
+            },
+            {
+              "id": "90300000121",
+              "name": "Ivrel Register",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": "lundrask_app::register",
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 3,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400012101",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000122",
+              "name": "Kelmoss Schedule",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "multi_level",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "task",
+              "created_from_board_id": null,
+              "items_count": 11,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "timeline_mkk1l2m3",
+                  "type": "timeline"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400012201",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000123",
+              "name": "Lundrask Orders",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 20,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                },
+                {
+                  "id": "text_mkr4t5y6",
+                  "type": "text"
+                },
+                {
+                  "id": "numbers_mkr7u8i9",
+                  "type": "numbers"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400012301",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000124",
+              "name": "Mossery Archive",
+              "type": "board",
+              "state": "archived",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 5,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400012401",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000125",
+              "name": "Nolvane Notes",
+              "type": "board",
+              "state": "deleted",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 0,
+              "workspace_id": "90100000101",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000101",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [],
+              "links": [],
+              "views": []
+            }
+          ]
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [
+        "90300000101",
+        "90300000102",
+        "90300000103",
+        "90300000104",
+        "90300000114",
+        "90300000121",
+        "90300000122",
+        "90300000123",
+        "90300000124",
+        "90300000125"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 2,
+      "kind": "boards_sweep",
+      "request": {
+        "document": "NO 2.6",
+        "variables": {
+          "ws": [
+            "90100000101"
+          ],
+          "p": 2
+        }
+      },
+      "response": {
+        "data": {
+          "version": {
+            "kind": "release_candidate",
+            "value": "2026-10"
+          },
+          "complexity": {
+            "after": 19908000
+          },
+          "portal_active": [],
+          "portal_archived": [],
+          "boards": []
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [],
+      "missing_ids": []
+    },
+    {
+      "page": 3,
+      "kind": "boards_sweep",
+      "request": {
+        "document": "NO 2.6",
+        "variables": {
+          "ws": [
+            "90100000102"
+          ],
+          "p": 1
+        }
+      },
+      "response": {
+        "data": {
+          "version": {
+            "kind": "release_candidate",
+            "value": "2026-10"
+          },
+          "complexity": {
+            "after": 19867000
+          },
+          "portal_active": [],
+          "portal_archived": [],
+          "boards": [
+            {
+              "id": "90300000105",
+              "name": "Corvane Catalogue",
+              "type": "custom_object",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 0,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "person"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400010501",
+                  "type": "FeatureBoardView",
+                  "name": "Catalogue",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000106",
+              "name": "Corvane Review Flow",
+              "type": "custom_object",
+              "state": "archived",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": "105719650",
+              "items_count": 0,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "person"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400010601",
+                  "type": "FeatureBoardView",
+                  "name": "Flow",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000110",
+              "name": "Corvane Portfolio",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": "work-management::portfolio",
+              "board_kind": "public",
+              "item_terminology": "project",
+              "created_from_board_id": "5882692393",
+              "items_count": 2,
+              "workspace_id": "90100000102",
+              "board_folder_id": "90200000001",
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "portfolio_project_link",
+                  "type": "board_relation"
+                },
+                {
+                  "id": "portfolio_project_owner",
+                  "type": "people"
+                },
+                {
+                  "id": "portfolio_project_status",
+                  "type": "mirror"
+                },
+                {
+                  "id": "portfolio_project_timeline",
+                  "type": "mirror"
+                },
+                {
+                  "id": "portfolio_project_priority",
+                  "type": "status"
+                }
+              ],
+              "links": [
+                {
+                  "id": "portfolio_project_link",
+                  "type": "board_relation",
+                  "settings": {
+                    "boardIds": [
+                      "90300000111",
+                      "90300000112"
+                    ]
+                  }
+                },
+                {
+                  "id": "portfolio_project_status",
+                  "type": "mirror",
+                  "settings": {
+                    "boardIds": [
+                      "90300000111",
+                      "90300000112"
+                    ],
+                    "displayed_linked_columns": [
+                      {
+                        "board_id": "90300000111",
+                        "column_ids": [
+                          "project_status"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "portfolio_project_timeline",
+                  "type": "mirror",
+                  "settings": {
+                    "boardIds": [
+                      "90300000111",
+                      "90300000112"
+                    ],
+                    "displayed_linked_columns": [
+                      {
+                        "board_id": "90300000111",
+                        "column_ids": [
+                          "project_timeline"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400011001",
+                  "type": "TableBoardView",
+                  "name": "Projects",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000111",
+              "name": "Ambrel Rollout",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "multi_level",
+              "object_type_unique_key": "work-management::portfolio-project",
+              "board_kind": "public",
+              "item_terminology": "task",
+              "created_from_board_id": "9857787491",
+              "items_count": 5,
+              "workspace_id": "90100000102",
+              "board_folder_id": "90200000002",
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "project_owner",
+                  "type": "people"
+                },
+                {
+                  "id": "project_status",
+                  "type": "status"
+                },
+                {
+                  "id": "project_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "project_priority",
+                  "type": "status"
+                },
+                {
+                  "id": "board_relation_mkq7r2d1",
+                  "type": "board_relation"
+                }
+              ],
+              "links": [
+                {
+                  "id": "board_relation_mkq7r2d1",
+                  "type": "board_relation",
+                  "settings": {
+                    "boardIds": [
+                      "90300000110"
+                    ]
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400011101",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000112",
+              "name": "Delvarr Migration",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "multi_level",
+              "object_type_unique_key": "work-management::project",
+              "board_kind": "public",
+              "item_terminology": "task",
+              "created_from_board_id": "9857787491",
+              "items_count": 5,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "project_owner",
+                  "type": "people"
+                },
+                {
+                  "id": "project_status",
+                  "type": "status"
+                },
+                {
+                  "id": "project_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "project_priority",
+                  "type": "status"
+                },
+                {
+                  "id": "board_relation_mkq8r3d2",
+                  "type": "board_relation"
+                }
+              ],
+              "links": [
+                {
+                  "id": "board_relation_mkq8r3d2",
+                  "type": "board_relation",
+                  "settings": {
+                    "boardIds": []
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400011201",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000113",
+              "name": "Elvaine Upgrade",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": "work-management::portfolio-project",
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 4,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "person",
+                  "type": "people"
+                },
+                {
+                  "id": "status",
+                  "type": "status"
+                },
+                {
+                  "id": "date4",
+                  "type": "date"
+                },
+                {
+                  "id": "text_mkab12cd",
+                  "type": "text"
+                },
+                {
+                  "id": "board_relation_mkab34ef",
+                  "type": "board_relation"
+                }
+              ],
+              "links": [
+                {
+                  "id": "board_relation_mkab34ef",
+                  "type": "board_relation",
+                  "settings": {
+                    "boardIds": []
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400011301",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000115",
+              "name": "Gorvanth Launch",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "multi_level",
+              "object_type_unique_key": "work-management::portfolio-project",
+              "board_kind": "public",
+              "item_terminology": "task",
+              "created_from_board_id": "9857787491",
+              "items_count": 5,
+              "workspace_id": "90100000102",
+              "board_folder_id": "90200000001",
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "project_owner",
+                  "type": "people"
+                },
+                {
+                  "id": "project_status",
+                  "type": "status"
+                },
+                {
+                  "id": "project_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "project_priority",
+                  "type": "status"
+                },
+                {
+                  "id": "board_relation_mkg1h2j3",
+                  "type": "board_relation"
+                }
+              ],
+              "links": [
+                {
+                  "id": "board_relation_mkg1h2j3",
+                  "type": "board_relation",
+                  "settings": {
+                    "boardIds": [
+                      "90300000116"
+                    ]
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400011501",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000116",
+              "name": "Gorvanth Launch",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": "work-management::standalone",
+              "board_kind": "public",
+              "item_terminology": "project",
+              "created_from_board_id": "6667825632",
+              "items_count": 1,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "portfolio_project_owner",
+                  "type": "people"
+                },
+                {
+                  "id": "portfolio_project_status",
+                  "type": "status"
+                },
+                {
+                  "id": "portfolio_project_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "portfolio_project_priority",
+                  "type": "status"
+                },
+                {
+                  "id": "portfolio_project_rag",
+                  "type": "status"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400011601",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000117",
+              "name": "Ambrel Rollout",
+              "type": "board",
+              "state": "deleted",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": "work-management::standalone",
+              "board_kind": "public",
+              "item_terminology": "project",
+              "created_from_board_id": "6667825632",
+              "items_count": 0,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [],
+              "links": [],
+              "views": []
+            },
+            {
+              "id": "90300000118",
+              "name": "Ambrel Rollout Planner",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": "9958257937",
+              "items_count": 3,
+              "workspace_id": "90100000102",
+              "board_folder_id": "90200000002",
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "rp_placeholder",
+                  "type": "text"
+                },
+                {
+                  "id": "rp_placeholder_index",
+                  "type": "numbers"
+                },
+                {
+                  "id": "rp_assignee",
+                  "type": "people"
+                },
+                {
+                  "id": "rp_assignee_mirror",
+                  "type": "mirror"
+                },
+                {
+                  "id": "rp_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "rp_effort_per_day",
+                  "type": "numbers"
+                },
+                {
+                  "id": "rp_connected_project",
+                  "type": "board_relation"
+                }
+              ],
+              "links": [
+                {
+                  "id": "rp_assignee_mirror",
+                  "type": "mirror",
+                  "settings": {
+                    "boardIds": []
+                  }
+                },
+                {
+                  "id": "rp_connected_project",
+                  "type": "board_relation",
+                  "settings": {}
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400011801",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000119",
+              "name": "Corvane Capacity",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 7,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "rp_assignee",
+                  "type": "people"
+                },
+                {
+                  "id": "rp_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "rp_total_effort",
+                  "type": "numbers"
+                },
+                {
+                  "id": "rp_selected_effort",
+                  "type": "numbers"
+                }
+              ],
+              "links": [],
+              "views": [
+                {
+                  "id": "90400011901",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            },
+            {
+              "id": "90300000120",
+              "name": "Halvenn Projects",
+              "type": "board",
+              "state": "active",
+              "hierarchy_type": "classic",
+              "object_type_unique_key": null,
+              "board_kind": "public",
+              "item_terminology": "item",
+              "created_from_board_id": null,
+              "items_count": 4,
+              "workspace_id": "90100000102",
+              "board_folder_id": null,
+              "inferred_metadata": {
+                "item_type": null
+              },
+              "manual_metadata": {
+                "board_md": null
+              },
+              "workspace": {
+                "id": "90100000102",
+                "account_product": {
+                  "kind": "core"
+                }
+              },
+              "columns": [
+                {
+                  "id": "name",
+                  "type": "name"
+                },
+                {
+                  "id": "portfolio_project_link",
+                  "type": "board_relation"
+                },
+                {
+                  "id": "portfolio_project_owner",
+                  "type": "people"
+                },
+                {
+                  "id": "portfolio_project_status",
+                  "type": "status"
+                },
+                {
+                  "id": "portfolio_project_timeline",
+                  "type": "timeline"
+                },
+                {
+                  "id": "portfolio_project_priority",
+                  "type": "status"
+                }
+              ],
+              "links": [
+                {
+                  "id": "portfolio_project_link",
+                  "type": "board_relation",
+                  "settings": {
+                    "boardIds": []
+                  }
+                }
+              ],
+              "views": [
+                {
+                  "id": "90400012001",
+                  "type": "TableBoardView",
+                  "name": "Main table",
+                  "source_view_id": null
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [
+        "90300000105",
+        "90300000106",
+        "90300000110",
+        "90300000111",
+        "90300000112",
+        "90300000113",
+        "90300000115",
+        "90300000116",
+        "90300000117",
+        "90300000118",
+        "90300000119",
+        "90300000120"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 4,
+      "kind": "boards_sweep",
+      "request": {
+        "document": "NO 2.6",
+        "variables": {
+          "ws": [
+            "90100000102"
+          ],
+          "p": 2
+        }
+      },
+      "response": {
+        "data": {
+          "version": {
+            "kind": "release_candidate",
+            "value": "2026-10"
+          },
+          "complexity": {
+            "after": 19826000
+          },
+          "portal_active": [],
+          "portal_archived": [],
+          "boards": []
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [],
+      "missing_ids": []
+    },
+    {
+      "page": 5,
+      "kind": "workspaces",
+      "request": {
+        "document": "query ($ids: [ID!]) { workspaces(ids: $ids) { id name kind account_product { id kind } } }",
+        "variables": {
+          "ids": [
+            "90100000101",
+            "90100000102"
+          ]
+        }
+      },
+      "response": {
+        "data": {
+          "workspaces": [
+            {
+              "id": "90100000101",
+              "name": "Ambrel Delivery",
+              "kind": "open",
+              "account_product": {
+                "id": "91500000001",
+                "kind": "core"
+              }
+            },
+            {
+              "id": "90100000102",
+              "name": "Corvane Planning",
+              "kind": "open",
+              "account_product": {
+                "id": "91500000001",
+                "kind": "core"
+              }
+            }
+          ]
+        }
+      },
+      "requested_ids": [
+        "90100000101",
+        "90100000102"
+      ],
+      "returned_ids": [
+        "90100000101",
+        "90100000102"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 6,
+      "kind": "account_products",
+      "request": {
+        "document": "query { account { products { id kind default_workspace_id } } }",
+        "variables": {}
+      },
+      "response": {
+        "data": {
+          "account": {
+            "products": [
+              {
+                "id": "91500000001",
+                "kind": "core",
+                "default_workspace_id": "90100000101"
+              }
+            ]
+          }
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [
+        "91500000001"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 7,
+      "kind": "docs",
+      "request": {
+        "document": "query ($ws: [ID!]) { docs(workspace_ids: $ws) { id object_id name workspace_id } }",
+        "variables": {
+          "ws": [
+            "90100000101",
+            "90100000102"
+          ]
+        }
+      },
+      "response": {
+        "data": {
+          "docs": [
+            {
+              "id": "91300000001",
+              "object_id": "90300000101",
+              "name": "Ambrel Handbook",
+              "workspace_id": "90100000101"
+            }
+          ]
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [
+        "91300000001"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 8,
+      "kind": "workflow_objects",
+      "request": {
+        "document": "query ($ws: [ID!]) { objects(object_type_unique_keys: [\"monday_workflows::workflow\"], workspace_ids: $ws, state: ACTIVE, limit: 500) { id state } }",
+        "variables": {
+          "ws": [
+            "90100000101",
+            "90100000102"
+          ]
+        }
+      },
+      "response": {
+        "data": {
+          "objects": [
+            {
+              "id": "90300000104",
+              "state": "active"
+            }
+          ]
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [
+        "90300000104"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 9,
+      "kind": "workflow_objects",
+      "request": {
+        "document": "query ($ws: [ID!]) { objects(object_type_unique_keys: [\"monday_workflows::workflow\"], workspace_ids: $ws, state: ARCHIVED, limit: 500) { id state } }",
+        "variables": {
+          "ws": [
+            "90100000101",
+            "90100000102"
+          ]
+        }
+      },
+      "response": {
+        "data": {
+          "objects": [
+            {
+              "id": "90300000106",
+              "state": "archived"
+            }
+          ]
+        }
+      },
+      "requested_ids": [],
+      "returned_ids": [
+        "90300000106"
+      ],
+      "missing_ids": []
+    },
+    {
+      "page": 10,
+      "kind": "portfolio_items",
+      "request": {
+        "document": "query ($ids: [ID!]) { boards(ids: $ids) { items_page(limit: 100) { cursor items { id column_values(ids: [\"portfolio_project_link\"]) { ... on BoardRelationValue { linked_item_ids linked_items { id board { id } } } } } } } }",
+        "variables": {
+          "ids": [
+            "90300000110"
+          ]
+        }
+      },
+      "response": {
+        "data": {
+          "boards": [
+            {
+              "items_page": {
+                "cursor": null,
+                "items": [
+                  {
+                    "id": "90500000001",
+                    "column_values": [
+                      {
+                        "linked_item_ids": [
+                          "90500000101"
+                        ],
+                        "linked_items": [
+                          {
+                            "id": "90500000101",
+                            "board": {
+                              "id": "90300000111"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "90500000002",
+                    "column_values": [
+                      {
+                        "linked_item_ids": [
+                          "90500000301"
+                        ],
+                        "linked_items": [
+                          {
+                            "id": "90500000301",
+                            "board": {
+                              "id": "90300000113"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "requested_ids": [
+        "90300000110"
+      ],
+      "returned_ids": [
+        "90300000110"
+      ],
+      "missing_ids": []
+    }
+  ]
+}

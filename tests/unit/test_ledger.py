@@ -1,0 +1,1676 @@
+"""Unit tests for plugins/monday-master-builder/scripts/ledger.py, part 1: the write path (WP3 step 5).
+
+Contract clauses of rebuild-workspace/build/wp3/CONTRACT.md by id in the test names. Each test copies
+tests/unit/fixtures/home/ into a temporary folder whose name holds a space, points MMB_HOME at it and HOME and
+USERPROFILE at an empty canary folder, and pins mmb_common's clock to 2026-11-05T14:30:00Z, as test_record.py does.
+Record variants (a revision v0.2 carrying the element-key table, a client-account record, a sandbox record, planted
+defects) are built in each test's own copy; nothing is added to tests/unit/fixtures/ (K14). Lease state is changed
+only through the mmb_common primitives (K37). ledger.py runs from a temporary plugin root: in process through main(),
+and as a subprocess where the process boundary is the point (K04, G49). Tests whose docstring says "Windows run" are
+repeated on a real Windows machine and on a Mac.
+"""
+import ast, contextlib, hashlib, importlib.util, io, json, os, re, shutil, subprocess, sys, tempfile, threading, time  # noqa: E401
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+HERE = Path(__file__).resolve().parent
+FIXTURES = HERE / "fixtures"
+SCRIPTS = HERE.parent.parent / "plugins" / "monday-master-builder" / "scripts"
+sys.dont_write_bytecode = True  # nothing cached beside the scripts (G49)
+sys.path.insert(0, str(SCRIPTS))
+import mmb_common as mc  # noqa: E402
+
+REAL_HOME, CLOCK = Path.home(), datetime(2026, 11, 5, 14, 30, tzinfo=timezone.utc)
+LABEL, IGNORE = "20261105-1405-r2d6", shutil.ignore_patterns(".gitkeep", ".DS_Store")
+S1, S2 = "strands/001-job-tracking", "strands/002-timber-orders"
+B1J, V1, V2 = S1 + "/solution/build.json", S1 + "/versions/v0.1", S1 + "/versions/v0.2"
+KEYS = ["expected", "field", "file", "problem"]
+OWN_WS, SALES_WS, OPS_WS, BOARD = "40000001", "90100000002", "40000002", "50000001"
+A21_WORDS = "the plugin never writes into any other workspace (A21)"
+TABLE = (("W1", "workspace", "Larkmoor Joinery – Ops"), ("B1", "board", "Jobs"), ("B1.V1", "view", "Jobs by stage"),
+         ("W2", "workspace", "Larkmoor Joinery – Sales"), ("B2", "board", "Orders"), ("B2.C1", "column", "Supplier"),
+         ("B1.C4", "column", "Ready to install"), ("B2.SUB", "subitems", "Order lines"),
+         ("A1", "automation", "Notify when ready"), ("WF1", "workflow", "Intake flow"),
+         ("WF1.PUB", "publication", "publish Intake flow, inactive"), ("AG1", "agent", "Dispatch helper"),
+         ("AG1.ACT", "activation", "activate Dispatch helper"), ("B1.AI1", "ai_column", "Job summary"),
+         ("VB1", "vibe_app", "Job wall"), ("VB1.PUB", "publication", "publish Job wall, active"),
+         ("SQ1", "sequence", "Order reminders"), ("SQ1.ACT", "activation", "activate Order reminders"),
+         ("WH1", "webhook", "Order feed"), ("DB1", "dashboard", "Workshop"), ("DB1.W2", "widget", "Jobs chart"),
+         ("PF1", "portfolio", "Installs"), ("PJ1", "project", "Install at the mill"), ("F1", "folder", "Archive"),
+         ("D1", "doc", "Start here"), ("B1.G2", "group", "Ready"), ("B1.FM1", "form", "Job request"),
+         ("B9", "board", "Supplier list"), ("B9.C1", "column", "Supplier code"), ("B5", "board", "Shared stock"),
+         ("U1", "ui_step", "Kanban view on Jobs"))
+PROMPTS = {"AG1": "Read each new job and assign it to the workshop lead.\nSay why in one line.",
+           "B1.AI1": "Summarise the job in one line.", "VB1": "A wall of the open jobs, by stage."}
+IRREVERSIBLE = ("W1", "W2", "F1", "B1", "B2.SUB", "WF1.PUB", "AG1.ACT", "VB1.PUB", "SQ1.ACT", "WH1")
+AGENT = {"plan": PROMPTS["AG1"], "state": "INACTIVE", "version_id": "vid-000001",
+         "triggers": [{"name": "When agent is mentioned"}, {"name": "When agent is assigned"}], "knowledge": []}
+VIBE = {"status": "READY", "is_published": False, "code_version": "1", "differs_from_request": False}
+HOLD = ("import sys, time\nsys.path.insert(0, sys.argv[1])\nimport mmb_common as mc\nfrom pathlib import Path\n"
+        "with mc.record_mutex(Path(sys.argv[2])):\n    print('held', flush=True)\n    time.sleep(float(sys.argv[3]))\n")
+TRY = ("import sys\nsys.path.insert(0, sys.argv[1])\nimport mmb_common as mc\nfrom pathlib import Path\ntry:\n"
+       "    with mc.record_mutex(Path(sys.argv[2]), timeout=0.3):\n        print('free')\nexcept mc.CannotRun:\n"
+       "    print('held')\n")
+
+
+def is_stdlib(name):
+    names = getattr(sys, "stdlib_module_names", None)  # Python 3.10 and later
+    if names is not None:
+        return name in names
+    spec = importlib.util.find_spec(name)
+    return spec is not None and "site-packages" not in str(spec.origin)
+
+
+def tree_hash(folder):
+    return {p.relative_to(folder).as_posix(): mc.sha256_file(p) for p in folder.rglob("*") if p.is_file()}
+
+
+def make_plugin(target):
+    """A plugin root as G31 has the tests build it: the stand-in templates and plugin.json, and scripts/."""
+    plugin = Path(shutil.copytree(FIXTURES / "plugin", target))
+    (plugin / "scripts").mkdir()
+    for name in ("mmb_common.py", "record.py", "ledger.py"):
+        shutil.copy(SCRIPTS / name, plugin / "scripts" / name)
+    return plugin
+
+
+def load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def blueprint(rows=TABLE, prompts=None, heading="## Element keys"):
+    prompts = PROMPTS if prompts is None else prompts
+    lines = ["---", 'schema: "blueprint/1"', 'strand: "001"', 'revision: "1"', 'sample_rows: "none"',
+             'updated: "2026-11-04T10:00"', "---", "Internal: never client-facing", "", "# Blueprint: Job tracking, v0.2",
+             "", heading, "", "| key | kind | name |", "|---|---|---|"] + ["| %s | %s | %s |" % row for row in rows]
+    lines += ["", "## Prompts", ""]
+    for key, text in prompts.items():
+        lines += ["### Prompt %s" % key, "", "```text", text, "```", ""]
+    lines += ["## What this build rests on", "", "- AS1: a job is ready to install when every cutting-list line is "
+              "ticked.", '- AT1: "install" means the fitting visit.', "- FK1: one board for all jobs, the owner's "
+              "leaning.", ""]
+    return "\n".join(lines)
+
+
+def version_md(sha, purpose="proof-of-concept"):
+    return "\n".join(["---", 'schema: "version/1"', 'strand: "001"', 'version: "v0.2"', 'qualified_version: "001/v0.2"',
+                      'state: "approved"', 'purpose: "%s"' % purpose, 'revision: "1"', 'sha256: "%s"' % sha,
+                      'opened: "2026-11-04"', 'released: "none"', 'shown: "none"', 'signed_off: "none"',
+                      'close_reason: "none"', 'updated: "2026-11-04T10:00"', "---", "Internal: never client-facing", "",
+                      "## Scope", "", "Revision 1 of v0.2.", ""])
+
+
+class Base(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fixtures_before = tree_hash(FIXTURES)
+        cls.plugin_tmp = Path(tempfile.mkdtemp(prefix="mmb ledger plugin "))
+        cls.plugin = make_plugin(cls.plugin_tmp / "plugin")
+        cls.led = load(cls.plugin / "scripts" / "ledger.py", "ledger_under_test")
+        cls.rec = load(cls.plugin / "scripts" / "record.py", "record_beside_ledger")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.plugin_tmp)
+        if tree_hash(FIXTURES) != cls.fixtures_before:  # K14: WP2's fixtures are never written
+            raise AssertionError("tests/unit/fixtures/ changed")
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="mmb ledger "))
+        self.canary, self.now = self.tmp / "canary", CLOCK
+        self.canary.mkdir()
+        self.copy_home()
+        self.real = self.snapshot(REAL_HOME / "monday-builder")
+        env = {"MMB_HOME": str(self.home), "HOME": str(self.canary), "USERPROFILE": str(self.canary)}
+        for patcher in (mock.patch.dict(os.environ, env), mock.patch.object(mc, "now_utc", lambda: self.now)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def copy_home(self):
+        self.home = self.tmp / "mmb home"
+        if self.home.exists():
+            shutil.rmtree(self.home)
+        shutil.copytree(FIXTURES / "home", self.home, ignore=IGNORE)
+        self.root = self.home / "clients" / "larkmoor-joinery"
+        self.epoch, self.label, self.run_id = "2", LABEL, None
+
+    def tearDown(self):
+        self.assertEqual(list(self.canary.iterdir()), [])  # K16
+        self.assertEqual(self.snapshot(REAL_HOME / "monday-builder"), self.real)
+        shutil.rmtree(self.tmp)
+
+    @staticmethod
+    def snapshot(path):
+        return path.exists(), path.stat().st_mtime_ns if path.exists() else None
+
+    # Running ledger.py.
+
+    def ledger(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = self.led.main(["--record", str(self.root)] + [str(arg) for arg in argv])
+        self.assertNotIn("\r", out.getvalue())  # K23
+        data = json.loads(out.getvalue())
+        self.assertTrue({"ok", "command", "asked_by"} <= set(data), data)
+        self.four_parts(data)
+        return code, data
+
+    def four_parts(self, data):
+        """K24, K25, K31: every refusal, finding and error names four non-empty parts, the file in POSIX form."""
+        found = data.get("refusals", []) + [data["error"]] if "error" in data else data.get("refusals", [])
+        found += (data.get("findings") or {}).get("blocking", []) + (data.get("findings") or {}).get("warnings", [])
+        for finding in found:
+            self.assertEqual(sorted(finding), KEYS)
+            self.assertTrue(all(finding.values()), finding)
+            self.assertNotIn("\\", finding["file"])
+
+    def ok(self, *argv):
+        code, data = self.ledger(*argv)
+        self.assertEqual((code, data["ok"]), (0, True), data)
+        return data
+
+    def refused(self, *argv):
+        """The refusals, after asserting exit 1 and an unchanged record tree (K27)."""
+        before = self.tree()
+        code, data = self.ledger(*argv)
+        self.assertEqual((code, data["ok"]), (1, False), data)
+        self.assertEqual(self.tree(), before)
+        return data["refusals"]
+
+    def check(self):
+        """(exit code, blocking (file, field) pairs, warning pairs) of `check`, which writes nothing (K246)."""
+        before = self.tree()
+        code, data = self.ledger("check")
+        self.assertEqual(self.tree(), before)
+        found = data["findings"]
+        return code, pairs(found["blocking"]), pairs(found["warnings"])
+
+    def tree(self):
+        return {p.relative_to(self.root).as_posix(): mc.sha256_file(p) for p in self.root.rglob("*")
+                if p.is_file() and p.name != "record.mutex"}
+
+    # Reading and editing the copy.
+
+    def sha(self, rel=B1J):
+        return mc.sha256_file(self.root / rel)
+
+    def data(self, rel=B1J):
+        return json.loads((self.root / rel).read_text(encoding="utf-8"))
+
+    def row(self, key):
+        return self.data()["objects"][key]
+
+    def edit_json(self, rel, change):
+        data = self.data(rel)
+        change(data)
+        (self.root / rel).write_bytes(mc.json_text(data).encode("utf-8"))
+
+    def edit_fm(self, rel, **updates):
+        path = self.root / rel
+        path.write_bytes(mc.set_front_matter(mc.read_text(path), updates).encode("utf-8"))
+
+    def put(self, name, data):
+        path = self.root / ".work" / "strands" / "001" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+        return ".work/strands/001/" + name
+
+    # The variants and the build steps.
+
+    def make_v2(self, rows=TABLE, prompts=None, purpose="proof-of-concept", heading="## Element keys"):
+        vdir = self.root / V2
+        vdir.mkdir(parents=True, exist_ok=True)
+        (vdir / "blueprint-r1.md").write_bytes(blueprint(rows, prompts, heading).encode("utf-8"))
+        sha = mc.sha256_file(vdir / "blueprint-r1.md")
+        (vdir / "version.md").write_bytes(version_md(sha, purpose).encode("utf-8"))
+        self.edit_fm(S1 + "/STRAND.md", version="v0.2", version_state="approved")
+        return sha
+
+    def approval_argv(self, sha, irreversible=IRREVERSIBLE, referenced=("B9",)):
+        argv = ["approval", "--strand", "001", "--sha256", sha, "--words", "yes, build revision 1 of v0.2", "--session",
+                "blueprint session of 2026-11-04", "--expect-sha", self.sha()]
+        for key in irreversible:
+            argv += ["--irreversible", key]
+        for key in referenced:
+            argv += ["--referenced", key]
+        return argv
+
+    def approve(self, purpose="proof-of-concept", extra=(), **kw):
+        sha = self.make_v2(purpose=purpose, **kw)
+        return self.ok(*(self.approval_argv(sha) + list(extra)))
+
+    def client(self):
+        self.edit_fm("CLIENT.md", account_kind="client", build_target="client-account")
+        self.edit_json("account.json", lambda d: d["account"].update(kind="client", build_target="client-account"))
+
+    def change_check(self, result="no change affecting this build", strand="001", approved=None):
+        path = self.put("change-check.json", {
+            "ring": "release_candidate 2026-10", "versions_seen": ["2026-07", "2026-10"], "release_notes_since": "not-read",
+            "roster_diff": {"added": [], "removed": [], "renamed": []}, "schema_diff": [], "result": result,
+            "approved_by_user": approved})
+        return self.ok("change-check", "--strand", strand, "--from", path)
+
+    def start(self, cc=True):
+        if cc:
+            self.change_check()
+        data = self.ok("run", "start", "--strand", "001", "--lease-epoch", self.epoch, "--session-label", self.label,
+                       "--another-build-running", "no", "--account-check", "match", "--expect-sha", self.sha())
+        self.run_id = data["run_id"]
+        return data
+
+    def fence(self):
+        return ["--lease-epoch", self.epoch, "--session-label", self.label, "--run-id", self.run_id]
+
+    def argv(self, command, *argv):
+        words = command.split(" ")
+        return words + ["--strand", "001"] + list(argv) + self.fence() + ["--expect-sha", self.sha()]
+
+    def go(self, command, *argv):
+        return self.ok(*self.argv(command, *argv))
+
+    def no(self, command, *argv):
+        return self.refused(*self.argv(command, *argv))
+
+    def intent(self, key, *argv, op="create"):
+        return self.go("intent", "--key", key, "--operation", op, *argv)
+
+    def record(self, key, *argv):
+        return self.go("record", "--key", key, *argv)
+
+    def read_file(self, key, obj, read="a read of the object"):
+        return self.put("verify-%s.json" % key, {"read": read, "object": obj})
+
+    def verify(self, key, obj, result="match", note=None):
+        return self.go("verify", "--key", key, "--result", result, "--read", self.read_file(key, obj),
+                       *(["--note", note] if note else []))
+
+    def yes(self, key, mode="per-item", *argv):
+        return self.go("irreversible-yes", "--key", key, "--mode", mode, "--what", "the step for %s" % key, *argv)
+
+    def end(self, used=7):
+        return self.go("run end", "--calls-used", used)
+
+    def sales(self, client=False):
+        """W2 created, read back and recorded as the client's crm workspace and a target of strand 001."""
+        if client:
+            self.yes("W2")
+        self.intent("W2", "--product", "crm")
+        self.record("W2", "--id", SALES_WS)
+        self.verify("W2", {"name": "Larkmoor Joinery – Sales", "kind": "open"})
+        self.ok("workspaces", "--strand", "001", "--product", "crm", "--id", SALES_WS, "--name",
+                "Larkmoor Joinery – Sales", "--created-in", "001/v0.2", *self.fence())
+
+    def agent(self):
+        self.intent("AG1", "--scope", OWN_WS)
+        self.record("AG1", "--id", "90800000001")
+        return self.verify("AG1", AGENT)
+
+    def lease(self):
+        return mc.lease_status(self.root)
+
+    def retake(self):
+        """Release whatever is held and take a new lease, through the primitives only (K37)."""
+        status = self.lease()
+        if status["held"]:
+            mc.lease_release(self.root, status["epoch"], status["session_label"])
+        taken = mc.lease_take(self.root, "001")
+        self.epoch, self.label, self.run_id = str(taken["epoch"]), taken["session_label"], None
+        return taken
+
+    def failing(self, name, nth=1):
+        """mc.write_file failing on the nth write of a file of that name, as an OS error would."""
+        real, count = mc.write_file, [0]
+
+        def write(path, data, root, backup=True, backup_dir=None):
+            if Path(path).name == name:
+                count[0] += 1
+                if count[0] == nth:
+                    raise OSError("planted failure")
+            return real(path, data, root, backup, backup_dir)
+        return mock.patch.object(mc, "write_file", write)
+
+
+def pairs(found):
+    return {(f["file"], f["field"]) for f in found}
+
+
+def words(found):
+    return " ".join("%s %s" % (f["problem"], f["expected"]) for f in found)
+
+
+class AAMutexReentryTest(Base):
+    """W26: the mutex re-entry is proved first of all, before any test relies on it."""
+
+    def test_K45_W26_the_fence_and_the_release_re_enter_a_hold_in_one_process(self):
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+
+        def child():
+            done = subprocess.run([sys.executable, "-B", "-c", TRY, str(SCRIPTS), str(self.root)], env=env,
+                                  capture_output=True, timeout=60)
+            return done.stdout.decode("utf-8").strip()
+        self.start()
+        with mc.record_mutex(self.root):
+            began = time.monotonic()
+            self.assertEqual(mc.lease_fence(self.root, "2", LABEL, self.run_id), (True, "ok"))
+            self.assertEqual(mc.lease_release(self.root, "2", LABEL)["state"], "released")
+            self.assertLess(time.monotonic() - began, 5)
+            self.assertEqual(child(), "held")
+        self.assertEqual(child(), "free")
+
+
+class FrameTest(Base):
+
+    def test_K01_K02_K03_K05_K06_K10_K15_K16_K34_K35_source_rules(self):
+        source = (SCRIPTS / "ledger.py").read_text(encoding="utf-8")
+        for path in (SCRIPTS / "ledger.py", Path(__file__)):
+            module = ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 9))
+            names = {a.name.split(".")[0] for n in ast.walk(module) if isinstance(n, ast.Import) for a in n.names}
+            names |= {n.module.split(".")[0] for n in ast.walk(module) if isinstance(n, ast.ImportFrom)}
+            for name in names - {"mmb_common"}:
+                self.assertTrue(is_stdlib(name), "%s imports %s" % (path.name, name))
+        body = ast.parse(source).body
+        first = next(n for n, node in enumerate(body) if isinstance(node, ast.Import) and node.names[0].name == "sys")
+        self.assertEqual(ast.unparse(body[first + 1]) if hasattr(ast, "unparse") else "sys.dont_write_bytecode = True",
+                         "sys.dont_write_bytecode = True")
+        common = next(n for n, node in enumerate(body) if isinstance(node, ast.Import) and node.names[0].name == "mmb_common")
+        self.assertGreater(common, first + 1)
+        for pattern in (r"os\.system", r"shell\s*=", r"os\.popen", r"\bsubprocess\b", r"os\.(rename|replace|remove|unlink)",
+                        r"shutil\.(move|rmtree)", r"\.(unlink|rename|rmdir)\(", r"expanduser", r"os\.sep", r'"~',
+                        r'\+ *"(/|\\\\)"', r'"(/|\\\\)" *\+', r"lock\.json", r"read_lock", r"\[\"lease\"\]\s*=",
+                        r"\.now\(", r"CLAUDE_PLUGIN_ROOT"):
+            self.assertIsNone(re.search(pattern, source), pattern)
+        for name in ("emit", "refuse", "Parser", "Usage"):  # K15: the frame is ledger.py's own copy
+            self.assertTrue(hasattr(self.led, name))
+            self.assertFalse(hasattr(mc, name))
+        for text in (source, Path(__file__).read_text(encoding="utf-8")):
+            for needle in ("Del" + "Ops", "/" + "Users/", "C:" + "\\" + "Users", "Library" + "/"):
+                self.assertNotIn(needle, text)
+
+    def test_C21_no_finding_is_built_with_an_empty_part(self):
+        builders = {"CannotRun", "Refusal", "MMBError", "refuse", "block", "warn"}
+        module = ast.parse((SCRIPTS / "ledger.py").read_text(encoding="utf-8"), feature_version=(3, 9))
+        for call in (n for n in ast.walk(module) if isinstance(n, ast.Call)):
+            if getattr(call.func, "attr", getattr(call.func, "id", None)) not in builders:
+                continue
+            for elts in [n.elts for arg in call.args for n in ast.walk(arg) if isinstance(n, ast.Tuple) and len(n.elts) == 4]:
+                for part in elts:
+                    self.assertFalse(isinstance(part, ast.Constant) and part.value in ("", None), call.lineno)
+
+    def test_K20_K21_K29_K30_catalogue_and_usage_errors(self):
+        catalogue = {"check", "bind", "approval", "change-check", "run start", "run heartbeat", "run end", "intent",
+                     "record", "verify", "depart", "ui-step", "irreversible-yes", "reconcile", "estimate", "snapshot",
+                     "compare", "classify", "native-map", "live-map", "live-map set", "workspaces"}
+        self.assertEqual(set(self.led.COMMANDS), catalogue)
+        for name in ("classify", "native-map", "snapshot", "compare", "reconcile", "estimate"):
+            self.assertIsNone(self.led.COMMANDS[name])
+            code, data = self.ledger(name)
+            self.assertEqual((code, data["error"]["problem"]), (3, "%s is not built yet" % name))
+        for argv in (("migrate",), (), ("run",), ("intent", "--strand", "001"), ("check", "--bogus"),
+                     ("live-map", "set", "--key", "001:B1"), ("bind",)):
+            code, data = self.ledger(*argv)
+            self.assertEqual((code, data["ok"], data["error"]["field"]), (3, False, "arguments"), argv)
+
+    def test_K22_a_folder_without_the_record_files_cannot_run(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = self.led.main(["--record", str(self.tmp), "check"])
+        self.assertEqual((code, json.loads(out.getvalue())["error"]["file"]), (3, "CLIENT.md"))
+        (self.root / "account.json").rename(self.root / "account.moved")
+        code, data = self.ledger("check")
+        self.assertEqual((code, data["error"]["file"]), (3, "account.json"))
+
+    def test_K25_K29_K247_malformed_json_and_whole_file_errors(self):
+        (self.root / "account.json").write_bytes(b"{ not json")
+        code, data = self.ledger("check")
+        self.assertEqual((code, data["error"]["file"], data["error"]["field"]), (3, "account.json", "(whole file)"))
+        before = self.tree()
+        code, data = self.ledger("bind", "--binding", ".work/none.json")
+        self.assertEqual((code, self.tree()), (3, before))
+
+    def test_K46_K111_a_mutex_held_by_another_process_is_exit_3_and_nothing_is_written(self):
+        """Windows run: the msvcrt branch of the record mutex."""
+        self.approve()
+        self.start()
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+        holder = subprocess.Popen([sys.executable, "-B", "-c", HOLD, str(SCRIPTS), str(self.root), "30"], env=env,
+                                  stdout=subprocess.PIPE)
+        try:
+            self.assertEqual(holder.stdout.readline().decode("utf-8").strip(), "held")
+            before = self.tree()
+            with mock.patch.object(mc, "MUTEX_TIMEOUT", 0.3):
+                code, data = self.ledger(*self.argv("intent", "--key", "B2", "--operation", "create", "--workspace",
+                                                    OWN_WS))
+            self.assertEqual((code, data["error"]["field"]), (3, "record.mutex"))
+            self.assertEqual(self.tree(), before)
+        finally:
+            holder.kill()
+            holder.wait(timeout=60)
+        (self.root / ".work" / "lock.json").write_bytes(b"{ torn")  # a fence that cannot run: a stop, never a skip
+        before = self.tree()
+        code, data = self.ledger(*self.argv("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS))
+        self.assertEqual((code, self.tree()), (3, before))
+
+    def test_K07_K08_K09_json_and_text_forms(self):
+        """Windows run: CRLF and BOM copies read alike; every write is LF."""
+        before_v01 = self.data()["approvals"][0]
+        self.approve()
+        self.start()
+        self.sales()
+        self.end()
+        for rel in ("account.json", B1J):
+            raw = (self.root / rel).read_bytes()
+            self.assertEqual(raw.decode("utf-8"), mc.json_text(json.loads(raw.decode("utf-8"))))
+        self.assertEqual(list(self.data()["approvals"][0].items()), list(before_v01.items()))
+        live = (self.root / "live" / "live-map.md").read_bytes()
+        self.assertFalse(live.startswith(b"\xef\xbb\xbf") or b"\r" in live)
+        first = self.ledger("check")[1]["findings"]
+        for rel in ("account.json", B1J):
+            text = (self.root / rel).read_bytes()
+            (self.root / rel).write_bytes(b"\xef\xbb\xbf" + text.replace(b"\n", b"\r\n"))
+        self.assertEqual(self.ledger("check")[1]["findings"], first)
+
+    def test_K10_K11_rewrites_back_up_keep_the_file_and_never_rename_or_delete(self):
+        """Windows run: in-place overwrite semantics differ there."""
+        targets = ("os.rename", "os.replace", "os.remove", "os.unlink", "os.rmdir", "shutil.move", "shutil.rmtree",
+                   "pathlib.Path.unlink", "pathlib.Path.rename", "pathlib.Path.replace", "pathlib.Path.rmdir")
+        build = self.root / B1J
+        inode, old = build.stat().st_ino, build.read_bytes()
+        with contextlib.ExitStack() as stack:
+            spies = [stack.enter_context(mock.patch(target)) for target in targets]
+            self.approve()
+            self.start()
+            self.sales()
+            self.end()
+        self.assertEqual([spy.call_count for spy in spies], [0] * len(targets))
+        self.assertEqual(build.stat().st_ino, inode)
+        backups = sorted((self.root / ".work" / "backup" / S1 / "solution").glob("build.json.*"))
+        self.assertEqual(backups[0].read_bytes(), old)
+
+    def test_K12_W36_a_newer_schema_refuses_every_writer_and_check_still_reads(self):
+        self.approve()
+        self.start()
+        self.edit_json("account.json", lambda d: d.update(schema="account/2"))
+        for argv in (["bind", "--binding", "x.json"], ["change-check", "--strand", "001", "--from", "x.json"],
+                     self.approval_argv("0" * 64), ["live-map"],
+                     ["live-map", "set", "--key", "001:B1", "--constraint", "free", "--source", "s", "--strand", "001"],
+                     ["workspaces", "--strand", "001", "--use", OWN_WS] + self.fence(),
+                     ["run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                      "--another-build-running", "no", "--account-check", "match"],
+                     self.argv("run heartbeat"), self.argv("run end", "--calls-used", "1"),
+                     self.argv("intent", "--key", "B2", "--operation", "create"),
+                     self.argv("record", "--key", "B2", "--id", "1"),
+                     self.argv("verify", "--key", "B2", "--result", "match", "--read", "x.json"),
+                     self.argv("depart", "--key", "B2", "--what", "w", "--error-code", "E", "--decision", "later-retry"),
+                     ["ui-step", "--strand", "001", "--what", "w", "--owner", "the user", "--target-version", "v0.2",
+                      "--expect-sha", self.sha()],
+                     self.argv("irreversible-yes", "--key", "W2", "--mode", "per-item", "--what", "w")):
+            self.assertIn(("account.json", "schema"), pairs(self.refused(*argv)), argv)
+        code, blocking, _ = self.check()
+        self.assertEqual((code, ("account.json", "schema") in blocking), (1, True))
+
+    def test_K04_G49_runs_from_a_plugin_copy_and_writes_nothing_there(self):
+        """Windows run: the same launch form, [interpreter, script path, ...], with no shell."""
+        plugin = make_plugin(self.tmp / "plugin copy")
+        before = sorted(p.relative_to(plugin).as_posix() for p in plugin.rglob("*"))
+        env = {key: value for key, value in os.environ.items() if key != "PYTHONDONTWRITEBYTECODE"}
+        env["HOME"] = env["USERPROFILE"] = str(self.tmp / "interpreter home")
+        SubprocessTest.sequence(self, plugin, env)
+        self.assertEqual(sorted(p.relative_to(plugin).as_posix() for p in plugin.rglob("*")), before)
+
+
+class SubprocessTest(Base):
+
+    @staticmethod
+    def sequence(case, plugin, env):
+        """One call of every subcommand group, each in its own process, at the machine's own clock."""
+        def launch(*argv):
+            done = subprocess.run([sys.executable, str(plugin / "scripts" / "ledger.py"), "--record", str(case.root)]
+                                  + [str(a) for a in argv], env=env, capture_output=True, timeout=120)
+            data = json.loads(done.stdout.decode("utf-8"))
+            case.assertNotIn(b"\r", done.stdout)
+            case.four_parts(data)
+            return done.returncode, data
+
+        def sha():
+            return case.sha()
+
+        def fence():
+            return ["--lease-epoch", "2", "--session-label", LABEL, "--run-id", run]
+        case.assertEqual(launch("check")[0], 2)
+        binding = case.put("binding.json", {"me": {"id": "20000001", "name": "The user", "kind": "admin"},
+                                            "account": {"id": "10000001", "slug": "example-account", "name": "Example",
+                                                        "tier": "standard", "products": [{"id": "30000001", "kind": "core"}]},
+                                            "version": {"kind": "release_candidate", "value": "2026-10"}})
+        case.assertEqual(launch("bind", "--binding", binding)[0], 0)
+        cc = case.put("cc.json", {"ring": "release_candidate 2026-10", "versions_seen": ["2026-10"],
+                                  "release_notes_since": "not-read", "roster_diff": {"added": [], "removed": [], "renamed": []},
+                                  "schema_diff": [], "result": "no change affecting this build", "approved_by_user": None})
+        case.assertEqual(launch("change-check", "--strand", "001", "--from", cc)[0], 0)
+        frozen = case.make_v2()
+        case.assertEqual(launch(*case.approval_argv(frozen))[0], 0)
+        code, data = launch("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                            "--another-build-running", "no", "--account-check", "match", "--expect-sha", sha())
+        case.assertEqual(code, 0, data)
+        run = data["run_id"]
+        for argv in (("intent", "--key", "W2", "--operation", "create", "--product", "crm"),
+                     ("record", "--key", "W2", "--id", SALES_WS)):
+            case.assertEqual(launch(*(list(argv) + ["--strand", "001"] + fence() + ["--expect-sha", sha()]))[0], 0)
+        read = case.read_file("W2", {"name": "Larkmoor Joinery – Sales", "kind": "open"})
+        for argv in (("verify", "--key", "W2", "--result", "match", "--read", read), ("run", "heartbeat"),
+                     ("irreversible-yes", "--key", "F1", "--mode", "per-item", "--what", "create the folder"),
+                     ("depart", "--key", "B1.G2", "--what", "the group call failed", "--error-code", "E1",
+                      "--decision", "blueprint-revision")):
+            code, data = launch(*(list(argv) + ["--strand", "001"] + fence() + ["--expect-sha", sha()]))
+            case.assertEqual(code, 0, data)
+        case.assertEqual(launch("workspaces", "--strand", "001", "--product", "crm", "--id", SALES_WS, "--name", "Sales",
+                                "--created-in", "001/v0.2", *fence())[0], 0)
+        case.assertEqual(launch("ui-step", "--strand", "001", "--what", "turn on the Kanban view", "--owner", "the user",
+                                "--target-version", "v0.2", "--expect-sha", sha())[0], 0)
+        case.assertEqual(launch("live-map")[0], 0)
+        case.assertEqual(launch("run", "end", "--strand", "001", "--calls-used", "5", *fence(), "--expect-sha", sha())[0], 0)
+        case.assertEqual(launch("live-map", "set", "--key", "001:W2", "--constraint", "free", "--source",
+                                "decision 2026-11-05 10:00", "--strand", "001")[0], 0)
+        case.assertEqual(launch("classify")[0], 3)
+        case.assertEqual(launch("migrate")[0], 3)
+
+    def test_K23_K26_every_group_runs_as_a_subprocess_with_no_shell(self):
+        """Windows run."""
+        SubprocessTest.sequence(self, self.plugin, dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+
+    def test_K47_two_writers_at_once_lose_nothing_and_tear_nothing(self):
+        """Windows run: two processes, one ledger, the same sha: one writes, one is refused."""
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+        sha = self.sha()
+        workers = [subprocess.Popen([sys.executable, str(self.plugin / "scripts" / "ledger.py"), "--record",
+                                     str(self.root), "ui-step", "--strand", "001", "--what", "step %d" % n, "--owner",
+                                     "the user", "--target-version", "v0.1", "--expect-sha", sha], env=env,
+                                    stdout=subprocess.PIPE) for n in range(2)]
+        for worker in workers:
+            worker.communicate(timeout=60)
+        self.assertEqual(sorted(w.returncode for w in workers), [0, 1])
+        self.assertEqual(len(self.data()["ui_steps"]), 1)
+
+
+class MutexTest(Base):
+
+    def test_K41_K42_K43_K44_every_read_and_write_sits_inside_one_hold(self):
+        seen, real_read, real_write, real_fence = [], mc.read_json, mc.write_file, mc.lease_fence
+
+        def held():
+            return any(key[1] == threading.get_ident() for key in mc._HELD)
+
+        def read(path, name=None):
+            if Path(path).name in ("account.json", "build.json", "lock.json"):
+                seen.append(("read", Path(path).name, held()))
+            return real_read(path, name)
+
+        def write(path, data, root, backup=True, backup_dir=None):
+            seen.append(("write", Path(path).name, held()))
+            return real_write(path, data, root, backup, backup_dir)
+
+        def fence(*args):
+            seen.append(("fence", "lock.json", held()))
+            return real_fence(*args)
+        with mock.patch.object(mc, "read_json", read), mock.patch.object(mc, "write_file", write), \
+                mock.patch.object(mc, "lease_fence", fence):
+            self.approve()
+            self.start()
+            self.sales()
+            self.intent("B2", "--workspace", SALES_WS)
+            self.record("B2", "--id", "90300000002")
+            self.end()
+        self.assertTrue(seen)
+        self.assertEqual([entry for entry in seen if not entry[2]], [])
+        names = [entry[:2] for entry in seen]  # K104: the fence comes before the first write of a fenced command
+        self.assertLess(names.index(("fence", "lock.json")), max(n for n, e in enumerate(names) if e == ("write", "build.json")))
+
+    def test_K48_K49_K50_K51_K120_W25_W33_run_end_reports_what_a_failure_left_committed(self):
+        cases = (("account.json", 2, []), ("live-map.md", 1, ["account.json"]),
+                 ("build.json", 1, ["account.json", "live/live-map.md"]),
+                 ("lock.json", 2, ["account.json", "live/live-map.md", B1J]))
+        for name, nth, written in cases:
+            with self.subTest(name=name):
+                self.copy_home()
+                os.environ["MMB_HOME"] = str(self.home)
+                self.approve()
+                self.start()
+                self.sales()
+                self.now = CLOCK + timedelta(minutes=1)  # the fence then writes the mirror and the lock first
+                with self.failing(name, nth):
+                    code, data = self.ledger(*self.argv("run end", "--calls-used", "4"))
+                self.assertEqual(code, 3)
+                if not written:
+                    self.assertNotIn("committed", data)
+                    self.assertEqual(data["error"]["file"], "account.json")
+                    continue
+                self.assertEqual(data["error"]["field"], "committed")
+                report = data["committed"]
+                self.assertEqual(set(report), {"command", "written", "not_written", "lease", "run_id", "next"})
+                self.assertEqual((report["command"], report["written"], report["run_id"]), ("run end", written, self.run_id))
+                self.assertIn(".work/lock.json", report["not_written"])
+                self.assertIn("same run end call", report["next"])
+                self.ok(*self.argv("run end", "--calls-used", "4"))  # the repeat completes it
+                self.assertEqual(self.lease()["state"], "released")
+                self.assertEqual(self.data()["runs"][-1]["state"], "ended")
+
+    def test_W25_W33_run_start_retries_with_its_run_id_after_a_failed_ledger_write(self):
+        self.approve()
+        self.change_check()
+        with self.failing("build.json"):
+            code, data = self.ledger("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                                     "--another-build-running", "no", "--account-check", "match", "--expect-sha", self.sha())
+        run = data["committed"]["run_id"]
+        self.assertEqual((code, data["committed"]["lease"]["refreshed"]["run_id"], self.lease()["run_id"]), (3, run, run))
+        self.assertIn("--run-id %s" % run, data["committed"]["next"])
+        done = self.ok("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                       "--another-build-running", "no", "--account-check", "match", "--run-id", run,
+                       "--expect-sha", self.sha())
+        self.assertEqual((done["run_id"], self.data()["runs"][-1]["id"]), (run, run))
+        self.refused("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                     "--another-build-running", "no", "--account-check", "match", "--run-id", run, "--expect-sha", self.sha())
+
+
+class BindTest(Base):
+
+    BINDING = {"me": {"id": "20000001", "name": "The user", "kind": "Admin"},
+               "account": {"id": "10000001", "slug": "example-account", "name": "Example Account", "tier": "pro",
+                           "products": [{"id": "30000001", "kind": "core"}, {"id": "30000002", "kind": "crm"},
+                                        {"id": "30000009", "kind": "marketing"}]},
+               "version": {"kind": "release_candidate", "value": "2026-10"}}
+
+    def unbind(self):
+        self.edit_json("account.json", lambda d: d["account"].update({k: "unbound" for k in d["account"] if k not in (
+            "kind", "build_target", "products")}, products=[]))
+        self.edit_fm("CLIENT.md", monday_account_id="unbound", monday_account_slug="unbound",
+                     monday_bound_user_id="unbound", monday_bound_at="unbound")
+
+    def bind(self, binding=None, **account):
+        doc = json.loads(json.dumps(binding or self.BINDING))
+        doc["account"].update(account)
+        return "bind", "--binding", self.put("binding.json", doc)
+
+    def test_K52_K53_K60_K61_bind_writes_the_account_and_the_mirror_check_agrees(self):
+        self.unbind()
+        data = self.ok(*self.bind())
+        account = self.data("account.json")["account"]
+        self.assertEqual({k: account[k] for k in ("id", "slug", "tier", "bound_user_id", "builder_role", "kind",
+                                                  "build_target")},
+                         {"id": "10000001", "slug": "example-account", "tier": "pro", "bound_user_id": "20000001",
+                          "builder_role": "admin", "kind": "own", "build_target": "own-account"})
+        self.assertEqual(account["products"], [{"id": "30000001", "kind": "core"}, {"id": "30000002", "kind": "crm"}])
+        self.assertEqual(account["bound_at"], "2026-11-05T14:30:00Z")
+        self.assertNotIn("unbound", json.dumps(account))
+        self.assertEqual(self.data("account.json")["api"]["connector_ring"], "release_candidate 2026-10")
+        self.assertEqual(data["log"][0]["type"], "binding")
+        self.edit_fm("CLIENT.md", **data["mirror"])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.rec.main(["--record", str(self.root), "check"])
+        blocking = pairs(json.loads(out.getvalue())["blocking"])
+        self.assertEqual({p for p in blocking if p[0] == "CLIENT.md"}, set())
+
+    def test_K54_kind_and_target_follow_the_record(self):
+        self.unbind()
+        self.edit_fm("CLIENT.md", account_kind="client")
+        self.assertIn(("CLIENT.md", "build_target"), pairs(self.refused(*self.bind())))
+        self.client()
+        self.ok(*self.bind(id="10000077", slug="client-account"))
+        self.assertEqual(self.data("account.json")["account"]["build_target"], "client-account")
+
+    def test_K55_K56_sandbox_accounts_bind_only_sandbox_records(self):
+        self.unbind()
+        self.client()
+        (self.home / "local" / "sandbox-accounts.txt").write_text(
+            "# kind | account_id | account_slug | workspace_id | label | note\n"
+            "sandbox | 10000088 | example-sandbox | * | probes | test account\n", encoding="utf-8")
+        found = self.refused(*self.bind(id="10000099", slug="example-sandbox"))  # matched on the slug alone
+        self.assertIn(("local/sandbox-accounts.txt", "sandbox"), pairs(found))
+        self.assertIn("example-sandbox", words(found))
+        self.edit_fm("CLIENT.md", account_kind="sandbox", build_target="none")
+        self.edit_json("account.json", lambda d: d["account"].update(kind="sandbox", build_target="none"))
+        self.assertIn(("local/sandbox-accounts.txt", "sandbox"), pairs(self.refused(*self.bind(id="10000077", slug="other"))))
+        self.ok(*self.bind(id="10000088", slug="example-sandbox"))
+
+    def test_K57_K58_own_record_binds_the_default_account_once_and_refreshes(self):
+        self.unbind()
+        self.assertIn(("local/settings.json", "default_build_account"),
+                      pairs(self.refused(*self.bind(id="10000077", slug="another"))))
+        self.ok(*self.bind())
+        first = self.data("account.json")["account"]["bound_at"]
+        self.now = CLOCK + timedelta(days=1)
+        again = self.ok(*self.bind(tier="enterprise"))
+        account = self.data("account.json")["account"]
+        self.assertEqual((again["refresh"], account["bound_at"], account["tier"]), (True, first, "enterprise"))
+        self.assertIn(("account.json", "account.id"), pairs(self.refused(*self.bind(id="10000002", slug="example-account"))))
+        other = json.loads(json.dumps(self.BINDING))
+        other["me"]["id"] = "20000002"
+        self.assertIn(("account.json", "account.bound_user_id"), pairs(self.refused(*self.bind(other))))
+
+    def test_K59_K61_bind_writes_no_workspace_and_refuses_a_numeric_id(self):
+        before = self.data("account.json")
+        self.ok(*self.bind())
+        after = self.data("account.json")
+        self.assertEqual((after["client_workspaces"], after["guard_index"]["client_workspace_ids"]),
+                         (before["client_workspaces"], before["guard_index"]["client_workspace_ids"]))
+        numeric = json.loads(json.dumps(self.BINDING))
+        numeric["account"]["id"] = 10000001
+        found = self.refused("bind", "--binding", self.put("binding.json", numeric))
+        self.assertIn((".work/strands/001/binding.json", "account.id"), pairs(found))
+
+
+class WorkspacesTest(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.start()
+
+    def ws(self, *argv):
+        return ["workspaces", "--strand", "001"] + list(argv) + self.fence()
+
+    def test_K36_K62_K64_K66_K68_a_product_workspace_is_recorded_beside_the_others(self):
+        core = self.data("account.json")["client_workspaces"]["core"]
+        data = self.ok(*self.ws("--product", "crm", "--id", SALES_WS, "--name", "Larkmoor Joinery – Sales",
+                                "--created-in", "001/v0.1"))
+        account = self.data("account.json")
+        self.assertEqual(account["client_workspaces"]["crm"], {"id": SALES_WS, "name": "Larkmoor Joinery – Sales",
+                                                               "created_in": "001/v0.1"})
+        self.assertEqual(account["client_workspaces"]["core"], core)
+        self.assertIn(SALES_WS, account["guard_index"]["client_workspace_ids"])
+        self.assertIn(SALES_WS, account["guard_index"]["build_targets_by_strand"]["001"]["workspace_ids"])
+        self.assertEqual(account["guard_index"]["product_workspaces"][SALES_WS], "crm")
+        self.assertEqual(data["mirror"]["client_workspaces"], "core:40000001;crm:%s" % SALES_WS)
+        lease = self.lease()
+        self.assertEqual(account["guard_index"]["lease"], {k: lease[k] for k in ("strand", "epoch", "session_label",
+                                                                                 "heartbeat_at")})
+
+    def test_K63_K65_K67_K138_the_refusals(self):
+        self.assertIn("core | crm | service", words(self.refused(*self.ws("--product", "dev", "--id", "90100000003",
+                                                                         "--name", "Dev", "--created-in", "001/v0.1"))))
+        found = self.refused(*self.ws("--product", "service", "--id", OPS_WS, "--name", "x", "--created-in", "001/v0.1"))
+        self.assertIn("never-demo", words(found))
+        self.assertIn("Internal Planning", words(found))
+        found = self.refused(*self.ws("--use", "90100000444"))
+        self.assertIn(A21_WORDS, words(found))
+        self.assertIn(("(flags)", "--created-in"), pairs(self.refused(*self.ws(
+            "--product", "crm", "--id", SALES_WS, "--name", "x", "--created-in", "002/v0.1"))))
+
+    def test_K145_W39_a_second_workspace_in_a_product_needs_the_direction_change(self):
+        self.ok(*self.ws("--product", "crm", "--id", SALES_WS, "--name", "Sales", "--created-in", "001/v0.1"))
+        argv = ("--product", "crm", "--id", "90100000003", "--name", "Sales two", "--created-in", "001/v0.1")
+        self.assertIn(("account.json", "client_workspaces.crm"), pairs(self.refused(*self.ws(*argv))))
+        self.ok(*self.ws(*(argv + ("--direction-change", "2026-11-05 14:30 · 001 · decision · v0.1 · fresh start"))))
+        account = self.data("account.json")
+        self.assertEqual(account["client_workspaces"]["crm"]["id"], "90100000003")
+        self.assertEqual(account["superseded_workspaces"][0]["id"], SALES_WS)
+        self.assertTrue({SALES_WS, "90100000003"} <= set(account["guard_index"]["client_workspace_ids"]))
+
+
+class ApprovalTest(Base):
+
+    def test_K69_K82_K83_K158_K176_the_entry_and_its_lists(self):
+        data = self.approve()
+        entry = self.data()["approvals"][-1]
+        self.assertEqual(list(entry), ["version", "qualified_version", "revision", "frozen_file", "sha256", "approved_at",
+                                       "approved_words", "approved_in_session", "approval_mode", "element_count",
+                                       "irreversible_listed", "automations_listed", "workflows_listed", "agents_listed",
+                                       "sequences_listed", "rests_on", "live_objects_touched"])
+        self.assertEqual(entry["rests_on"], {"clearance": "cleared to build", "purpose": "proof-of-concept",
+                                             "assumptions": 1, "assumed_terms": 1, "forks_on_leaning": 1})
+        self.assertIn("VB1.PUB", entry["irreversible_listed"])
+        self.assertEqual((entry["automations_listed"], entry["agents_listed"], entry["frozen_file"]),
+                         (["A1"], ["AG1"], "versions/v0.2/blueprint-r1.md"))
+        self.assertEqual(entry["element_count"], len([r for r in TABLE if r[1] not in ("publication", "activation",
+                                                                                      "ui_step")]))
+        self.assertEqual(set(data["delta"]["kept"]), {"W1", "B1", "B1.V1"})
+        self.assertIn("B2", data["delta"]["new"])
+        row = self.row("B2")
+        self.assertEqual((row["status"], row["approval_ref"], row["blueprint_ref"]), ("planned", "v0.2r1", "v0.2r1#B2"))
+        self.assertEqual((self.row("AG1")["prompt_ref"], self.row("B9")["origin"]), ("v0.2r1#AG1", "pre-existing-referenced"))
+        self.assertEqual(self.row("B1")["status"], "verified")
+
+    def test_K70_K71_K83_the_refusals_of_a_revision(self):
+        sha = self.make_v2()
+        path = self.root / V2 / "blueprint-r1.md"
+        path.write_bytes(path.read_bytes() + b"\n")
+        self.assertIn("--sha256", words(self.refused(*self.approval_argv(sha))))
+        self.assertIn("is not a row", words(self.refused(*self.approval_argv(self.make_v2(), irreversible=IRREVERSIBLE + (
+            "B99",)))))
+        self.assertIn("a list", words(self.refused(*self.approval_argv(self.make_v2(), irreversible=IRREVERSIBLE + ("A1",)))))
+        self.assertIn("is not listed", words(self.refused(*self.approval_argv(self.make_v2(), irreversible=("W1",)))))
+        for rows, prompts, expect in ((TABLE + (("B2", "board", "Again"),), None, "repeats"),
+                                      (TABLE + (("BX", "board", "Odd"),), None, "is not a key"),
+                                      (TABLE + (("B7", "lamp", "Odd"),), None, "no object type"),
+                                      (TABLE, {"AG1": "x", "VB1": "y"}, "no prompt block")):
+            self.assertIn(expect, words(self.refused(*self.approval_argv(self.make_v2(rows, prompts)))), expect)
+        self.assertIn("no element-key table", words(self.refused(*self.approval_argv(self.make_v2(heading="## Elements")))))
+        self.approve()
+        self.assertIn("approved already", words(self.refused(*self.approval_argv(mc.sha256_file(path)))))
+
+    def test_K84_touches_and_reads_live(self):
+        sha = self.make_v2()
+        self.assertIn("not a constraint", words(self.refused(*(self.approval_argv(sha) + ["--touches", "001:B1=maybe"]))))
+        self.ok(*(self.approval_argv(sha) + ["--touches", "001:B1=change-with-own-yes"]))
+        build = self.data()
+        self.assertEqual((build["approvals"][-1]["live_objects_touched"], build["reads_live"]),
+                         ([{"key": "001:B1", "constraint": "change-with-own-yes"}], ["001:B1"]))
+
+    def test_K72_W44_the_approval_mode_of_each_record(self):
+        self.assertEqual(self.approve()["approval"]["approval_mode"], "own-account-poc")
+        for variant in ("working", "client", "sandbox"):
+            self.copy_home()
+            os.environ["MMB_HOME"] = str(self.home)
+            if variant == "client":
+                self.client()
+            if variant == "sandbox":
+                self.edit_json("account.json", lambda d: d["account"].update(kind="sandbox", build_target="none"))
+            purpose = "working-solution" if variant == "working" else "proof-of-concept"
+            self.assertEqual(self.approve(purpose=purpose)["approval"]["approval_mode"], "per-list", variant)
+
+    def test_K40_a_strand_without_a_ledger_is_refused_and_none_is_created(self):
+        found = self.refused("run", "start", "--strand", "002", "--lease-epoch", "2", "--session-label", LABEL,
+                             "--another-build-running", "no", "--account-check", "match", "--expect-sha", "none")
+        self.assertIn((S2 + "/solution/build.json", "(whole file)"), pairs(found))
+        self.edit_fm(S2 + "/STRAND.md", kind="non-platform")
+        self.assertIn((S2 + "/STRAND.md", "kind"), pairs(self.refused(
+            "approval", "--strand", "002", "--sha256", "0" * 64, "--words", "w", "--session", "s", "--expect-sha", "none")))
+        self.assertFalse((self.root / S2 / "solution" / "build.json").exists())
+
+
+class ChangeCheckTest(Base):
+
+    def test_K88_K89_K90_K93_K95_the_block_and_nothing_else(self):
+        before = self.data("account.json")
+        data = self.change_check(strand="002")
+        after = self.data("account.json")
+        block = after["change_check"]
+        self.assertEqual(list(block), ["at", "for_strand", "ring", "versions_seen", "release_notes_since", "roster_diff",
+                                       "schema_diff", "result", "approved_by_user"])
+        self.assertEqual((block["at"], block["for_strand"], block["approved_by_user"], data["asked_by"]),
+                         ("2026-11-05T14:30:00Z", "002", None, "002"))
+        for key in before:
+            if key not in ("change_check", "updated_at"):
+                self.assertEqual(after[key], before[key], key)
+
+    def test_K91_K92_K94_values_and_the_two_outcomes(self):
+        bad = {"ring": "r", "versions_seen": [], "release_notes_since": "yesterday",
+               "roster_diff": {"added": [], "removed": []}, "schema_diff": [], "result": "fine", "approved_by_user": None}
+        found = self.refused("change-check", "--strand", "001", "--from", self.put("cc.json", bad))
+        self.assertEqual({f["field"] for f in found}, {"release_notes_since", "roster_diff", "result"})
+        self.assertTrue(self.change_check()["go_on"])
+        self.assertFalse(self.change_check("change affecting this build")["go_on"])
+        self.assertTrue(self.change_check("change affecting this build", approved="2026-11-05 14:31 · 001 · decision")["go_on"])
+
+
+class RunTest(Base):
+
+    def test_K96_K97_K98_K99_K103_run_start_enters_its_run_through_the_refresh(self):
+        self.now = CLOCK + timedelta(minutes=1)
+        data = self.start()
+        self.assertEqual(data["run_id"], "run-2026-11-05-1")
+        lease = self.lease()
+        self.assertEqual((lease["run_id"], lease["heartbeat_at"]), ("run-2026-11-05-1", "2026-11-05T14:31:00Z"))
+        build = self.data()
+        run = build["runs"][-1]
+        self.assertEqual(list(run), ["id", "version", "kind", "session_label", "lease_epoch", "another_build_running",
+                                     "started_at", "heartbeat_at", "ended_at", "state", "calls_estimated", "calls_used",
+                                     "account_checks"])
+        self.assertEqual((build["lease_epoch_at_run"], run["state"], run["ended_at"], run["calls_used"]), (2, "running", None, None))
+        self.assertRegex(run["another_build_running"], r"^no, answered \d\d:\d\d$")
+        self.assertEqual(run["account_checks"], [{"at": "2026-11-05T14:31:00Z", "before": "run start", "result": "match"}])
+        self.assertEqual((run["calls_estimated"], build["preflight"]["version"]), ([10, 20], "v0.1"))
+
+    def test_K100_K121_a_yes_to_the_one_question_stops_and_releases(self):
+        history = len(mc.read_lock(self.root)["history"])
+        data = self.ok("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                       "--another-build-running", "yes", "--answer-words", "yes, the other laptop is building",
+                       "--account-check", "match", "--expect-sha", self.sha())
+        run = self.data()["runs"][-1]
+        self.assertEqual((data["released"], run["state"], run["calls_used"]), (True, "ended", 0))
+        self.assertIn("the other laptop", run["another_build_running"])
+        self.assertEqual((self.lease()["state"], len(mc.read_lock(self.root)["history"])), ("released", history + 1))
+
+    def test_K101_K102_W30_who_may_start_a_run_and_how_the_id_is_counted(self):
+        base = ["run", "start", "--strand", "001", "--another-build-running", "no", "--account-check", "match"]
+        lock = mc.read_lock(self.root)
+        for epoch, label in (("1", LABEL), ("2", "20261028-0915-m3p8")):
+            self.refused(*(base + ["--lease-epoch", epoch, "--session-label", label, "--expect-sha", self.sha()]))
+        self.assertEqual(mc.read_lock(self.root), lock)
+        self.assertIn("match", words(self.refused(*(base[:-1] + ["mismatch", "--lease-epoch", "2", "--session-label",
+                                                                  LABEL, "--expect-sha", self.sha()]))))
+        self.edit_json(B1J, lambda d: d["runs"].append(dict(d["runs"][0], id="run-2026-11-05-4")))
+        self.assertEqual(self.start()["run_id"], "run-2026-11-05-5")
+        self.assertIn("already carries", words(self.refused(*(base + ["--lease-epoch", "2", "--session-label", LABEL,
+                                                                       "--expect-sha", self.sha()]))))
+        old = self.run_id
+        self.go("run end", "--calls-used", "0")
+        self.retake()
+        self.refused(*(base + ["--lease-epoch", self.epoch, "--session-label", self.label, "--run-id", old,
+                               "--expect-sha", self.sha()]))
+
+    def test_K104_K105_K106_K107_K108_K134_K135_K136_the_three_parts_of_the_fence(self):
+        self.start()
+        old = (self.epoch, self.label, self.run_id)
+        self.end()
+        self.retake()
+        self.start()
+        new = (self.epoch, self.label, self.run_id)
+        for (epoch, label, run), part in (((old[0], new[1], new[2]), "epoch"), ((new[0], old[1], new[2]), "session"),
+                                          ((new[0], new[1], old[2]), "run")):
+            self.epoch, self.label, self.run_id = epoch, label, run
+            found = self.refused(*self.argv("run heartbeat"))
+            self.assertIn(part, words(found).lower(), part)
+        self.epoch, self.label, self.run_id = new
+        self.go("run heartbeat")
+
+    def test_K109_K110_K112_K113_K114_a_write_needs_a_started_run_and_the_three_values(self):
+        self.approve()
+        self.edit_json(B1J, lambda d: d["runs"].append(dict(d["runs"][0], id="run-2026-11-05-9", state="running")))
+        self.run_id = "run-2026-11-05-9"
+        self.change_check()
+        found = self.no("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS)
+        self.assertIn("no run has started", words(found))
+        self.edit_json(B1J, lambda d: d["runs"].pop())
+        self.start(cc=False)
+        for flag in ("--lease-epoch", "--session-label", "--run-id"):
+            argv = self.argv("run heartbeat")
+            index = argv.index(flag)
+            del argv[index:index + 2]
+            self.assertIn(flag, words(self.refused(*argv)) + " ".join(f["problem"] for f in self.refused(*argv)))
+        self.label = "20261105-1405-zzzz"
+        self.assertIn("session", words(self.no("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS)))
+        self.label = LABEL
+        history = len(mc.read_lock(self.root)["history"])
+        self.now = CLOCK + timedelta(minutes=2)
+        self.go("run heartbeat", "--account-check", "mismatch", "--before", "writes 21 to 40")
+        self.assertEqual((self.lease()["heartbeat_at"], len(mc.read_lock(self.root)["history"])),
+                         ("2026-11-05T14:32:00Z", history))
+        run = self.data()["runs"][-1]
+        self.assertEqual((run["heartbeat_at"], run["account_checks"][-1]["result"]), ("2026-11-05T14:32:00Z", "mismatch"))
+
+    def test_K115_K116_K117_K118_K119_K201_K226_run_end_writes_verified_rows_and_releases(self):
+        self.approve()
+        self.start()
+        self.sales()
+        self.intent("B2", "--parent-key", "W2")
+        self.record("B2", "--id", "90300000002")
+        self.verify("B2", {"name": "Orders", "type": "board", "state": "active", "workspace_id": SALES_WS})
+        self.intent("B2.C1")
+        self.record("B2.C1", "--id", "supplier_mkx1a2b3")
+        self.verify("B2.C1", {"id": "supplier_mkx1a2b3", "title": "Sup"}, result="mismatch")
+        self.intent("D1", "--workspace", OWN_WS)
+        self.record("D1", "--id", "90300000041")
+        self.go("depart", "--key", "B1.G2", "--what", "w", "--error-code", "E9", "--decision", "later-retry")
+        history = len(mc.read_lock(self.root)["history"])
+        data = self.end(used=11)
+        run = self.data()["runs"][-1]
+        self.assertEqual((run["state"], run["calls_used"], run["ended_at"]), ("ended", 11, "2026-11-05T14:30:00Z"))
+        lock = mc.read_lock(self.root)
+        self.assertEqual((lock["state"], len(lock["history"]), lock["history"][-1]["event"]), ("released", history + 1, "released"))
+        live = self.data("account.json")["live_objects"]
+        for key in ("001:W2", "001:B2"):
+            self.assertEqual((live[key]["constraint"], live[key]["constraint_source"]), ("change-with-own-yes",
+                                                                                         "pending strand close"))
+        self.assertEqual(live["001:W2"]["kind"], "workspace")
+        self.assertEqual(live["001:B2"]["digest"], self.row("B2")["verify"]["digest"])
+        self.assertEqual((live["001:B2"]["workspace"], live["001:B2"]["introduced_in"]), (SALES_WS, "001/v0.2"))
+        for key in ("001:B2.C1", "001:D1", "001:B1.G2", "001:A1"):
+            self.assertNotIn(key, live)
+        self.assertEqual(set(data["live_rows"]["created"]), {"001:W2", "001:B2"})
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.rec.main(["--record", str(self.root), "check"])
+        self.assertEqual([f for f in json.loads(out.getvalue())["blocking"] if "live" in f["file"] or "live_objects" in
+                          f["field"]], [])
+        self.assertEqual(self.check()[1], set())
+
+    def test_W32_run_end_refuses_a_row_still_attempting(self):
+        self.approve()
+        self.start()
+        self.intent("B2", "--workspace", OWN_WS)
+        self.assertIn("B2", words(self.no("run end", "--calls-used", "3")))
+
+
+class RefusalTest(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.approve()
+        self.start()
+
+    def test_K122_K183_the_status_chain(self):
+        self.assertIn("status chain", words(self.no("intent", "--key", "B1", "--operation", "create")))
+        self.assertIn("attempting", words(self.no("record", "--key", "B2", "--id", "90300000002")))
+        self.assertIn("record first", words(self.no("verify", "--key", "B2", "--result", "match", "--read",
+                                                    self.read_file("B2", {"name": "Orders"}))))
+        self.intent("B2", "--workspace", OWN_WS)  # planned to attempting
+        self.no("intent", "--key", "B2", "--operation", "create")
+        self.go("intent", "--key", "B2", "--operation", "create", "--retry")  # attempting to attempting
+        self.record("B2", "--id", "90300000002")  # attempting to written
+        self.verify("B2", {"name": "Orders"}, result="not-checkable", note="the user checks the board by eye")
+        self.assertEqual(self.row("B2")["status"], "written")  # written stays written
+        self.verify("B2", {"name": "Orders"}, result="mismatch")
+        self.go("intent", "--key", "B2", "--operation", "create", "--retry")  # mismatch to attempting, once
+        self.record("B2", "--id", "90300000002")
+        self.verify("B2", {"name": "Orders"}, result="mismatch")
+        self.assertIn("tried already", words(self.no("intent", "--key", "B2", "--operation", "create", "--retry")))
+        self.go("depart", "--key", "B2", "--what", "w", "--error-code", "E1", "--decision", "later-retry")
+        self.go("intent", "--key", "B2", "--operation", "create", "--retry")  # departed (later-retry) to attempting
+        self.record("B2", "--id", "90300000002")
+        self.verify("B2", {"name": "Orders"})
+        self.intent("B2", op="update")  # verified to attempting, the version joins changed_in when it differs
+        self.record("B2", "--id", "90300000002")
+        self.verify("B2", {"name": "Orders"})
+        self.intent("B1", "--approval-ref", "v0.2r1", "--evidence", "no automation or view outside the strand reads it",
+                    op="archive")
+        self.record("B1")
+        self.assertEqual((self.row("B1")["status"], self.row("B1")["state"]), ("removed", "archived"))
+        self.verify("B1", {"name": "Jobs", "state": "archived"})
+        self.assertEqual(self.row("B1")["status"], "removed")
+        self.assertIn("final", words(self.no("depart", "--key", "B1", "--what", "w", "--error-code", "E",
+                                             "--decision", "later-retry")))
+
+    def test_K123_K124_K125_K126_K155_a_row_without_its_approval_ref_is_refused(self):
+        self.intent("WF1", "--workspace", OWN_WS)
+        self.record("WF1", "--id", "90300000071")
+        self.verify("WF1", {"name": "Intake flow", "state": "ACTIVE", "validation": "no issues"})
+        for key in ("W2", "F1", "A1", "WF1.PUB", "AG1", "SQ1", "B1"):
+            self.edit_json(B1J, lambda d, k=key: d["objects"][k].update(approval_ref=None))
+        for key, op, extra in (("W2", "create", ["--product", "crm"]), ("F1", "create", ["--workspace", OWN_WS]),
+                               ("A1", "create", ["--parent-key", "B1"]), ("AG1", "create", ["--scope", OWN_WS]),
+                               ("SQ1", "create", ["--scope", OWN_WS, "--notifies", "20000001"]),
+                               ("WF1.PUB", "publish", []), ("B1", "archive", ["--evidence", "nothing else reads it"])):
+            found = self.no("intent", "--key", key, "--operation", op, *extra)
+            self.assertIn((B1J, "objects.%s.approval_ref" % key), pairs(found), key)
+        self.intent("F1", "--workspace", OWN_WS, "--approval-ref", "v0.2r1")
+        self.assertTrue(self.row("F1")["irreversible"])
+
+    def test_K127_K128_K129_K130_K178_origins_and_prior_states(self):
+        prior = self.put("prior.json", {"name": "Shared stock", "columns": []})
+        self.assertIn("prior state", words(self.no("intent", "--key", "B5", "--operation", "create", "--workspace", OWN_WS,
+                                                   "--prior-state", prior)))
+        self.assertIn("pre-existing-modified", words(self.no(
+            "intent", "--key", "B5", "--operation", "create", "--workspace", OWN_WS, "--origin", "found")))
+        self.assertIn("no prior state", words(self.no("intent", "--key", "B5", "--operation", "create", "--workspace",
+                                                      OWN_WS, "--origin", "pre-existing-modified")))
+        live_row = {"monday_id": "90300000077", "kind": "board", "workspace": OWN_WS, "name_at_build": "Stock",
+                    "owner_strand": "002", "introduced_in": "002/v0.1", "state": "active", "constraint": "do-not-change",
+                    "constraint_source": "calls/2026-10-20-discovery.md@00:12:10", "digest": "b7:00000000",
+                    "last_verified": "2026-11-01", "dependants": []}
+        self.edit_json("account.json", lambda d: d["live_objects"].update({"002:B7": live_row}))
+        other = ["--workspace", OWN_WS, "--origin", "other-strand-modified", "--prior-state", prior]
+        found = self.no("intent", "--key", "B5", "--operation", "create", *other, "--source-strand", "002",
+                        "--live-key", "002:B7")
+        self.assertIn("do-not-change", words(found))
+        self.assertIn("discovery.md@00:12:10", words(found))
+        self.assertIn("source_strand", " ".join(f["field"] for f in self.no(
+            "intent", "--key", "B5", "--operation", "create", *other, "--live-key", "002:B7")))
+        self.edit_json("account.json", lambda d: d["live_objects"]["002:B7"].update(constraint="change-with-own-yes"))
+        self.intent("B5", *other, "--source-strand", "002", "--live-key", "002:B7")
+        row = self.row("B5")
+        self.assertEqual((row["origin"], row["source_strand"], row["live_key"], row["irreversible"]),
+                         ("other-strand-modified", "002", "002:B7", True))
+
+    def test_K131_K132_K133_K173_K179_ids_parents_shas_and_deletes(self):
+        self.intent("B2", "--workspace", OWN_WS)
+        self.record("B2", "--id", "90300000002")
+        found = self.no("verify", "--key", "B2", "--result", "match", "--read", self.put("n.json", {
+            "read": "r", "object": {"id": 50000001}}))
+        self.assertIn((".work/strands/001/n.json", "object.id"), pairs(found))
+        self.assertIn("--parent-id", words(self.no("intent", "--key", "B1.C4", "--operation", "create", "--parent-id",
+                                                    "12a")) + " ".join(f["field"] for f in self.no(
+            "intent", "--key", "B1.C4", "--operation", "create", "--parent-id", "12a")))
+        self.assertIn("B77", words(self.no("intent", "--key", "B1.C4", "--operation", "create", "--parent-key", "B77")))
+        self.assertIn(BOARD, words(self.no("intent", "--key", "B1.C4", "--operation", "create",
+                                                                     "--parent-id", "999")))
+        self.assertIn("no id yet", words(self.no("intent", "--key", "B1.FM1", "--operation", "create", "--parent-key",
+                                                 "B1.G2")))
+        stale = self.sha()
+        self.ok("ui-step", "--strand", "001", "--what", "x", "--owner", "the user", "--target-version", "v0.2",
+            "--expect-sha", stale)
+        found = self.refused("ui-step", "--strand", "001", "--what", "y", "--owner", "the user", "--target-version",
+                             "v0.2", "--expect-sha", stale)
+        self.assertIn((B1J, "sha256"), pairs(found))
+        self.assertIn("never deletes", words(self.no("intent", "--key", "B1", "--operation", "delete")))
+
+
+class ScopeTest(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.approve()
+        self.start()
+
+    def b2(self, *argv):
+        return self.no("intent", "--key", "B2", "--operation", "create", *argv)
+
+    def test_K137_K146_K147_K148_K150_the_target_workspace(self):
+        self.edit_json("account.json", lambda d: d["guard_index"]["client_workspace_ids"].append("90100000005"))
+        found = self.b2("--workspace", "90100000005")
+        self.assertIn(("account.json", "guard_index.build_targets_by_strand.001"), pairs(found))
+        self.assertIn("strand 001", words(found))
+        self.assertIn(A21_WORDS, words(found))
+        sibling = self.b2("--workspace", "90100000999")  # a workspace of a sibling client's record
+        self.assertIn("90100000999", words(sibling))
+        self.assertIn(A21_WORDS, words(sibling))
+        operational = self.b2("--workspace", OPS_WS)
+        self.assertIn("never-demo", words(operational))
+        (self.home / "local" / "sandbox-accounts.txt").write_text(
+            "never-demo | 10000001 | example-account | 90100000888 | demo | kept for demos\n", encoding="utf-8")
+        self.edit_json("account.json", lambda d: (d["guard_index"]["client_workspace_ids"].append("90100000888"),
+                                                  d["guard_index"]["build_targets_by_strand"]["001"]["workspace_ids"]
+                                                  .append("90100000888")))
+        self.assertIn("never-demo | 10000001", words(self.b2("--workspace", "90100000888")))
+        self.intent("B2", "--workspace", OWN_WS)
+        self.assertEqual(self.row("B2")["workspace"], OWN_WS)
+
+    def test_K139_K140_K141_K142_K143_K149_references_outside_the_client(self):
+        outside = {"monday_id": "90300000555", "kind": "board", "workspace": "90100000777", "name_at_build": "Theirs",
+                   "owner_strand": "001", "introduced_in": "client", "state": "active", "constraint": "free",
+                   "constraint_source": "s", "digest": None, "last_verified": None, "dependants": []}
+        self.edit_json("account.json", lambda d: d["live_objects"].update({"001:B8": outside}))
+        for key, base in (("AG1", ["--scope", OWN_WS]), ("VB1", ["--scope", OWN_WS]),
+                          ("WH1", ["--scope", OWN_WS]), ("SQ1", ["--scope", OWN_WS, "--notifies", "20000001"])):
+            for ref, why in (("board:90300000555", "outside the client"), ("board:90300000666", "to place it"),
+                             ("workspace:90100000777", "outside the client")):
+                found = self.no("intent", "--key", key, "--operation", "create", *base, "--ref", ref)
+                self.assertIn(why, words(found), (key, ref))
+                self.assertIn(A21_WORDS, words(found))
+        self.intent("AG1", "--scope", OWN_WS, "--ref", "board:%s" % BOARD)
+        self.assertEqual(self.row("AG1")["refs"], ["board:%s" % BOARD])
+
+    def test_K144_K177_workspace_rows_and_account_level_rows(self):
+        self.intent("W2", "--product", "crm")
+        row = self.row("W2")
+        self.assertEqual((row["irreversible"], row["product"], self.data()["client_slug"]), (True, "crm", "larkmoor-joinery"))
+        self.assertIn("--scope", " ".join(f["field"] for f in self.b2("--workspace", OWN_WS, "--scope", OWN_WS)))
+        self.assertIn("no scope", words(self.no("intent", "--key", "AG1", "--operation", "create")))
+        self.intent("AG1", "--scope", OWN_WS)
+        self.assertEqual((self.row("AG1")["workspace"], self.row("AG1")["workspace_scope"]), (None, [OWN_WS]))
+
+
+class ModesTest(Base):
+
+    def test_K73_K74_K75_K76_K77_K78_K79_K81_K213_one_revision_on_both_build_targets(self):
+        """Windows run and macOS run: the same revision on an own-account and on a client-account record."""
+        self.approve()
+        self.start()
+        self.assertIn("grouped", words(self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1",
+                                               "--notifies", "90600000001")))
+        listed = self.intent("A1", "--parent-key", "B1", "--notifies", "20000001")
+        workspace = self.intent("W2", "--product", "crm")
+        self.record("W2", "--id", SALES_WS)
+        self.agent()
+        activation = self.intent("AG1.ACT", op="activate")
+        for data, cls in ((listed, "list"), (workspace, "irreversible"), (activation, "publication")):
+            self.assertEqual((data["class"], data["yes"], data["approval_mode"]), (cls, "card", "own-account-poc"))
+        entries = self.data()["irreversible_yes"]
+        self.assertEqual([(e["key"], e["mode"], e["approval_ref"]) for e in entries],
+                         [("A1", "card", "v0.2r1"), ("W2", "card", "v0.2r1"), ("AG1", "card", "v0.2r1"),
+                          ("AG1.ACT", "card", "v0.2r1")])
+        build = self.data()
+        for key, row in build["objects"].items():  # K78: every ref resolves to one entry, which names its mode
+            found = [a for a in build["approvals"] if "%sr%s" % (a["version"], a["revision"]) == row["approval_ref"]]
+            self.assertEqual(len(found), 1, key)
+        self.copy_home()
+        os.environ["MMB_HOME"] = str(self.home)
+        self.client()
+        self.approve()
+        self.start()
+        self.assertIn("grouped", words(self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1")))
+        self.assertIn("per-item", words(self.no("intent", "--key", "W2", "--operation", "create", "--product", "crm")))
+        self.yes("A1", "grouped")
+        self.assertEqual(self.intent("A1", "--parent-key", "B1")["yes"], "grouped")
+        for key in ("W2", "WH1"):  # the user said yes to the first and the third, not to F1
+            self.yes(key)
+        self.assertEqual([e["key"] for e in self.data()["irreversible_yes"] if e["mode"] == "per-item"], ["W2", "WH1"])
+        self.assertEqual(self.intent("W2", "--product", "crm")["yes"], "per-item")
+        self.assertIn("F1", words(self.no("intent", "--key", "F1", "--operation", "create", "--workspace", OWN_WS)))
+
+    def test_K80_K214_a_yes_is_read_from_disk_and_never_carries_to_another_run(self):
+        self.client()
+        self.approve()
+        self.start()
+        self.yes("F1")
+        self.end()
+        self.retake()
+        self.now = CLOCK + timedelta(minutes=1)
+        self.start()
+        self.assertIn("in this run", words(self.no("intent", "--key", "F1", "--operation", "create", "--workspace", OWN_WS)))
+        self.edit_json(B1J, lambda d: d["approvals"][-1].update(approval_mode="own-account-poc"))
+        self.assertEqual(self.intent("F1", "--workspace", OWN_WS)["yes"], "card")
+
+
+class RowsTest(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.approve()
+        self.start()
+
+    def test_K151_K152_K153_K236_K237_K238_types_keys_and_shapes_through_check(self):
+        self.assertEqual(len(self.led.TYPES), 23)
+        bad = {"B2": dict(self.row("B2"), type="item"), "B1.X": dict(self.row("B1.C4"), name=None),
+               "001:B7": dict(self.row("B2")), "B2.C1": dict(self.row("B2.C1"), owner_user_ids="20000001"),
+               "D1": dict(self.row("D1"), origin="found", status="done", state="on"),
+               "B9.C1": dict(self.row("B9.C1"), id=12345)}
+        self.edit_json(B1J, lambda d: d["objects"].update(bad))
+        code, blocking, _ = self.check()
+        for field in ("objects.B2.type", "objects.B1.X", "objects.B1.X.name", "objects.001:B7",
+                      "objects.B2.C1.owner_user_ids", "objects.D1.origin", "objects.D1.status", "objects.D1.state",
+                      "objects.B9.C1.id"):
+            self.assertIn((B1J, field), blocking, field)
+        self.assertEqual(code, 1)
+
+    def test_K154_W10_the_approval_class_of_each_kind(self):
+        objects = {"B1": {"type": "board", "origin": "created"}, "B9": {"type": "board", "origin": "pre-existing-referenced"}}
+        led = SimpleNamespace(objects=objects)
+        cases = (({"type": "board"}, "create", "created", None, "card"),
+                 ({"type": "workspace"}, "create", "created", None, "irreversible"),
+                 ({"type": "folder"}, "create", "created", None, "irreversible"),
+                 ({"type": "subitems"}, "create", "created", None, "irreversible"),
+                 ({"type": "column", "parent_key": "B1"}, "create", "created", None, "card"),
+                 ({"type": "column", "parent_key": "B9"}, "create", "created", None, "irreversible"),
+                 ({"type": "column", "parent_key": "002:B4"}, "create", "created", None, "irreversible"),
+                 ({"type": "automation"}, "create", "created", None, "list"),
+                 ({"type": "workflow"}, "create", "created", None, "list"),
+                 ({"type": "agent"}, "create", "created", "IR-04", "list"),
+                 ({"type": "sequence"}, "create", "created", None, "list"),
+                 ({"type": "webhook"}, "create", "created", None, "webhook"),
+                 ({"type": "publication"}, "publish", "created", None, "publication"),
+                 ({"type": "activation"}, "activate", "created", None, "publication"),
+                 ({"type": "board"}, "archive", "created", None, "removed"),
+                 ({"type": "project"}, "connect", "created", None, "irreversible"),
+                 ({"type": "board"}, "convert", "created", None, "irreversible"),
+                 ({"type": "board"}, "update", "pre-existing-modified", None, "irreversible"),
+                 ({"type": "board"}, "create", "pre-existing-referenced", None, "card"),
+                 ({"type": "view"}, "create", "created", "IR-05", "irreversible"),
+                 ({"type": "dashboard"}, "create", "created", None, "card"))
+        for row, op, origin, ir, cls in cases:
+            self.assertEqual(self.led.approval_class(row, op, origin, ir, led), cls, (row, op, origin))
+        need = self.led.yes_needed
+        self.assertEqual([need("list", "per-list", "A1", []), need("list", "own-account-poc", "A1", []),
+                          need("list", "own-account-poc", "A1", ["90600000001"]), need("webhook", "own-account-poc", "WH1", []),
+                          need("publication", "own-account-poc", "SQ1.ACT", []), need("irreversible", "per-list", "W2", []),
+                          need("card", "per-list", "B2", [])],
+                         ["grouped", None, "grouped", "per-item", "per-item", "per-item", None])
+
+    def test_K156_K181_subitems_and_companions(self):
+        self.intent("B2", "--workspace", OWN_WS)
+        self.record("B2", "--id", "90300000002")
+        self.verify("B2", {"name": "Orders"})
+        sub = self.intent("B2.SUB")
+        self.assertEqual(sub["class"], "irreversible")
+        self.record("B2.SUB", "--id", "90300000003")
+        self.assertEqual(self.row("B2")["companions"], {"subitems_board_id": "90300000003"})
+        self.intent("PJ1", "--workspace", OWN_WS)
+        self.assertIn(("(flags)", "--companion"), pairs(self.no("record", "--key", "PJ1", "--id", "90300000090",
+                                                                 "--companion", "tracker_id=1")))
+        self.record("PJ1", "--id", "90300000090", "--companion", "tasks_board_id=90300000091", "--companion",
+                    "overview_board_id=90300000092", "--companion", "folder_id=90200000001")
+        self.assertEqual(set(self.row("PJ1")["companions"]), {"tasks_board_id", "overview_board_id", "folder_id"})
+
+    def test_K157_a_column_on_a_referenced_or_protected_board(self):
+        self.verify("B9", {"id": "90300000009", "workspace_id": OWN_WS, "name": "Supplier list"})
+        self.assertEqual((self.row("B9")["status"], self.row("B9")["id"]), ("verified", "90300000009"))
+        self.assertEqual(self.intent("B9.C1")["class"], "irreversible")
+        self.ok("live-map", "set", "--key", "001:B1", "--constraint", "do-not-change", "--source",
+                "calls/2026-10-20-discovery.md@00:14:02", "--strand", "001")
+        found = self.no("intent", "--key", "B1.C4", "--operation", "create")
+        self.assertIn("do-not-change", words(found))
+        self.ok("live-map", "set", "--key", "001:B1", "--constraint", "free", "--source", "decision 2026-11-05", "--strand", "001")
+        self.assertEqual(self.intent("B1.C4")["class"], "card")
+
+    def test_K158_K159_an_automation_is_a_list_row_never_created_twice(self):
+        self.assertEqual(self.data()["approvals"][-1]["automations_listed"], ["A1"])
+        self.intent("A1", "--parent-key", "B1")
+        self.record("A1", "--id", "91100000001")
+        self.assertIn("status chain", words(self.no("intent", "--key", "A1", "--operation", "create")))
+        self.verify("A1", {"active": True, "updated_at": "2026-11-05T14:30:00Z"}, result="mismatch")
+        self.assertIn("never retried", words(self.no("intent", "--key", "A1", "--operation", "create", "--retry")))
+
+    def test_K160_K197_a_workflow_and_its_publication(self):
+        self.assertIn("verified", words(self.no("intent", "--key", "WF1.PUB", "--operation", "publish")))
+        self.intent("WF1", "--workspace", OWN_WS)
+        self.record("WF1", "--id", "90300000071")
+        self.assertIn("validation", words(self.no("verify", "--key", "WF1", "--result", "match", "--read",
+                                                  self.read_file("WF1", {"name": "Intake flow", "state": "ACTIVE"}))))
+        self.assertIn("no issues", words(self.no("verify", "--key", "WF1", "--result", "match", "--read", self.read_file(
+            "WF1", {"name": "Intake flow", "state": "ACTIVE", "validation": "2 issues"}))))
+        self.verify("WF1", {"name": "Intake flow", "state": "ACTIVE", "validation": "no issues"})
+        self.assertEqual(self.row("WF1")["read_values"], {"state": "ACTIVE"})
+        self.edit_json(B1J, lambda d: d["objects"]["WF1.PUB"].update(name="publish Intake flow"))
+        self.assertIn("activation state", words(self.no("intent", "--key", "WF1.PUB", "--operation", "publish")))
+        self.edit_json(B1J, lambda d: d["objects"]["WF1.PUB"].update(name="publish Intake flow, inactive"))
+        self.assertEqual(self.intent("WF1.PUB", op="publish")["class"], "publication")
+        self.record("WF1.PUB")
+        self.assertIn("sandbox trigger test", words(self.no("verify", "--key", "WF1.PUB", "--result", "match", "--read",
+                                                            self.read_file("WF1.PUB", {"published": True}))))
+        self.verify("WF1.PUB", {"published": True}, result="needs-user", note="the user runs the sandbox trigger test")
+
+    def test_K161_K162_K174_K175_K191_K192_K193_the_agent(self):
+        self.intent("AG1", "--scope", OWN_WS)
+        self.record("AG1", "--id", "90800000001")
+        self.assertIn("activation", words(self.no("intent", "--key", "AG1.ACT", "--operation", "activate")))
+        lacking = {k: v for k, v in AGENT.items() if k != "knowledge"}
+        self.assertIn("knowledge", words(self.no("verify", "--key", "AG1", "--result", "match", "--read",
+                                                 self.read_file("AG1", lacking))))
+        self.assertIn("skills", words(self.no("verify", "--key", "AG1", "--result", "match", "--read",
+                                              self.read_file("AG1", dict(AGENT, skills=[])))))
+        self.assertIn("frozen prompt", words(self.no("verify", "--key", "AG1", "--result", "match", "--read",
+                                                     self.read_file("AG1", dict(AGENT, plan=AGENT["plan"] + "!")))))
+        self.assertIn("activation", words(self.no("verify", "--key", "AG1", "--result", "match", "--read",
+                                                  self.read_file("AG1", dict(AGENT, state="ACTIVE")))))
+        crlf = dict(AGENT, plan=AGENT["plan"].replace("\n", "\r\n") + "\r\n")
+        data = self.verify("AG1", crlf)
+        row = self.row("AG1")
+        self.assertEqual((row["status"], row["version_id_at_build"], row["prompt_ref"], row["state"]),
+                         ("verified", "vid-000001", "v0.2r1#AG1", "inactive"))
+        self.assertEqual(data["triggers_beyond_defaults"], [])
+        self.assertEqual(self.intent("AG1.ACT", op="activate")["class"], "publication")
+
+    def test_K163_K190_K198_K169_kinds_with_no_read_back(self):
+        self.intent("B1.AI1")
+        self.record("B1.AI1", "--id", "job_summary_mkab12cd")
+        self.assertIn("not-checkable", words(self.no("verify", "--key", "B1.AI1", "--result", "match", "--read",
+                                                     self.read_file("B1.AI1", {"id": "job_summary_mkab12cd"}))))
+        self.assertIn("--note", " ".join(f["field"] for f in self.no("verify", "--key", "B1.AI1", "--result",
+                                                                     "not-checkable", "--read", self.read_file(
+                                                                         "B1.AI1", {"id": "x"}))))
+        data = self.verify("B1.AI1", {"id": "job_summary_mkab12cd"}, result="not-checkable", note="the user reads it in the UI")
+        self.assertEqual((data["result"], self.row("B1.AI1")["status"]), ("not-checkable", "written"))
+        self.intent("DB1", "--workspace", OWN_WS, "--ref", "board:%s" % BOARD)
+        self.record("DB1", "--id", "91200000001")
+        self.verify("DB1", {"name": "Workshop", "workspace_id": OWN_WS, "kind": "PUBLIC"})
+        self.intent("DB1.W2")
+        self.assertIn("no id", words(self.no("record", "--key", "DB1.W2")))
+        self.record("DB1.W2", "--id", "91600000001")
+        self.assertIn("widget", words(self.no("verify", "--key", "DB1.W2", "--result", "match", "--read",
+                                              self.read_file("DB1.W2", {"id": "91600000001"}))))
+        self.assertEqual(self.row("DB1")["refs"], ["board:%s" % BOARD])  # K168
+
+    def test_K164_K165_K172_K194_K195_K196_the_vibe_app(self):
+        self.intent("VB1", "--scope", OWN_WS, "--ref", "board:%s" % BOARD)
+        self.assertEqual(self.row("VB1")["id"], None)
+        self.assertIn("keep polling", self.record("VB1", "--pending", "--polled-seconds", "30")["message"])
+        self.assertIn("ceiling", self.record("VB1", "--pending", "--polled-seconds", "300")["message"])
+        self.assertEqual(self.row("VB1")["status"], "attempting")
+        self.assertIn("verified", words(self.no("intent", "--key", "VB1.PUB", "--operation", "publish")))
+        self.record("VB1", "--id", "90900000001")
+        self.assertIn("READY", words(self.no("verify", "--key", "VB1", "--result", "match", "--read",
+                                             self.read_file("VB1", dict(VIBE, status="GENERATING")))))
+        differs = dict(VIBE, differs_from_request=True, difference="a stage filter was added")
+        self.assertIn("no yes from the user", words(self.no("verify", "--key", "VB1", "--result", "match", "--read",
+                                                            self.read_file("VB1", differs))))
+        data = self.verify("VB1", dict(differs, user_yes_to_difference="yes, keep the filter"))
+        self.assertIn("the user's yes: yes, keep the filter", data["note"])
+        self.assertEqual(self.row("VB1")["read_values"], {"status": "READY", "is_published": False, "code_version": "1"})
+        self.assertEqual(self.intent("VB1.PUB", op="publish")["class"], "publication")
+
+    def test_K166_K167_K198_sequences_and_webhooks(self):
+        self.assertIn("recipients", words(self.no("intent", "--key", "SQ1", "--operation", "create", "--scope", OWN_WS)))
+        self.assertIn("grouped", words(self.no("intent", "--key", "SQ1", "--operation", "create", "--scope", OWN_WS,
+                                               "--notifies", "email:orders@example.com")))
+        self.yes("SQ1", "grouped")
+        self.intent("SQ1", "--scope", OWN_WS, "--notifies", "email:orders@example.com")
+        self.assertIn("planned", words(self.no("intent", "--key", "WH9", "--operation", "create", "--scope", OWN_WS)))
+        self.assertIn("per-item", words(self.no("intent", "--key", "WH1", "--operation", "create", "--scope", OWN_WS)))
+        self.yes("WH1")
+        self.intent("WH1", "--scope", OWN_WS)
+        self.record("WH1", "--id", "90300000101")
+        self.assertIn("not-checkable", words(self.no("verify", "--key", "WH1", "--result", "match", "--read",
+                                                     self.read_file("WH1", {"id": "90300000101"}))))
+        self.record("SQ1", "--id", "90300000102")
+        self.verify("SQ1", {"id": "90300000102"}, result="not-checkable", note="the user checks the recipients")
+
+    def test_K170_K171_K200_the_project_and_its_two_halves(self):
+        self.assertIn("tasks board", words(self.no("intent", "--key", "PJ1", "--operation", "connect", "--workspace", OWN_WS)))
+        self.intent("PJ1", "--workspace", OWN_WS)
+        self.record("PJ1", "--id", "90300000090", "--companion", "tasks_board_id=90300000091", "--companion",
+                    "overview_board_id=90300000092")
+        self.verify("PJ1", {"name": "Install at the mill", "type": "board"})
+        connect = self.intent("PJ1", op="connect")
+        self.assertEqual((connect["class"], self.row("PJ1")["irreversible"]), ("irreversible", True))
+        self.record("PJ1", "--id", "90300000090")
+        half = {"link_board_ids": ["90300000091"], "row_board_ids": []}
+        self.assertIn("partial link", words(self.no("verify", "--key", "PJ1", "--result", "match", "--read",
+                                                    self.read_file("PJ1", half))))
+        data = self.verify("PJ1", half, result="needs-user", note="the user opens the portfolio")
+        self.assertIn("partial link", data["note"])
+        self.verify("PJ1", {"link_board_ids": ["90300000091"], "row_board_ids": ["90300000091"]})
+        self.assertEqual(self.row("PJ1")["status"], "verified")
+
+    def test_K182_K184_K185_K186_K187_K189_K199_intent_record_and_verify(self):
+        data = self.intent("B2", "--workspace", OWN_WS, "--payload-sha", "a" * 64)
+        attempt = self.row("B2")["attempt"]
+        self.assertEqual((attempt["run_id"], attempt["started_at"], len(attempt["intent_digest"])),
+                         (self.run_id, "2026-11-05T14:30:00Z", 8))
+        self.assertEqual(data["attempt"], attempt)
+        self.assertIn("reconcile", self.record("B2", "--timed-out")["message"])
+        self.record("B2", "--id-from-error", "--id", "90300000002")
+        self.assertEqual((self.row("B2")["status"], self.row("B2")["id"]), ("attempting", "90300000002"))
+        self.record("B2", "--id", "90300000002")
+        self.assertEqual((self.row("B2")["status"], self.row("B2")["id"]), ("written", "90300000002"))
+        self.assertIn("--result", " ".join(f["field"] for f in self.no("verify", "--key", "B2", "--result", "ok",
+                                                                       "--read", self.read_file("B2", {"name": "x"}))))
+        for doc in ({"read": "", "object": {"name": "Orders"}}, {"read": "boards(ids:)", "object": {}}):
+            self.no("verify", "--key", "B2", "--result", "match", "--read", self.put("empty.json", doc))
+        self.assertIn("permissions", words(self.no("verify", "--key", "B2", "--result", "match", "--read", self.read_file(
+            "B2", {"name": "Orders", "column_permissions": []}))))
+        self.verify("B2", {"name": "Orders", "type": "board", "state": "active", "workspace_id": OWN_WS})
+        block = self.row("B2")["verify"]
+        self.assertEqual(list(block), ["read", "at", "result", "digest", "note"])
+        expected = self.led.digest("b2", {"name": "Orders", "type": "board", "state": "active", "workspace_id": OWN_WS,
+                                          "board_folder_id": None})
+        self.assertEqual((block["digest"], self.row("B2")["status"]), (expected, "verified"))
+        self.assertRegex(block["digest"], r"^b2:[0-9a-f]{8}$")
+
+    def test_K85_K86_K87_assumptions_and_sample_data_survive_the_write_path(self):
+        self.assertIn("--sample-data", words(self.no("intent", "--key", "B1.IB1", "--operation", "create")))
+        self.assertIn("not in the frozen", words(self.no("intent", "--key", "B1.IB1", "--operation", "create",
+                                                         "--sample-data", "--assumption-ref", "AS7")))
+        self.intent("B1.IB1", "--sample-data", "--assumption-ref", "AS1", "--assumption-ref", "FK1")
+        before = {k: self.row("B1.IB1")[k] for k in ("assumption_refs", "sample_data")}
+        self.assertEqual(before, {"assumption_refs": ["AS1", "FK1"], "sample_data": True})
+        self.record("B1.IB1", "--item-id", "90500000001", "--item-id", "90500000002")
+        self.verify("B1.IB1", {"item_ids": ["90500000002", "90500000001"]})
+        self.assertEqual(self.row("B1.IB1")["item_ids"], ["90500000001", "90500000002"])
+        self.end()
+        self.assertEqual({k: self.row("B1.IB1")[k] for k in before}, before)
+        self.assertFalse(self.row("B2")["sample_data"])
+        self.assertNotIn("001:B1.IB1", self.data("account.json")["live_objects"])
+
+
+class DepartTest(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.approve()
+        self.start()
+
+    def test_K202_K203_K204_K205_K206_departures(self):
+        self.assertIn("call forms", words(self.no("depart", "--key", "B1.G2", "--what", "w", "--error-code", "E",
+                                                  "--decision", "later-retry", "--attempt", "flat", "--attempt",
+                                                  "wrapped", "--attempt", "raw")))
+        self.no("depart", "--key", "B1.G2", "--what", "w", "--error-code", " ", "--decision", "later-retry")
+        for key, decision in (("B1.G2", "later-retry"), ("B1.FM1", "blueprint-revision"), ("D1", "ui-step")):
+            extra = ["--ui-what", "add the doc by hand", "--ui-owner", "the user"] if decision == "ui-step" else []
+            data = self.go("depart", "--key", key, "--what", "the call failed", "--error-code", "ColumnValueException",
+                           "--decision", decision, "--attempt", "flat", "--attempt", "wrapped", *extra)
+            self.assertEqual(self.row(key)["status"], "departed")
+        entry = self.data()["departures"][-1]
+        self.assertEqual(list(entry), ["key", "version", "what", "error_code", "attempts", "decision"])
+        self.assertEqual((entry["decision"], data["decision"]), ("ui-step U2", "ui-step U2"))
+        self.assertEqual(self.data()["ui_steps"][-1]["key"], "U2")
+
+    def test_K207_K208_K209_ui_steps(self):
+        sha = self.sha()
+        self.assertIn("U<n>", words(self.refused("ui-step", "--strand", "001", "--key", "X1", "--what", "w", "--owner",
+                                                 "the user", "--target-version", "v0.2", "--expect-sha", sha)))
+        data = self.ok("ui-step", "--strand", "001", "--key", "U1", "--what", "add the Kanban view", "--owner",
+                       "the user", "--target-version", "v0.2", "--expect-sha", sha)
+        self.assertEqual(list(data["ui_step"]), ["key", "what", "owner", "target_version", "status"])
+        self.refused("ui-step", "--strand", "001", "--key", "U9", "--done", "--expect-sha", self.sha())
+        self.ok("ui-step", "--strand", "001", "--key", "U1", "--done", "--expect-sha", self.sha())
+        self.assertEqual(self.data()["ui_steps"][0]["status"], "done")
+
+    def test_K210_K211_K212_K215_K216_irreversible_yes(self):
+        self.client()
+        data = self.yes("F1", "per-item", "--log-ref", "2026-11-05 14:30 · 001 · irreversible · v0.2 · F1")
+        entry = self.data()["irreversible_yes"][-1]
+        self.assertEqual(list(entry), ["key", "what", "at", "mode", "approval_ref", "evidence", "log_ref"])
+        self.assertEqual((entry["at"], entry["approval_ref"], data["log"][0]["type"]),
+                         ("2026-11-05T14:30:00Z", "v0.2r1", "irreversible"))
+        self.assertIn("not listed", words(self.no("irreversible-yes", "--key", "B2", "--mode", "per-item", "--what", "w")))
+        self.assertIn("evidence", words(self.no("irreversible-yes", "--key", "B1", "--mode", "per-item", "--what",
+                                                "archive the old Jobs board")))
+        self.yes("B1", "per-item", "--approval-ref", "v0.2r1")
+        self.assertIn("containment evidence", words(self.no("intent", "--key", "B1", "--operation", "archive",
+                                                            "--approval-ref", "v0.2r1")))
+        self.yes("B1", "per-item", "--approval-ref", "v0.2r1", "--evidence", "no view, automation or other strand reads it")
+        self.assertEqual(self.intent("B1", "--approval-ref", "v0.2r1", op="archive")["class"], "removed")
+        self.assertTrue(self.row("B1")["irreversible"])
+        self.assertIn("B1", [e["key"] for e in self.data()["irreversible_yes"]])
+
+
+class LiveMapTest(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.approve()
+        self.start()
+        self.sales()
+        self.end()
+
+    def test_K217_K218_K219_K220_K221_K222_K223_K224_K226_the_map_and_its_rows(self):
+        text = mc.read_text(self.root / "live" / "live-map.md")
+        fields, body = mc.split_front_matter(text)
+        live = self.data("account.json")["live_objects"]
+        self.assertEqual(list(fields), ["schema", "client", "rows", "updated"])
+        self.assertEqual((fields["schema"], fields["rows"]), ("live-map/1", str(len(live))))
+        self.assertIn(self.led.MAP_HEAD, body)
+        self.assertIn("| 001:W2 | %s | workspace | %s | 001/v0.2 | active | change-with-own-yes |" % (SALES_WS, SALES_WS),
+                      body)
+        for key, row in live.items():
+            self.assertRegex(key, r"^\d{3}:")
+            self.assertIsInstance(row["monday_id"], str)
+            self.assertIn(row["state"], self.led.STATES)
+            self.assertRegex(row["introduced_in"], r"^\d{3}/v\d+\.\d+$|^client$|^native$")
+        self.assertEqual(self.check()[1], set())
+
+    def test_K225_K227_K228_K229_K230_K231_K233_live_map_set(self):
+        before = self.data("account.json")["live_objects"]["001:W2"]
+        base = ["live-map", "set", "--strand", "001"]
+        for argv, expect in ((["--key", "001:Z9", "--constraint", "free", "--source", "s"], "no live-map row"),
+                             (["--key", "001:W2", "--constraint", "maybe", "--source", "s"], "not a constraint"),
+                             (["--key", "001:W2", "--constraint", "free", "--source", " "], "interim"),
+                             (["--key", "001:W2", "--constraint", "free", "--source", "pending strand close"], "interim")):
+            self.assertIn(expect, words(self.refused(*(base + argv))))
+        self.assertIn("built by strand 001", words(self.refused("live-map", "set", "--strand", "002", "--key", "001:W2",
+                                                                "--constraint", "free", "--source", "s")))
+        build = self.sha()
+        data = self.ok(*(base + ["--key", "001:W2", "--constraint", "do-not-change", "--source",
+                                 "calls/2026-10-20-discovery.md@00:21:40"]))
+        after = self.data("account.json")["live_objects"]["001:W2"]
+        self.assertEqual({k: v for k, v in after.items() if k not in ("constraint", "constraint_source")},
+                         {k: v for k, v in before.items() if k not in ("constraint", "constraint_source")})
+        self.assertIn("| do-not-change | calls/2026-10-20-discovery.md@00:21:40 |",
+                      mc.read_text(self.root / "live" / "live-map.md"))
+        self.assertEqual((self.sha(), data["asked_by"]), (build, "001"))
+        self.assertEqual(self.ok("live-map", "--strand", "002")["asked_by"], "002")
+        self.assertEqual(self.sha(), build)  # K38: record-level commands write no build.json
+        self.assertEqual(self.check()[1], set())
+
+    def test_K232_W61_a_later_run_end_keeps_a_promoted_constraint(self):
+        self.ok("live-map", "set", "--strand", "001", "--key", "001:W2", "--constraint", "free", "--source",
+                "decision 2026-11-05 14:40")
+        self.retake()
+        self.start()
+        self.end()
+        row = self.data("account.json")["live_objects"]["001:W2"]
+        self.assertEqual((row["constraint"], row["constraint_source"]), ("free", "decision 2026-11-05 14:40"))
+
+
+class CheckTest(Base):
+
+    def table_in_v01(self):
+        """The C129 stand-in: the v0.1 frozen file's heading as the pinned one, in this copy only (W42)."""
+        path = self.root / V1 / "blueprint-r1.md"
+        path.write_bytes(path.read_bytes().replace(b"## Elements\n", b"## Element keys\n"))
+        sha = mc.sha256_file(path)
+        self.edit_fm(V1 + "/version.md", sha256=sha)
+        self.edit_json(B1J, lambda d: d["approvals"][0].update(sha256=sha))
+
+    def test_K28_K248_the_untouched_fixture_checks_with_one_warning(self):
+        code, blocking, warnings = self.check()
+        self.assertEqual((code, blocking, warnings), (2, set(), {(V1 + "/blueprint-r1.md", "## Element keys")}))
+        data = self.ledger("check")[1]
+        self.assertEqual(data["shas"], {"account.json": self.sha("account.json"), B1J: self.sha()})
+
+    def test_K243_C129_the_key_half_of_a_ref(self):
+        self.table_in_v01()
+        self.assertEqual(self.check(), (0, set(), set()))
+        self.edit_json(B1J, lambda d: d["objects"]["B1"].update(blueprint_ref="v0.1r1#B9"))
+        self.assertEqual(self.check()[:2], (1, {(B1J, "objects.B1.blueprint_ref")}))
+
+    def test_K234_K235_K242_K247_schemas_fields_and_the_frozen_sha(self):
+        self.edit_json(B1J, lambda d: d.update(schema="build/3"))
+        self.assertEqual(self.check()[:2], (1, {(B1J, "schema")}))
+        self.edit_json(B1J, lambda d: d.update(schema="build/2"))
+        self.edit_json("account.json", lambda d: d["account"].pop("tier"))
+        self.edit_json(B1J, lambda d: (d["approvals"][0].pop("approved_words"), d["runs"][0].pop("kind"),
+                                       d["objects"]["B1"].pop("name")))
+        blocking = self.check()[1]
+        for pair in (("account.json", "account.tier"), (B1J, "approvals[0].approved_words"), (B1J, "runs[0].kind"),
+                     (B1J, "objects.B1.name")):
+            self.assertIn(pair, blocking)
+        self.copy_home()
+        os.environ["MMB_HOME"] = str(self.home)
+        path = self.root / V1 / "blueprint-r1.md"
+        path.write_bytes(path.read_bytes() + b"x")
+        self.assertIn((V1 + "/blueprint-r1.md", "sha256"), self.check()[1])
+
+    def test_K239_K240_K241_K244_K245_K249_the_ledger_rules(self):
+        live_row = {"monday_id": "90300000077", "kind": "board", "workspace": OWN_WS, "name_at_build": "Stock",
+                    "owner_strand": "002", "introduced_in": "002/v0.1", "state": "active", "constraint": "do-not-change",
+                    "constraint_source": "s", "digest": None, "last_verified": None, "dependants": []}
+        self.edit_json("account.json", lambda d: d["live_objects"].update({"002:B7": live_row}))
+
+        def plant(d):
+            objects = d["objects"]
+            objects["B1.V1"].update(parent_key="B4")
+            objects["B1"].update(prior_state={"name": "Jobs"}, workspace="90100000999")
+            objects["W1"].update(origin="pre-existing-modified")
+            objects["B1.C1"] = dict(objects["B1.V1"], type="column", parent_key="B1", origin="other-strand-modified",
+                                    source_strand="002", live_key="002:B7", prior_state={}, approval_ref="v9.9r9")
+            d["irreversible_yes"].append({"key": "B1", "what": "w", "at": "2026-11-05T14:30:00Z", "mode": "per-item",
+                                          "approval_ref": "v0.1r1", "evidence": None, "log_ref": None})
+        self.edit_json(B1J, plant)
+        blocking = self.check()[1]
+        for field in ("objects.B1.V1.parent_key", "objects.B1.prior_state", "objects.W1.prior_state",
+                      "objects.B1.C1.live_key", "objects.B1.C1.approval_ref", "objects.B1.workspace",
+                      "irreversible_yes[0].key"):
+            self.assertIn((B1J, field), blocking, field)
+        self.edit_json("account.json", lambda d: d["live_objects"].pop("002:B7"))
+        self.assertIn((B1J, "objects.B1.C1.live_key"), self.check()[1])
+
+    def test_W63_two_running_runs_a_stale_run_and_a_map_that_differs(self):
+        self.edit_json(B1J, lambda d: d["runs"].extend([dict(d["runs"][0], id="run-2026-11-05-1", state="running",
+                                                              heartbeat_at="2026-11-05T13:00:00Z"),
+                                                         dict(d["runs"][0], id="run-2026-11-05-2", state="running",
+                                                              heartbeat_at="2026-11-05T14:29:00Z")]))
+        self.edit_json("account.json", lambda d: d["live_objects"]["001:B1"].update(state="archived"))
+        code, blocking, warnings = self.check()
+        self.assertIn((B1J, "runs"), blocking)
+        self.assertIn(("live/live-map.md", "001:B1.state"), blocking)
+        self.assertIn((B1J, "runs[1].heartbeat_at"), warnings)
+
+
+if __name__ == "__main__":
+    unittest.main()

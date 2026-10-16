@@ -1,0 +1,1950 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "record-map.md build/2",
+      "record-map.md account/1",
+      "SF 5",
+      "SF 9",
+      "G-07",
+      "G-08",
+      "G-09",
+      "G-10",
+      "G-11",
+      "G-65",
+      "G-66",
+      "G-67",
+      "G-69",
+      "G-90",
+      "G-92",
+      "P-19",
+      "P-20",
+      "P-21"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string."
+  },
+  "account": {
+    "client_workspace_ids": [
+      "90100000401",
+      "90100000402",
+      "90100000403"
+    ],
+    "build_targets_by_strand": {
+      "001": {
+        "workspace_ids": [
+          "90100000401",
+          "90100000402"
+        ],
+        "folder_ids": [
+          "90200000401"
+        ]
+      },
+      "002": {
+        "workspace_ids": [
+          "90100000401",
+          "90100000403"
+        ],
+        "folder_ids": []
+      }
+    },
+    "native_board_index": {
+      "90300000431": "crm/leads"
+    },
+    "live_objects": {
+      "002:B1": {
+        "monday_id": "90300000432",
+        "kind": "board",
+        "name_at_build": "Kelmoss Rota",
+        "workspace": "90100000401",
+        "owner_strand": "002",
+        "introduced_in": "002/v0.1",
+        "state": "active",
+        "constraint": "change-with-own-yes",
+        "constraint_source": "pending strand close",
+        "digest": "b1:4d2aed55",
+        "last_verified": "2026-10-10",
+        "dependants": []
+      }
+    }
+  },
+  "lock": {
+    "schema": "lock/2",
+    "state": "held",
+    "strand": "001",
+    "epoch": 3,
+    "session_label": "20261016-0855-c3d4",
+    "run_id": "run-2026-10-16-1",
+    "heartbeat_at": "2026-10-16T09:35:00Z"
+  },
+  "build": {
+    "schema": "build/2",
+    "strand": "001",
+    "runs": [
+      {
+        "id": "run-2026-10-15-1",
+        "version": "v0.1",
+        "kind": "build",
+        "session_label": "20261015-0855-a1b2",
+        "lease_epoch": 2,
+        "another_build_running": "no, answered 08:57",
+        "started_at": "2026-10-15T08:58:00Z",
+        "heartbeat_at": "2026-10-15T15:10:00Z",
+        "ended_at": "2026-10-15T15:12:00Z",
+        "state": "ended",
+        "calls_estimated": [
+          40,
+          70
+        ],
+        "calls_used": 52,
+        "account_checks": []
+      },
+      {
+        "id": "run-2026-10-16-1",
+        "version": "v0.1",
+        "kind": "build",
+        "session_label": "20261016-0855-c3d4",
+        "lease_epoch": 3,
+        "another_build_running": "no, answered 08:58",
+        "started_at": "2026-10-16T09:00:00Z",
+        "heartbeat_at": "2026-10-16T09:35:00Z",
+        "ended_at": null,
+        "state": "running",
+        "calls_estimated": [
+          20,
+          40
+        ],
+        "calls_used": 17,
+        "account_checks": []
+      }
+    ],
+    "objects": {
+      "W1": {
+        "type": "workspace",
+        "id": "90100000401",
+        "name": "Ambrel Works",
+        "parent_key": null,
+        "parent_id": null,
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": null,
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:00:00Z",
+          "intent_digest": "bdc1bf9d"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:00:00Z",
+          "result": "match",
+          "digest": "w1:eccb9300",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#W1"
+      },
+      "W2": {
+        "type": "workspace",
+        "id": "90100000402",
+        "name": "Corvane Sales",
+        "parent_key": null,
+        "parent_id": null,
+        "origin": "pre-existing-referenced",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": null,
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": null,
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:00:00Z",
+          "result": "match",
+          "digest": "w2:70d6fd7b",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#W2"
+      },
+      "F1": {
+        "type": "folder",
+        "id": "90200000401",
+        "name": "Ambrel Files",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:04:00Z",
+          "intent_digest": "4e4a871c"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:04:00Z",
+          "result": "match",
+          "digest": "f1:2de01150",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#F1"
+      },
+      "B1": {
+        "type": "board",
+        "id": "90300000401",
+        "name": "Ambrel Jobs",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:11:00Z",
+          "intent_digest": "7f65e298"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:11:00Z",
+          "result": "match",
+          "digest": "b1:1934c642",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B1"
+      },
+      "B1.C1": {
+        "type": "column",
+        "id": "status_mkr1t2y3",
+        "name": "Stage",
+        "parent_key": "B1",
+        "parent_id": "90300000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "written",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:14:00Z",
+          "intent_digest": "f707664d"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B1.C1"
+      },
+      "B1.G1": {
+        "type": "group",
+        "id": "topics",
+        "name": "Open",
+        "parent_key": "B1",
+        "parent_id": "90300000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:13:00Z",
+          "intent_digest": "30f332e3"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:13:00Z",
+          "result": "match",
+          "digest": "b1.g1:a8b84697",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B1.G1"
+      },
+      "B2": {
+        "type": "board",
+        "id": "90300000402",
+        "name": "Corvane Orders",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "written",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:19:00Z",
+          "intent_digest": "fda827d9"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B2"
+      },
+      "B3": {
+        "type": "board",
+        "id": "90300000403",
+        "name": "Delvarr Stock",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:24:00Z",
+          "intent_digest": "38d95d46"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:24:00Z",
+          "result": "match",
+          "digest": "b3:ed76c0e4",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B3"
+      },
+      "B4": {
+        "type": "board",
+        "id": "90300000404",
+        "name": "Elvaine Tasks",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:27:00Z",
+          "intent_digest": "2b527f21"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:27:00Z",
+          "result": "match",
+          "digest": "b4:2706065f",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B4"
+      },
+      "B5": {
+        "type": "board",
+        "id": "90300000405",
+        "name": "Fenmark Rota",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:29:00Z",
+          "intent_digest": "f5ccbde9"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:29:00Z",
+          "result": "match",
+          "digest": "b5:1b84a543",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B5"
+      },
+      "B6": {
+        "type": "board",
+        "id": null,
+        "name": "Garvenn Intake",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:04:00Z",
+          "intent_digest": "f5f324d6"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B6"
+      },
+      "B7": {
+        "type": "board",
+        "id": null,
+        "name": "Halvenn Log",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:05:00Z",
+          "intent_digest": "36f6be2c"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B7"
+      },
+      "B8": {
+        "type": "board",
+        "id": null,
+        "name": "Ivrel Plan",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:06:00Z",
+          "intent_digest": "d57f5379"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B8"
+      },
+      "B9": {
+        "type": "board",
+        "id": null,
+        "name": "Kelmoss Notes",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:07:00Z",
+          "intent_digest": "92b21162"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B9"
+      },
+      "B10": {
+        "type": "board",
+        "id": null,
+        "name": "Lundrask Schedule",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "planned",
+        "attempt": null,
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B10"
+      },
+      "B11": {
+        "type": "board",
+        "id": null,
+        "name": "Mossery Board",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "departed",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:08:00Z",
+          "intent_digest": "5e35f2d1"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B11"
+      },
+      "B12": {
+        "type": "board",
+        "id": "90300000412",
+        "name": "Nolvane Archive",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "archived",
+        "status": "removed",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:02:00Z",
+          "intent_digest": "b49573ae"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#B12"
+      },
+      "D1": {
+        "type": "doc",
+        "id": "91300000401",
+        "name": "Ambrel Guide",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:39:00Z",
+          "intent_digest": "5dda1024"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:39:00Z",
+          "result": "match",
+          "digest": "d1:c7ec0bcf",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {
+          "doc_container_board_id": "90300000410"
+        },
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#D1"
+      },
+      "A1": {
+        "type": "automation",
+        "id": null,
+        "name": "When an item is created assign the person in the owner column",
+        "parent_key": "B1",
+        "parent_id": "90300000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:09:00Z",
+          "intent_digest": "0bfbbf9a"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#A1"
+      },
+      "A2": {
+        "type": "automation",
+        "id": "91100000402",
+        "name": "When status changes to Done notify the owner",
+        "parent_key": "B1",
+        "parent_id": "90300000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T13:59:00Z",
+          "intent_digest": "b2996f03"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T13:59:00Z",
+          "result": "match",
+          "digest": "a2:b2c70158",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#A2"
+      },
+      "DB1": {
+        "type": "dashboard",
+        "id": "91200000401",
+        "name": "Ambrel Overview",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:50:00Z",
+          "intent_digest": "54d8300d"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:50:00Z",
+          "result": "match",
+          "digest": "db1:c08d5eae",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [
+          "board:90300000401"
+        ],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#DB1"
+      },
+      "DB2": {
+        "type": "dashboard",
+        "id": "91200000402",
+        "name": "Corvane Totals",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T09:52:00Z",
+          "intent_digest": "f1a51a09"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-15T10:52:00Z",
+          "result": "match",
+          "digest": "db2:73e43139",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [
+          "board:90300000402"
+        ],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#DB2"
+      },
+      "AG1": {
+        "type": "agent",
+        "id": null,
+        "name": "Halvenn Helper",
+        "parent_key": null,
+        "parent_id": null,
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:13:00Z",
+          "intent_digest": "d377b89e"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#AG1"
+      },
+      "AG2": {
+        "type": "agent",
+        "id": "90800000402",
+        "name": "Delvarr Aide",
+        "parent_key": null,
+        "parent_id": null,
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "state": "active",
+        "status": "verified",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-14T10:59:00Z",
+          "intent_digest": "6927d652"
+        },
+        "verify": {
+          "read": "identity fields in digest_fields",
+          "at": "2026-10-14T10:59:00Z",
+          "result": "match",
+          "digest": "ag2:089894d5",
+          "note": null
+        },
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#AG2"
+      },
+      "VB1": {
+        "type": "vibe_app",
+        "id": "90900000401",
+        "name": "Ambrel Board View",
+        "parent_key": null,
+        "parent_id": null,
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "state": null,
+        "status": "written",
+        "attempt": {
+          "run_id": "run-2026-10-15-1",
+          "started_at": "2026-10-15T14:59:00Z",
+          "intent_digest": "6d6c42d4"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [
+          "board:90300000401"
+        ],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#VB1"
+      },
+      "VB2": {
+        "type": "vibe_app",
+        "id": null,
+        "name": "Lundrask View",
+        "parent_key": null,
+        "parent_id": null,
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:28:00Z",
+          "intent_digest": "c163515a"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [
+          "board:90300000401"
+        ],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#VB2"
+      },
+      "WF1": {
+        "type": "workflow",
+        "id": null,
+        "name": "Mossery Flow",
+        "parent_key": "W1",
+        "parent_id": "90100000401",
+        "origin": "created",
+        "source_strand": null,
+        "introduced_in": "v0.1",
+        "changed_in": [],
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "state": null,
+        "status": "attempting",
+        "attempt": {
+          "run_id": "run-2026-10-16-1",
+          "started_at": "2026-10-16T09:33:00Z",
+          "intent_digest": "d458aba3"
+        },
+        "verify": null,
+        "creator_user_id": "90600000001",
+        "owner_user_ids": [
+          "90600000001"
+        ],
+        "irreversible": false,
+        "sample_data": false,
+        "approval_ref": "v0.1r1",
+        "notifies": [],
+        "companions": {},
+        "refs": [],
+        "role": null,
+        "prior_state": null,
+        "url": null,
+        "blueprint_ref": "v0.1r1#WF1"
+      }
+    }
+  },
+  "sibling": {
+    "strand": "002",
+    "asks_with": "reconcile --strand 001 --classify-only --asked-by 002"
+  },
+  "digest_fields": [
+    {
+      "at": [
+        "build",
+        "objects",
+        "W1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "W1",
+        "type": "workspace",
+        "operation": "create",
+        "name": "Ambrel Works",
+        "parent_id": null,
+        "workspace": null,
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "W1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "w1",
+      "fields": {
+        "name": "Ambrel Works",
+        "kind": "open"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "W2",
+        "verify",
+        "digest"
+      ],
+      "prefix": "w2",
+      "fields": {
+        "name": "Corvane Sales",
+        "kind": "open"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "F1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "F1",
+        "type": "folder",
+        "operation": "create",
+        "name": "Ambrel Files",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "F1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "f1",
+      "fields": {
+        "name": "Ambrel Files",
+        "workspace_id": "90100000401"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B1",
+        "type": "board",
+        "operation": "create",
+        "name": "Ambrel Jobs",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b1",
+      "fields": {
+        "name": "Ambrel Jobs",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000401",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B1.C1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B1.C1",
+        "type": "column",
+        "operation": "create",
+        "name": "Stage",
+        "parent_id": "90300000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B1.G1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B1.G1",
+        "type": "group",
+        "operation": "create",
+        "name": "Open",
+        "parent_id": "90300000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B1.G1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b1.g1",
+      "fields": {
+        "title": "Open",
+        "color": "#579bfc",
+        "position": "65536"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B2",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B2",
+        "type": "board",
+        "operation": "create",
+        "name": "Corvane Orders",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B3",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B3",
+        "type": "board",
+        "operation": "create",
+        "name": "Delvarr Stock",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B3",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b3",
+      "fields": {
+        "name": "Delvarr Stock",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000401",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B4",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B4",
+        "type": "board",
+        "operation": "create",
+        "name": "Elvaine Tasks",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B4",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b4",
+      "fields": {
+        "name": "Elvaine Tasks",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000401",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B5",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B5",
+        "type": "board",
+        "operation": "create",
+        "name": "Fenmark Rota",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B5",
+        "verify",
+        "digest"
+      ],
+      "prefix": "b5",
+      "fields": {
+        "name": "Fenmark Rota",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000401",
+        "board_folder_id": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B6",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B6",
+        "type": "board",
+        "operation": "create",
+        "name": "Garvenn Intake",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B7",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B7",
+        "type": "board",
+        "operation": "create",
+        "name": "Halvenn Log",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B8",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B8",
+        "type": "board",
+        "operation": "create",
+        "name": "Ivrel Plan",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B9",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B9",
+        "type": "board",
+        "operation": "create",
+        "name": "Kelmoss Notes",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B11",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B11",
+        "type": "board",
+        "operation": "create",
+        "name": "Mossery Board",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "B12",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "B12",
+        "type": "board",
+        "operation": "create",
+        "name": "Nolvane Archive",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "D1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "D1",
+        "type": "doc",
+        "operation": "create",
+        "name": "Ambrel Guide",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "D1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "d1",
+      "fields": {
+        "name": "Ambrel Guide",
+        "workspace_id": "90100000401"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "A1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "A1",
+        "type": "automation",
+        "operation": "create",
+        "name": "When an item is created assign the person in the owner column",
+        "parent_id": "90300000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "A2",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "A2",
+        "type": "automation",
+        "operation": "create",
+        "name": "When status changes to Done notify the owner",
+        "parent_id": "90300000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "A2",
+        "verify",
+        "digest"
+      ],
+      "prefix": "a2",
+      "fields": {
+        "active": true,
+        "updated_at": "2026-10-15T14:00:00Z"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "DB1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "DB1",
+        "type": "dashboard",
+        "operation": "create",
+        "name": "Ambrel Overview",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [
+          "board:90300000401"
+        ],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "DB1",
+        "verify",
+        "digest"
+      ],
+      "prefix": "db1",
+      "fields": {
+        "name": "Ambrel Overview",
+        "workspace_id": "90100000401",
+        "kind": "PUBLIC"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "DB2",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "DB2",
+        "type": "dashboard",
+        "operation": "create",
+        "name": "Corvane Totals",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [
+          "board:90300000402"
+        ],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "DB2",
+        "verify",
+        "digest"
+      ],
+      "prefix": "db2",
+      "fields": {
+        "name": "Corvane Totals",
+        "workspace_id": "90100000401",
+        "kind": "PUBLIC"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "AG1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "AG1",
+        "type": "agent",
+        "operation": "create",
+        "name": "Halvenn Helper",
+        "parent_id": null,
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "AG2",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "AG2",
+        "type": "agent",
+        "operation": "create",
+        "name": "Delvarr Aide",
+        "parent_id": null,
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "AG2",
+        "verify",
+        "digest"
+      ],
+      "prefix": "ag2",
+      "fields": {
+        "state": "ACTIVE",
+        "version_id": "vid-000003"
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "VB1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "VB1",
+        "type": "vibe_app",
+        "operation": "create",
+        "name": "Ambrel Board View",
+        "parent_id": null,
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "refs": [
+          "board:90300000401"
+        ],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "VB2",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "VB2",
+        "type": "vibe_app",
+        "operation": "create",
+        "name": "Lundrask View",
+        "parent_id": null,
+        "workspace": null,
+        "workspace_scope": [
+          "90100000401"
+        ],
+        "refs": [
+          "board:90300000401"
+        ],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "build",
+        "objects",
+        "WF1",
+        "attempt",
+        "intent_digest"
+      ],
+      "prefix": null,
+      "fields": {
+        "key": "WF1",
+        "type": "workflow",
+        "operation": "create",
+        "name": "Mossery Flow",
+        "parent_id": "90100000401",
+        "workspace": "90100000401",
+        "workspace_scope": [],
+        "refs": [],
+        "notifies": [],
+        "payload_sha256": null
+      }
+    },
+    {
+      "at": [
+        "account",
+        "live_objects",
+        "002:B1",
+        "digest"
+      ],
+      "prefix": "b1",
+      "fields": {
+        "name": "Kelmoss Rota",
+        "type": "board",
+        "state": "active",
+        "workspace_id": "90100000401",
+        "board_folder_id": null
+      }
+    }
+  ]
+}

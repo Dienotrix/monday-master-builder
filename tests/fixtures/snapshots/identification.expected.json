@@ -1,0 +1,870 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "NO 2.6",
+      "NO 5",
+      "NO 7.1",
+      "NO 7.2",
+      "NO 7.3",
+      "NO 7.4",
+      "G-08",
+      "G-09",
+      "G-10",
+      "G-69",
+      "G-71",
+      "G-72",
+      "G-73",
+      "G-74",
+      "G-77",
+      "G-78",
+      "G-80",
+      "G-81",
+      "G-83",
+      "G-92",
+      "G-98",
+      "G-100"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string.",
+    "answers_for": "identification.reads.json"
+  },
+  "board_count": 22,
+  "boards": {
+    "90300000101": {
+      "case": "R1-doc-container",
+      "class": "doc_container",
+      "rule": "R1",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:document",
+        "N0:core",
+        "doc:91300000001"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R1",
+        "G-10"
+      ]
+    },
+    "90300000102": {
+      "case": "R2-parent-board",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 14
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R11",
+        "NO 5 N11",
+        "G-10"
+      ]
+    },
+    "90300000103": {
+      "case": "R2-subitems",
+      "class": "subitems_board",
+      "rule": "R2",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 9
+      },
+      "confidence": "high",
+      "signals": [
+        "type:sub_items_board",
+        "N0:core",
+        "parent:90300000102"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R2",
+        "G-10",
+        "G-44"
+      ]
+    },
+    "90300000104": {
+      "case": "R3-workflow-object",
+      "class": "workflow_object",
+      "rule": "R3",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:core",
+        "lineage:105719650",
+        "workflow_objects:in"
+      ],
+      "lineage": {
+        "chain": [
+          "105719650"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R3",
+        "NO 7.2",
+        "G-69",
+        "G-100"
+      ]
+    },
+    "90300000105": {
+      "case": "R3-custom-object-other",
+      "class": "custom_object_other",
+      "rule": "R3",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:core",
+        "workflow_objects:out"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R3",
+        "G-74"
+      ]
+    },
+    "90300000106": {
+      "case": "R3-workflow-object-archived",
+      "class": "workflow_object",
+      "rule": "R3",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "archived",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:core",
+        "lineage:105719650",
+        "workflow_objects:in"
+      ],
+      "lineage": {
+        "chain": [
+          "105719650"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R3",
+        "G-09",
+        "G-100"
+      ]
+    },
+    "90300000110": {
+      "case": "R4-portfolio",
+      "class": "portfolio_board",
+      "rule": "R4",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 2
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio",
+        "N0:core",
+        "lineage:5882692393",
+        "portfolio_project_ids:5"
+      ],
+      "lineage": {
+        "chain": [
+          "5882692393"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R4",
+        "NO 7.1",
+        "G-74",
+        "G-81"
+      ]
+    },
+    "90300000111": {
+      "case": "R5-created-connected",
+      "class": "project_tasks_board",
+      "rule": "R5",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 5
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio-project",
+        "N0:core",
+        "lineage:9857787491",
+        "project_ids:4",
+        "hierarchy:multi_level"
+      ],
+      "lineage": {
+        "chain": [
+          "9857787491"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R5",
+        "NO 7.2",
+        "G-72"
+      ]
+    },
+    "90300000112": {
+      "case": "R5-created-transient-key",
+      "class": "project_tasks_board",
+      "rule": "R5",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 5
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::project",
+        "N0:core",
+        "lineage:9857787491",
+        "project_ids:4",
+        "hierarchy:multi_level"
+      ],
+      "lineage": {
+        "chain": [
+          "9857787491"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R5",
+        "NO 7.1",
+        "G-73"
+      ]
+    },
+    "90300000113": {
+      "case": "R5-converted",
+      "class": "converted_project_board",
+      "rule": "R5",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 4
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio-project",
+        "N0:core"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R5",
+        "G-80"
+      ]
+    },
+    "90300000114": {
+      "case": "R5-origin-unknown",
+      "class": "project_board_origin_unknown",
+      "rule": "R5",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 6
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio-project",
+        "N0:core"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R5",
+        "G-81"
+      ]
+    },
+    "90300000115": {
+      "case": "R5-created-folder-shared",
+      "class": "project_tasks_board",
+      "rule": "R5",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 5
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio-project",
+        "N0:core",
+        "lineage:9857787491",
+        "project_ids:4",
+        "hierarchy:multi_level"
+      ],
+      "lineage": {
+        "chain": [
+          "9857787491"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R5",
+        "NO 7.3",
+        "G-78"
+      ]
+    },
+    "90300000116": {
+      "case": "R6-overview-live",
+      "class": "project_overview_companion",
+      "rule": "R6",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 1
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::standalone",
+        "N0:core",
+        "lineage:6667825632",
+        "portfolio_project_ids:5"
+      ],
+      "lineage": {
+        "chain": [
+          "6667825632"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R6",
+        "G-72"
+      ]
+    },
+    "90300000117": {
+      "case": "R6-overview-deleted",
+      "class": "project_overview_companion",
+      "rule": "R6",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "deleted",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::standalone",
+        "N0:core",
+        "lineage:6667825632"
+      ],
+      "lineage": {
+        "chain": [
+          "6667825632"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R6",
+        "G-77"
+      ]
+    },
+    "90300000118": {
+      "case": "R8-planner",
+      "class": "resource_planner_companion",
+      "rule": "R8",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 3
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "lineage:9958257937",
+        "rp_ids:7",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [
+          "9958257937"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R8",
+        "NO 7.2",
+        "G-72"
+      ]
+    },
+    "90300000119": {
+      "case": "R8-near-miss",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 7
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "rp_ids:4",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R8",
+        "NO 5 R11"
+      ]
+    },
+    "90300000120": {
+      "case": "R9-portfolio-shaped",
+      "class": "portfolio_shaped_board_without_key",
+      "rule": "R9",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 4
+      },
+      "confidence": "low",
+      "signals": [
+        "N0:core",
+        "portfolio_project_ids:5",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": true,
+      "limits": [],
+      "models": [
+        "NO 5 R9",
+        "G-81"
+      ]
+    },
+    "90300000121": {
+      "case": "R7-unrecognised-key",
+      "class": "keyed_board_unrecognized_key",
+      "rule": "R7",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 3
+      },
+      "confidence": "low",
+      "signals": [
+        "key:lundrask_app::register",
+        "N0:core"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": true,
+      "limits": [],
+      "models": [
+        "NO 5 R7",
+        "G-81"
+      ]
+    },
+    "90300000122": {
+      "case": "R10-multi-level",
+      "class": "multi_level_board_not_project",
+      "rule": "R10",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 11
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "hierarchy:multi_level",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R10",
+        "G-10",
+        "G-81"
+      ]
+    },
+    "90300000123": {
+      "case": "R11-normal",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 20
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R11"
+      ]
+    },
+    "90300000124": {
+      "case": "R11-archived",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "archived",
+        "items_count": 5
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R0",
+        "NO 5 R11",
+        "G-09"
+      ]
+    },
+    "90300000125": {
+      "case": "R11-deleted",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "deleted",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R0",
+        "NO 5 R11",
+        "G-77"
+      ]
+    }
+  },
+  "totals": {
+    "converted_project_board": 1,
+    "custom_object_other": 1,
+    "doc_container": 1,
+    "keyed_board_unrecognized_key": 1,
+    "multi_level_board_not_project": 1,
+    "normal_classic_board": 5,
+    "portfolio_board": 1,
+    "portfolio_shaped_board_without_key": 1,
+    "project_board_origin_unknown": 1,
+    "project_overview_companion": 2,
+    "project_tasks_board": 3,
+    "resource_planner_companion": 1,
+    "subitems_board": 1,
+    "workflow_object": 2
+  },
+  "limits": [],
+  "projects": [
+    {
+      "portfolio_id": "90300000110",
+      "tasks_board_id": "90300000111",
+      "result": "connected",
+      "rules": [
+        "C1",
+        "C2",
+        "C3"
+      ],
+      "note": null,
+      "models": [
+        "NO 7.3",
+        "G-78"
+      ]
+    },
+    {
+      "portfolio_id": "90300000110",
+      "tasks_board_id": "90300000112",
+      "result": "partial link - review",
+      "rules": [
+        "C1"
+      ],
+      "note": null,
+      "models": [
+        "NO 7.3",
+        "G-78"
+      ]
+    },
+    {
+      "portfolio_id": "90300000110",
+      "tasks_board_id": "90300000113",
+      "result": "partial link - review",
+      "rules": [
+        "C2"
+      ],
+      "note": null,
+      "models": [
+        "NO 7.3",
+        "G-78",
+        "G-80"
+      ]
+    },
+    {
+      "portfolio_id": null,
+      "tasks_board_id": "90300000114",
+      "result": "unconnected",
+      "rules": [],
+      "note": null,
+      "models": [
+        "NO 7.3"
+      ]
+    },
+    {
+      "portfolio_id": null,
+      "tasks_board_id": "90300000115",
+      "result": "unconnected",
+      "rules": [
+        "C4"
+      ],
+      "note": "overview 90300000116",
+      "models": [
+        "NO 7.3",
+        "NO 7.4",
+        "G-78"
+      ]
+    }
+  ],
+  "reports": [],
+  "sweep_complete": true,
+  "unreadable_ids": []
+}

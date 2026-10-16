@@ -1,0 +1,2407 @@
+{
+  "fixture": {
+    "synthetic": true,
+    "ring_modelled": "release_candidate 2026-10",
+    "schema_source": {
+      "version": "2026-10",
+      "url": "https://api.monday.com/v2/get_schema?format=sdl&version=2026-10",
+      "read": "2026-10-16",
+      "field_list": "schema-fields.json"
+    },
+    "sources": [
+      "NO 1",
+      "NO 2.1",
+      "NO 2.2",
+      "NO 2.3",
+      "NO 2.4",
+      "NO 2.5",
+      "NO 2.6",
+      "NO 3",
+      "NO 4",
+      "NO 5",
+      "NO 6.5",
+      "NO 7",
+      "G-91",
+      "G-92",
+      "G-93",
+      "G-94",
+      "G-95",
+      "G-96",
+      "G-97",
+      "G-98",
+      "G-99",
+      "G-100",
+      "G-101",
+      "G-102",
+      "G-103",
+      "G-104",
+      "G-106",
+      "G-107"
+    ],
+    "built": "2026-10-16",
+    "confirmed_by_capture": null,
+    "id_rule": "Every id is invented in the range README's id table gives for its type, except monday's own template and template view ids from shared/native-objects.md; every id is a string.",
+    "answers_for": "native.reads.json"
+  },
+  "board_count": 59,
+  "boards": {
+    "90300000201": {
+      "case": "crm-v2-leads",
+      "class": "native_crm_leads",
+      "rule": "N2",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 40
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:5678953932",
+        "view:124433515",
+        "reserved:crm/leads"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953932"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.1",
+        "NO 3.1",
+        "G-94"
+      ]
+    },
+    "90300000202": {
+      "case": "crm-v2-opportunities",
+      "class": "native_crm_opportunities_or_deals",
+      "rule": "N2",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 25
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:5678953956",
+        "view:124433522",
+        "reserved:crm/opportunities_or_deals",
+        "CRM_RELATION_MARK",
+        "CRM_FEATURE_MARK",
+        "V2_OPPS_FINGERPRINT"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953956"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.3",
+        "NO 2.4",
+        "G-96",
+        "G-99"
+      ]
+    },
+    "90300000203": {
+      "case": "crm-v2-contacts",
+      "class": "native_crm_contacts",
+      "rule": "N2",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 60
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:5678953938",
+        "view:124433508",
+        "reserved:crm/contacts",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953938"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 3.1",
+        "G-101"
+      ]
+    },
+    "90300000204": {
+      "case": "crm-v2-accounts-renamed",
+      "class": "native_crm_accounts",
+      "rule": "N2",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 18
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:5678953942",
+        "view:124433511",
+        "reserved:crm/accounts",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953942"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 6.1",
+        "G-97"
+      ]
+    },
+    "90300000205": {
+      "case": "crm-v2-activities",
+      "class": "native_crm_activities",
+      "rule": "N2",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 33
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:5678953951",
+        "view:124433520",
+        "reserved:crm/activities",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953951"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 3.1"
+      ]
+    },
+    "90300000206": {
+      "case": "crm-v2-sales-targets-chain-broken",
+      "class": "native_crm_sales_targets",
+      "rule": "N4",
+      "attributes": {
+        "family": null,
+        "version": "unknown",
+        "install_kind": "descendant_fingerprint",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 12
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "reserved:crm/sales_targets",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000901"
+        ],
+        "resolved": false,
+        "result": "UNRESOLVED",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L1"
+      ],
+      "models": [
+        "NO 5 N4",
+        "NO 2.1",
+        "G-92",
+        "G-94",
+        "G-96"
+      ]
+    },
+    "90300000207": {
+      "case": "crm-products-services",
+      "class": "native_crm_products_services",
+      "rule": "N4",
+      "attributes": {
+        "family": null,
+        "version": "unknown",
+        "install_kind": "descendant_fingerprint",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 15
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "reserved:crm/products_services"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L1"
+      ],
+      "models": [
+        "NO 5 N4",
+        "NO 3",
+        "NO 3.3",
+        "G-97"
+      ]
+    },
+    "90300000208": {
+      "case": "crm-companion-marks",
+      "class": "native_crm_companion_board",
+      "rule": "N6",
+      "attributes": {
+        "family": null,
+        "version": "unknown",
+        "install_kind": null,
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 9
+      },
+      "confidence": "medium",
+      "signals": [
+        "N0:crm",
+        "CRM_RELATION_MARK",
+        "CRM_MIRROR_MARK"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N6",
+        "NO 2.4",
+        "NO 3"
+      ]
+    },
+    "90300000209": {
+      "case": "crm-companion-unresolved",
+      "class": "native_crm_companion_board",
+      "rule": "N6",
+      "attributes": {
+        "family": null,
+        "version": "unknown",
+        "install_kind": "lineage_unresolved",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 7
+      },
+      "confidence": "medium",
+      "signals": [
+        "N0:crm",
+        "CRM_MIRROR_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000902"
+        ],
+        "resolved": false,
+        "result": "UNRESOLVED",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N6",
+        "NO 2.4",
+        "G-94"
+      ]
+    },
+    "90300000210": {
+      "case": "crm-v1-deals",
+      "class": "native_crm_opportunities_or_deals",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 30
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:2658101899",
+        "view:60638373",
+        "reserved:crm/opportunities_or_deals",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "2658101899"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.3",
+        "G-96"
+      ]
+    },
+    "90300000211": {
+      "case": "crm-v1-deals-copy-1hop",
+      "class": "native_crm_opportunities_or_deals",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "descendant_copy(1)",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 11
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:2658101899",
+        "reserved:crm/opportunities_or_deals",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000210",
+          "2658101899"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 1,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.1",
+        "NO 2.2",
+        "G-94",
+        "G-97"
+      ]
+    },
+    "90300000212": {
+      "case": "crm-v1-contacts",
+      "class": "native_crm_contacts",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 44
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:2658101923",
+        "reserved:crm/contacts",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "2658101923"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 3.1"
+      ]
+    },
+    "90300000213": {
+      "case": "crm-v1-leads",
+      "class": "native_crm_leads",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 19
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:2658101980",
+        "view:121301932",
+        "reserved:crm/leads"
+      ],
+      "lineage": {
+        "chain": [
+          "2658101980"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 3.1",
+        "NO 3.2"
+      ]
+    },
+    "90300000214": {
+      "case": "crm-v1-accounts",
+      "class": "native_crm_accounts",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 16
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:2658101956",
+        "view:124032534",
+        "reserved:crm/accounts",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "2658101956"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.3"
+      ]
+    },
+    "90300000215": {
+      "case": "crm-v1-activities",
+      "class": "native_crm_activities",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 27
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:2658101993",
+        "reserved:crm/activities"
+      ],
+      "lineage": {
+        "chain": [
+          "2658101993"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 3",
+        "G-101"
+      ]
+    },
+    "90300000216": {
+      "case": "crm-quotes-invoices",
+      "class": "native_crm_quotes_invoices",
+      "rule": "N2",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 13
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:8179060947",
+        "view:174990912",
+        "view:174990913",
+        "reserved:crm/quotes_invoices"
+      ],
+      "lineage": {
+        "chain": [
+          "8179060947"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 3",
+        "NO 3.3",
+        "G-95"
+      ]
+    },
+    "90300000217": {
+      "case": "crm-qi-line-items",
+      "class": "native_crm_quotes_invoices_subitems",
+      "rule": "N5",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 29
+      },
+      "confidence": "high",
+      "signals": [
+        "type:sub_items_board",
+        "N0:crm",
+        "parent:90300000216",
+        "lineage:18393462843",
+        "reserved:crm/qi_line_items"
+      ],
+      "lineage": {
+        "chain": [
+          "18393462843"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N5",
+        "NO 3.3",
+        "G-101"
+      ]
+    },
+    "90300000218": {
+      "case": "crm-qi-generic-ids-only",
+      "class": "ordinary_board_in_product_workspace",
+      "rule": "N9",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 10
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N9",
+        "NO 3.3:85"
+      ]
+    },
+    "90300000219": {
+      "case": "crm-v1-deals-subitems",
+      "class": "native_crm_opportunities_or_deals_subitems",
+      "rule": "N5",
+      "attributes": {
+        "family": "crm_core",
+        "version": "v1",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 22
+      },
+      "confidence": "high",
+      "signals": [
+        "type:sub_items_board",
+        "N0:crm",
+        "parent:90300000210",
+        "lineage:2658102037"
+      ],
+      "lineage": {
+        "chain": [
+          "2658102037"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N5",
+        "NO 3.3",
+        "G-107"
+      ]
+    },
+    "90300000220": {
+      "case": "service-b-tickets",
+      "class": "native_service_tickets",
+      "rule": "N2",
+      "attributes": {
+        "family": "B",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 88
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5727048235",
+        "view:125328754",
+        "reserved:service/tickets"
+      ],
+      "lineage": {
+        "chain": [
+          "5727048235"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.1",
+        "G-92"
+      ]
+    },
+    "90300000221": {
+      "case": "service-b-tickets-copy-1hop",
+      "class": "native_service_tickets",
+      "rule": "N2",
+      "attributes": {
+        "family": "B",
+        "version": null,
+        "install_kind": "descendant_copy(1)",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 40
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5727048235",
+        "reserved:service/tickets"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000220",
+          "5727048235"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 1,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.1",
+        "G-92",
+        "G-94"
+      ]
+    },
+    "90300000222": {
+      "case": "service-b-tickets-copy-2hop",
+      "class": "native_service_tickets",
+      "rule": "N2",
+      "attributes": {
+        "family": "B",
+        "version": null,
+        "install_kind": "descendant_copy(2)",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 17
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5727048235",
+        "reserved:service/tickets"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000221",
+          "90300000220",
+          "5727048235"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 2,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.1",
+        "G-94"
+      ]
+    },
+    "90300000223": {
+      "case": "service-a-tickets-sla",
+      "class": "native_service_tickets",
+      "rule": "N2",
+      "attributes": {
+        "family": "A",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": true,
+        "state": "active",
+        "items_count": 52
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:7819831530",
+        "view:176205535",
+        "reserved:service/tickets",
+        "SERVICE_SLA_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "7819831530"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 5 N12",
+        "NO 2.4",
+        "G-102"
+      ]
+    },
+    "90300000224": {
+      "case": "service-a-tickets-subitems",
+      "class": "native_service_tickets_subitems",
+      "rule": "N5",
+      "attributes": {
+        "family": "A",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 31
+      },
+      "confidence": "high",
+      "signals": [
+        "type:sub_items_board",
+        "N0:service",
+        "parent:90300000223",
+        "lineage:7819831540",
+        "reserved:service/tickets_subitems"
+      ],
+      "lineage": {
+        "chain": [
+          "7819831540"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N5",
+        "NO 4.3"
+      ]
+    },
+    "90300000225": {
+      "case": "service-b-csat",
+      "class": "native_service_csat_survey",
+      "rule": "N2",
+      "attributes": {
+        "family": "B",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 26
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5727048234",
+        "view:125328753"
+      ],
+      "lineage": {
+        "chain": [
+          "5727048234"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3",
+        "G-107"
+      ]
+    },
+    "90300000226": {
+      "case": "service-b-contacts",
+      "class": "native_service_service_contacts",
+      "rule": "N2",
+      "attributes": {
+        "family": "B",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 38
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5727048230"
+      ],
+      "lineage": {
+        "chain": [
+          "5727048230"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3"
+      ]
+    },
+    "90300000227": {
+      "case": "service-satellite",
+      "class": "native_service_satellite_probable",
+      "rule": "N7",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 12
+      },
+      "confidence": "low",
+      "signals": [
+        "N0:service",
+        "imitation:terminology",
+        "relation_target:90300000223"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": true,
+      "limits": [],
+      "models": [
+        "NO 5 N7",
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    "90300000228": {
+      "case": "service-b-start-here-doc",
+      "class": "doc_container",
+      "rule": "R1",
+      "attributes": {
+        "family": "B",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:document",
+        "N0:service",
+        "lineage:5765211778",
+        "doc:91300000201"
+      ],
+      "lineage": {
+        "chain": [
+          "5765211778"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R1",
+        "NO 4.1:104"
+      ]
+    },
+    "90300000229": {
+      "case": "portal-active",
+      "class": "native_service_portal",
+      "rule": "N1a",
+      "attributes": {
+        "family": "Portal",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 2
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:service",
+        "lineage:9449773054",
+        "view:200776197",
+        "portal_objects:active",
+        "workflow_objects:out"
+      ],
+      "lineage": {
+        "chain": [
+          "9449773054"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N1a",
+        "NO 4.4",
+        "G-100"
+      ]
+    },
+    "90300000230": {
+      "case": "portal-archived-alias",
+      "class": "native_service_portal",
+      "rule": "N1a",
+      "attributes": {
+        "family": "Portal",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "archived",
+        "items_count": 1
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:service",
+        "lineage:9449773054",
+        "view:200776197",
+        "portal_objects:archived",
+        "workflow_objects:out"
+      ],
+      "lineage": {
+        "chain": [
+          "9449773054"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N1a",
+        "NO 4.4",
+        "G-100"
+      ]
+    },
+    "90300000231": {
+      "case": "portal-archived-lineage",
+      "class": "native_service_portal",
+      "rule": "N1b",
+      "attributes": {
+        "family": "Portal",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "archived",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:service",
+        "lineage:9449773054",
+        "view:200776197",
+        "workflow_objects:out"
+      ],
+      "lineage": {
+        "chain": [
+          "9449773054"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N1b",
+        "NO 4.4",
+        "G-100"
+      ]
+    },
+    "90300000232": {
+      "case": "workflow-object-not-portal",
+      "class": "workflow_object",
+      "rule": "R3",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:service",
+        "lineage:105719650",
+        "workflow_objects:in"
+      ],
+      "lineage": {
+        "chain": [
+          "105719650"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R3",
+        "NO 4.4",
+        "G-100"
+      ]
+    },
+    "90300000233": {
+      "case": "custom-object-other",
+      "class": "custom_object_other",
+      "rule": "R3",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "type:custom_object",
+        "N0:service",
+        "workflow_objects:out"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R3",
+        "G-74"
+      ]
+    },
+    "90300000234": {
+      "case": "service-c-csat-view-only",
+      "class": "native_service_csat_survey",
+      "rule": "N3",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 41
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "view:122226423"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N3",
+        "NO 2.2",
+        "G-95"
+      ]
+    },
+    "90300000235": {
+      "case": "service-c-tickets",
+      "class": "native_service_tickets",
+      "rule": "N2",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 64
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5561655961",
+        "view:122226426",
+        "reserved:service/tickets"
+      ],
+      "lineage": {
+        "chain": [
+          "5561655961"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.1"
+      ]
+    },
+    "90300000236": {
+      "case": "service-c-incidents",
+      "class": "native_service_incidents",
+      "rule": "N2",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 8
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5561655956"
+      ],
+      "lineage": {
+        "chain": [
+          "5561655956"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3",
+        "G-107"
+      ]
+    },
+    "90300000237": {
+      "case": "service-c-tickets-chain-broken",
+      "class": "native_service_tickets",
+      "rule": "N4",
+      "attributes": {
+        "family": "B or C",
+        "version": null,
+        "install_kind": "descendant_fingerprint",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 23
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "reserved:service/tickets"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000903"
+        ],
+        "resolved": false,
+        "result": "UNRESOLVED",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L1"
+      ],
+      "models": [
+        "NO 5 N4",
+        "NO 2.3",
+        "G-96"
+      ]
+    },
+    "90300000238": {
+      "case": "service-c-asset-management",
+      "class": "native_service_asset_management",
+      "rule": "N2",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 70
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5561656015",
+        "reserved:service/asset_management"
+      ],
+      "lineage": {
+        "chain": [
+          "5561656015"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3"
+      ]
+    },
+    "90300000239": {
+      "case": "service-c-employee-lifecycle",
+      "class": "native_service_employee_lifecycle",
+      "rule": "N2",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 15
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5561655954",
+        "view:122226427",
+        "reserved:service/employee_lifecycle"
+      ],
+      "lineage": {
+        "chain": [
+          "5561655954"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3"
+      ]
+    },
+    "90300000240": {
+      "case": "service-c-employee-directory",
+      "class": "native_service_employee_directory",
+      "rule": "N2",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 48
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:5561656011",
+        "reserved:service/employee_directory"
+      ],
+      "lineage": {
+        "chain": [
+          "5561656011"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3"
+      ]
+    },
+    "90300000241": {
+      "case": "service-c-tickets-subitems",
+      "class": "native_service_tickets_subitems",
+      "rule": "N5",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 37
+      },
+      "confidence": "high",
+      "signals": [
+        "type:sub_items_board",
+        "N0:service",
+        "parent:90300000235",
+        "lineage:5561656760",
+        "reserved:service/tickets_subitems"
+      ],
+      "lineage": {
+        "chain": [
+          "5561656760"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N5",
+        "NO 4.3"
+      ]
+    },
+    "90300000242": {
+      "case": "service-d-tickets",
+      "class": "native_service_tickets",
+      "rule": "N2",
+      "attributes": {
+        "family": "D",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 29
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:6410079972",
+        "view:139565036",
+        "reserved:service/tickets"
+      ],
+      "lineage": {
+        "chain": [
+          "6410079972"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.1"
+      ]
+    },
+    "90300000243": {
+      "case": "service-d-incidents",
+      "class": "native_service_incidents",
+      "rule": "N2",
+      "attributes": {
+        "family": "D",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 5
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service",
+        "lineage:6410079951"
+      ],
+      "lineage": {
+        "chain": [
+          "6410079951"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 4.3"
+      ]
+    },
+    "90300000244": {
+      "case": "service-c-lifecycle-subitems",
+      "class": "native_service_employee_lifecycle_subitems",
+      "rule": "N5",
+      "attributes": {
+        "family": "C",
+        "version": null,
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 20
+      },
+      "confidence": "high",
+      "signals": [
+        "type:sub_items_board",
+        "N0:service",
+        "parent:90300000239",
+        "lineage:5561656359"
+      ],
+      "lineage": {
+        "chain": [
+          "5561656359"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N5",
+        "NO 4.1"
+      ]
+    },
+    "90300000250": {
+      "case": "lookalike-name",
+      "class": "lookalike_board",
+      "rule": "N8",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 8
+      },
+      "confidence": "medium",
+      "signals": [
+        "N0:crm",
+        "imitation:name",
+        "imitation:terminology"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N8",
+        "G-97"
+      ]
+    },
+    "90300000251": {
+      "case": "lookalike-terminology",
+      "class": "lookalike_board",
+      "rule": "N8",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 12
+      },
+      "confidence": "medium",
+      "signals": [
+        "N0:crm",
+        "imitation:terminology"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N8",
+        "NO 5:158",
+        "G-97"
+      ]
+    },
+    "90300000252": {
+      "case": "ordinary-terminology-call",
+      "class": "ordinary_board_in_product_workspace",
+      "rule": "N9",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 14
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N9",
+        "NO 5:158",
+        "G-97"
+      ]
+    },
+    "90300000253": {
+      "case": "ordinary-terminology-client",
+      "class": "ordinary_board_in_product_workspace",
+      "rule": "N9",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 21
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N9",
+        "NO 5:158",
+        "G-97"
+      ]
+    },
+    "90300000254": {
+      "case": "ordinary-links-into-native",
+      "class": "ordinary_board_in_product_workspace",
+      "rule": "N9",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 9
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N9",
+        "G-104"
+      ]
+    },
+    "90300000255": {
+      "case": "default-shaped-satellite",
+      "class": "ordinary_board_in_product_workspace",
+      "rule": "N9",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 6
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:service"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2",
+        "L3"
+      ],
+      "models": [
+        "NO 5 N9",
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    "90300000256": {
+      "case": "stripped-native",
+      "class": "lookalike_board",
+      "rule": "N8",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 10
+      },
+      "confidence": "medium",
+      "signals": [
+        "N0:crm",
+        "imitation:name",
+        "imitation:terminology"
+      ],
+      "lineage": {
+        "chain": [
+          "90300000901"
+        ],
+        "resolved": false,
+        "result": "UNRESOLVED",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L2"
+      ],
+      "models": [
+        "NO 5 N8",
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    "90300000257": {
+      "case": "planted-ids",
+      "class": "native_crm_leads",
+      "rule": "N4",
+      "attributes": {
+        "family": null,
+        "version": "unknown",
+        "install_kind": "descendant_fingerprint",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 6
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "reserved:crm/leads"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [
+        "L1"
+      ],
+      "models": [
+        "NO 5 N4",
+        "NO 6.1",
+        "G-93"
+      ]
+    },
+    "90300000258": {
+      "case": "ordinary-test-blank-defaults",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 3
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N11",
+        "NO 5 R11",
+        "NO 2.3",
+        "G-98"
+      ]
+    },
+    "90300000259": {
+      "case": "ordinary-test-suffixed-ids",
+      "class": "normal_classic_board",
+      "rule": "R11",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 2
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:core",
+        "N11"
+      ],
+      "lineage": {
+        "chain": [],
+        "resolved": false,
+        "result": "NO_LINEAGE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N11",
+        "NO 5 R11",
+        "NO 2.3",
+        "G-96"
+      ]
+    },
+    "90300000260": {
+      "case": "native-moved-to-core",
+      "class": "native_descendant_misplaced",
+      "rule": "N10",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "active",
+        "items_count": 14,
+        "fingerprint": "crm/accounts"
+      },
+      "confidence": "low",
+      "signals": [
+        "N0:core",
+        "lineage:5678953942",
+        "view:124433511",
+        "reserved:crm/accounts",
+        "CRM_RELATION_MARK"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953942"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": true,
+      "limits": [],
+      "models": [
+        "NO 5 N10",
+        "NO 2.5",
+        "G-106"
+      ]
+    },
+    "90300000261": {
+      "case": "keyed-board-with-native-signals",
+      "class": "keyed_board_unrecognized_key",
+      "rule": "R7",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 4
+      },
+      "confidence": "low",
+      "signals": [
+        "key:lundrask_app::register",
+        "N0:crm",
+        "lineage:5678953932",
+        "reserved:crm/leads"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953932"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": true,
+      "limits": [],
+      "models": [
+        "NO 5 R7",
+        "NO 8 P-9",
+        "G-91"
+      ]
+    },
+    "90300000262": {
+      "case": "deleted-native-lineage-only",
+      "class": "native_crm_contacts",
+      "rule": "N2",
+      "attributes": {
+        "family": "sales_crm",
+        "version": "v2",
+        "install_kind": "direct_install",
+        "sla_mark": false,
+        "state": "deleted",
+        "items_count": 0
+      },
+      "confidence": "high",
+      "signals": [
+        "N0:crm",
+        "lineage:5678953938"
+      ],
+      "lineage": {
+        "chain": [
+          "5678953938"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 N2",
+        "NO 2.1",
+        "G-77"
+      ]
+    },
+    "90300000263": {
+      "case": "portfolio-cursor",
+      "class": "portfolio_board",
+      "rule": "R4",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 120
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio",
+        "N0:core",
+        "lineage:5882692393",
+        "portfolio_project_ids:5"
+      ],
+      "lineage": {
+        "chain": [
+          "5882692393"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R4",
+        "NO 7.3"
+      ]
+    },
+    "90300000264": {
+      "case": "project-incomplete-read",
+      "class": "project_tasks_board",
+      "rule": "R5",
+      "attributes": {
+        "family": null,
+        "version": null,
+        "install_kind": null,
+        "sla_mark": null,
+        "state": "active",
+        "items_count": 5
+      },
+      "confidence": "high",
+      "signals": [
+        "key:work-management::portfolio-project",
+        "N0:core",
+        "lineage:9857787491",
+        "project_ids:4",
+        "hierarchy:multi_level"
+      ],
+      "lineage": {
+        "chain": [
+          "9857787491"
+        ],
+        "resolved": true,
+        "result": "RESOLVED_TEMPLATE",
+        "hops": 0,
+        "note": null
+      },
+      "review": false,
+      "limits": [],
+      "models": [
+        "NO 5 R5",
+        "NO 7.3"
+      ]
+    }
+  },
+  "totals": {
+    "custom_object_other": 1,
+    "doc_container": 1,
+    "keyed_board_unrecognized_key": 1,
+    "native_crm_accounts": 2,
+    "native_crm_activities": 2,
+    "native_crm_companion_board": 2,
+    "native_crm_contacts": 3,
+    "native_crm_leads": 2,
+    "native_crm_opportunities_or_deals": 3,
+    "native_crm_opportunities_or_deals_subitems": 1,
+    "native_crm_quotes_invoices": 1,
+    "native_crm_quotes_invoices_subitems": 1,
+    "native_descendant_misplaced": 1,
+    "native_service_asset_management": 1,
+    "native_service_csat_survey": 2,
+    "native_service_employee_directory": 1,
+    "native_service_employee_lifecycle": 1,
+    "native_service_employee_lifecycle_subitems": 1,
+    "native_service_incidents": 2,
+    "native_service_portal": 3,
+    "native_service_satellite_probable": 1,
+    "native_service_service_contacts": 1,
+    "native_service_tickets": 6,
+    "native_service_tickets_subitems": 2,
+    "normal_classic_board": 2,
+    "portfolio_board": 1,
+    "project_tasks_board": 1,
+    "workflow_object": 1
+  },
+  "limits": [
+    {
+      "board_id": "90300000206",
+      "code": "L1",
+      "codes": [
+        "L1"
+      ],
+      "class": "native_crm_sales_targets",
+      "reason": "planted reserved ids read the same as a chain-broken native",
+      "models": [
+        "NO 6.1",
+        "NO 6.5",
+        "G-93"
+      ]
+    },
+    {
+      "board_id": "90300000207",
+      "code": "L1",
+      "codes": [
+        "L1"
+      ],
+      "class": "native_crm_products_services",
+      "reason": "planted reserved ids read the same as a chain-broken native",
+      "models": [
+        "NO 6.1",
+        "NO 6.5",
+        "G-93"
+      ]
+    },
+    {
+      "board_id": "90300000218",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "ordinary_board_in_product_workspace",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000237",
+      "code": "L1",
+      "codes": [
+        "L1"
+      ],
+      "class": "native_service_tickets",
+      "reason": "planted reserved ids read the same as a chain-broken native",
+      "models": [
+        "NO 6.1",
+        "NO 6.5",
+        "G-93"
+      ]
+    },
+    {
+      "board_id": "90300000250",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "lookalike_board",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000251",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "lookalike_board",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000252",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "ordinary_board_in_product_workspace",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000253",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "ordinary_board_in_product_workspace",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000254",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "ordinary_board_in_product_workspace",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000255",
+      "code": "L3",
+      "codes": [
+        "L2",
+        "L3"
+      ],
+      "class": "ordinary_board_in_product_workspace",
+      "reason": "a default-shaped satellite that lost its lineage",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000256",
+      "code": "L2",
+      "codes": [
+        "L2"
+      ],
+      "class": "lookalike_board",
+      "reason": "a native stripped of its template columns with a broken chain reads as this",
+      "models": [
+        "NO 6.5",
+        "G-107"
+      ]
+    },
+    {
+      "board_id": "90300000257",
+      "code": "L1",
+      "codes": [
+        "L1"
+      ],
+      "class": "native_crm_leads",
+      "reason": "planted reserved ids read the same as a chain-broken native",
+      "models": [
+        "NO 6.1",
+        "NO 6.5",
+        "G-93"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "portfolio_id": null,
+      "tasks_board_id": "90300000264",
+      "result": "incomplete read - review",
+      "rules": [],
+      "note": null,
+      "models": [
+        "NO 7.3"
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "workspace_id": "90100000207",
+      "product": "crm",
+      "report": "product boards not installed here"
+    }
+  ],
+  "sweep_complete": true,
+  "unreadable_ids": [
+    "90300000901",
+    "90300000902",
+    "90300000903"
+  ],
+  "native_board_index": {
+    "90300000201": "crm/leads",
+    "90300000202": "crm/opportunities_or_deals",
+    "90300000203": "crm/contacts",
+    "90300000204": "crm/accounts",
+    "90300000205": "crm/activities",
+    "90300000206": "crm/sales_targets",
+    "90300000207": "crm/products_services",
+    "90300000208": "crm/companion",
+    "90300000209": "crm/companion",
+    "90300000210": "crm/opportunities_or_deals",
+    "90300000211": "crm/opportunities_or_deals",
+    "90300000212": "crm/contacts",
+    "90300000213": "crm/leads",
+    "90300000214": "crm/accounts",
+    "90300000215": "crm/activities",
+    "90300000216": "crm/quotes_invoices",
+    "90300000217": "crm/quotes_invoices_subitems",
+    "90300000219": "crm/opportunities_or_deals_subitems",
+    "90300000220": "service/tickets",
+    "90300000221": "service/tickets",
+    "90300000222": "service/tickets",
+    "90300000223": "service/tickets",
+    "90300000224": "service/tickets_subitems",
+    "90300000225": "service/csat_survey",
+    "90300000226": "service/service_contacts",
+    "90300000227": "service/satellite_probable",
+    "90300000229": "service/portal",
+    "90300000230": "service/portal",
+    "90300000231": "service/portal",
+    "90300000234": "service/csat_survey",
+    "90300000235": "service/tickets",
+    "90300000236": "service/incidents",
+    "90300000237": "service/tickets",
+    "90300000238": "service/asset_management",
+    "90300000239": "service/employee_lifecycle",
+    "90300000240": "service/employee_directory",
+    "90300000241": "service/tickets_subitems",
+    "90300000242": "service/tickets",
+    "90300000243": "service/incidents",
+    "90300000244": "service/employee_lifecycle_subitems",
+    "90300000257": "crm/leads",
+    "90300000260": "crm/accounts",
+    "90300000262": "crm/contacts"
+  },
+  "portal_object_ids": {
+    "active": [
+      "90300000229"
+    ],
+    "archived": [
+      "90300000230",
+      "90300000231"
+    ]
+  }
+}
