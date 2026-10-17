@@ -78,7 +78,11 @@ REF = re.compile(r"(v\d+\.\d+)r(\d+)(?:#(.+))?")
 ASSUMPTION_ID = re.compile(r"(AS|AT|FK)\d+")
 LOCAL_KEY = re.compile(r"\d{3}:[A-Z][A-Za-z0-9.]*")
 RECIPIENT = re.compile(r"\d+|team:\d+|email:[^@\s]+@[^@\s]+")
-DIGITS = re.compile(r"[0-9]+")
+DIGITS = re.compile(r"[0-9]+")  # a count, an epoch or a revision; never a monday id
+ID = re.compile(r"[1-9][0-9]*")  # R4: a monday id has one spelling, digits with no leading zero
+LEADING_ZERO = re.compile(r"0[0-9]*")
+REF_FORM = re.compile(r"(board|workspace|doc|view|column):([1-9][0-9]*)")
+STRICTNESS = {"do-not-change": 2, "change-with-own-yes": 1, "free": 0}
 MAP_HEAD = "| key | monday id | kind | workspace | built by | state | constraint | source | dependants | last verified |"
 MAP_SEP = "|---|---|---|---|---|---|---|---|---|---|"
 MAP_COLUMNS = ("monday id", "kind", "workspace", "built by", "state", "constraint", "source", "dependants",
@@ -105,7 +109,6 @@ IDENTITY = {"workspace": ("name", "kind"), "folder": ("name", "workspace_id"),
             "publication": ("state", "is_published"), "activation": ("state", "is_published")}
 for _kind in ("subitems", "portfolio", "project"):
     IDENTITY[_kind] = IDENTITY["board"]
-NOT_BUILT = ("classify", "native-map", "snapshot", "compare", "reconcile", "estimate")
 
 
 # The frame (a copy of record.py's, PLAN 8 item 3): the envelope, the refusal helper, the parser.
@@ -169,6 +172,26 @@ def numeric_ids(data, path=""):
     elif isinstance(data, list):
         for n, item in enumerate(data):
             found += numeric_ids(item, "%s[%d]" % (path, n))
+    return found
+
+
+def zero_ids(data, path=""):
+    """Dotted paths of every string of digits with a leading zero held under an id key (R4): one id, one spelling."""
+    found = []
+    if isinstance(data, dict):
+        for key, value in data.items():
+            where = "%s.%s" % (path, key) if path else str(key)
+            if id_key(key) and isinstance(value, str) and LEADING_ZERO.fullmatch(value):
+                found.append(where)
+            elif id_key(key) and isinstance(value, list):
+                found += ["%s[%d]" % (where, n) for n, item in enumerate(value)
+                          if isinstance(item, str) and LEADING_ZERO.fullmatch(item)]
+                found += [p for n, item in enumerate(value) for p in zero_ids(item, "%s[%d]" % (where, n))]
+            else:
+                found += zero_ids(value, where)
+    elif isinstance(data, list):
+        for n, item in enumerate(data):
+            found += zero_ids(item, "%s[%d]" % (path, n))
     return found
 
 
@@ -431,6 +454,12 @@ class Ledger:
                 return str(row["workspace"])
         return None
 
+    def holder_of(self, monday_id):
+        """The bare key of this ledger's row, or else the qualified live-map key, that holds a monday id, or None."""
+        found = sorted(k for k, r in self.objects.items() if str(r.get("id")) == str(monday_id))
+        found = found or shared_rows(self.account.get("live_objects") or {}, monday_id)
+        return found[0] if found else None
+
     def row_workspace(self, key, seen=()):
         row = self.objects.get(key)
         if row is None or key in seen:
@@ -462,6 +491,28 @@ def operational_workspaces():
     for fields, line in sandbox_lines():
         if fields[0] == "never-demo" and len(fields) > 3 and DIGITS.fullmatch(fields[3]):
             found.setdefault(fields[3], "local/sandbox-accounts.txt: %s" % line)
+    for listed in list(found):  # R4: a home file that spells an id with a leading zero still names that id
+        if DIGITS.fullmatch(listed) and listed.lstrip("0"):
+            found.setdefault(listed.lstrip("0"), found[listed])
+    return found
+
+
+def sibling_workspaces(root):
+    """[(home-relative name, {workspace ids})] of every other client record under the home: its client_workspace_ids
+    and superseded_workspaces ids, read for ids only inside this record's hold (R8, the cross-record check)."""
+    found, base = [], mc.home() / "clients"
+    for folder in sorted(base.iterdir()) if base.is_dir() else []:
+        path = folder / "account.json"
+        if not path.is_file() or folder.resolve() == root.resolve():
+            continue
+        name = "clients/%s/account.json" % folder.name
+        data = mc.read_json(path, name)
+        data = data if isinstance(data, dict) else {}
+        index = data.get("guard_index") if isinstance(data.get("guard_index"), dict) else {}
+        listed = index.get("client_workspace_ids") if isinstance(index.get("client_workspace_ids"), list) else []
+        older = data.get("superseded_workspaces") if isinstance(data.get("superseded_workspaces"), list) else []
+        ids = {str(i) for i in listed} | {str(item.get("id")) for item in older if isinstance(item, dict)}
+        found.append((name, ids))
     return found
 
 
@@ -497,13 +548,14 @@ def input_json(root, value, flag):
         raise mc.CannotRun((name, mc.WHOLE_FILE, "the file is not a JSON object", "a JSON object"))
     numbers = numeric_ids(data)
     refuse(*[(name, where, "an id stored as a number", "every monday id a string of digits, as GraphQL returns ID")
-             for where in numbers])
+             for where in numbers] + [(name, where, "an id spelt with a leading zero", "a monday id as digits with no "
+                                       "leading zero, so one id has one spelling (R4)") for where in zero_ids(data)])
     return data, name
 
 
 def digits(flag, value, file="(flags)"):
-    return None if value is None or DIGITS.fullmatch(str(value)) else (
-        file, flag, "%r is not a monday id" % value, "a string of digits, stored as given")
+    return None if value is None or ID.fullmatch(str(value)) else (
+        file, flag, "%r is not a monday id" % value, "a string of digits with no leading zero, stored as given (R4)")
 
 
 def fence_flags(args):
@@ -551,22 +603,110 @@ def run_reasons(led, run_id, states=("running",)):
     return []
 
 
-def commit(command, steps, run_id=None, next_call=None):
+def account_reasons(led, run_id):
+    """R14: no write while the run's last account check found another account."""
+    checks = (led.run(run_id) or {}).get("account_checks") or []
+    if checks and isinstance(checks[-1], dict) and checks[-1].get("result") == "mismatch":
+        return [(led.build_rel, "runs[].account_checks", "the last account check of run %s (before %s) read another "
+                 "account than the bound one" % (run_id, checks[-1].get("before")), "stop before any write; once the "
+                 "bound account is read again, run heartbeat --account-check match with the user's words "
+                 "(--answer-words)")]
+    return []
+
+
+def current_approval(led):
+    """(entry, ref) of the approval of the version being built: version.md's revision, the entry run start checked."""
+    fields = led.version_fields() if led.version != "none" else None
+    ref = "%sr%s" % (led.version, (fields or {}).get("revision", "none"))
+    return (led.approval(ref) if fields else None), ref, fields
+
+
+def latest_ref(led):
+    """The vNrM of the strand's latest approval of its current version, or None (R12)."""
+    found = [a for a in (led.build or {}).get("approvals") or [] if a.get("version") == led.version and is_int(
+        a.get("revision"))]
+    return "%sr%d" % (led.version, max(a["revision"] for a in found)) if found else None
+
+
+def inventory_copy(led):
+    """(data, record-relative name) of the inventory copy the last reconcile of this strand left, or (None, name)."""
+    path = led.root / ".work" / "strands" / led.short / "live-inventory.json"
+    name = led.rel(path)
+    if not path.is_file():
+        return None, name
+    try:
+        data = input_json(led.root, name, "--inventory")[0]
+    except mc.MMBError:
+        return None, name
+    return (None if any(inventory_reasons(data, name, led.short)) else data), name
+
+
+def after(later, earlier):
+    """True when both are UTC stamps and the first is strictly later."""
+    return is_utc(later) and is_utc(earlier) and mc.parse_utc(later) > mc.parse_utc(earlier)
+
+
+def recovery_reasons(led, run_id):
+    """R10: a run that started with recovery first takes no write and no departure before a reconcile read the
+    account after the run began."""
+    run = led.run(run_id) or {}
+    if not run.get("recovery_first"):
+        return []
+    data, name = inventory_copy(led)
+    if data is not None and after(data.get("read_at"), run.get("started_at")):
+        return []
+    return [(led.build_rel, "runs[].recovery_first", "run %s started with recovery first (an interrupted run or a row "
+             "left attempting) and no reconcile has read the account since it began" % run_id,
+             "ledger.py reconcile --strand %s --inventory <a read made now>, and the user's approval of its plan, "
+             "before any new write (A8.11)" % led.short)]
+
+
+def retry_reasons(led, key, row, what):
+    """R10: a row left attempting (a timeout, a lost reply) is retried or departed only after a reconcile over a read
+    made after its attempt began classes it `retry`; a kind no inventory carries needs that reconcile to have run,
+    since the read it names is the session's."""
+    rel, field = led.build_rel, "objects.%s.status" % key
+    started = (row.get("attempt") or {}).get("started_at")
+    data, name = inventory_copy(led)
+    if data is None:
+        return [(name, mc.WHOLE_FILE, "%s of %s, which may have been applied, with no reconcile made" % (what, key),
+                 "ledger.py reconcile --strand %s --inventory <a read made after the attempt>, then %s" % (
+                     led.short, what))]
+    if not after(data.get("read_at"), started):
+        return [(name, "read_at", "the last reconcile read the account at %s, not after the attempt on %s began (%s)" % (
+            data.get("read_at"), key, started), "a reconcile over a read made after the attempt began")]
+    plan = Reconciler(led, Inventory(data)).run()
+    found = next((e for e in plan["elements"] if e["key"] == key), None)
+    if found is None:
+        if any(item["key"] == key for item in plan["not_in_inventory"]):
+            return []
+        return [(rel, field, "the last reconcile gives %s no class" % key, "a reconcile that classes it retry")]
+    if found["class"] != "retry":
+        return [(rel, field, "the last reconcile classes %s %s (live %s)" % (key, found["class"], ", ".join(
+            found["live_ids"]) or "none"), "retry: an adopt is recorded with record, a duplicate goes to its "
+                 "proposals, each with the user's approval")]
+    return []
+
+
+def commit(command, steps, run_id=None, next_call=None, root=None):
     """Run the writes of one call in order (W25). The first write failing is exit 3 naming its file with nothing
-    committed; a later one is exit 3 with error field `committed` and the `committed` report (W33)."""
+    committed; a later one is exit 3 with error field `committed` and the `committed` report (W33), whose `shas`
+    gives the new sha256 of each file written, so the retry's --expect-sha needs no check first (R19)."""
     written, lease = [], None
     for index, (rel, step, lease_mark) in enumerate(steps):
         try:
             step()
-        except (OSError, mc.MMBError) as exc:
+        except Exception as exc:  # R20: after a first write, any failure is reported with what stands
             why = exc.findings[0]["problem"] if isinstance(exc, mc.MMBError) else "%s: %s" % (type(exc).__name__, exc)
             if not written:
-                if isinstance(exc, mc.MMBError):
+                if not isinstance(exc, OSError):
                     raise
-                raise mc.CannotRun((rel, mc.WHOLE_FILE, "could not write the file: %s; nothing was written" % why,
-                                    "the same call again once no other program holds the file"))
+                raise mc.CannotRun((rel, mc.WHOLE_FILE, "could not write the file: %s; none of this call's own writes "
+                                    "was made, though a fence that passed before them moved the lease heartbeat "
+                                    "(R19)" % why, "the same call again once no other program holds the file"))
+            shas = {r: mc.sha256_file(mc.record_path(root, r)) for r in written if r != mc.LOCK_REL} if root else {}
             report = {"command": command, "written": written, "not_written": [r for r, _, _ in steps[index:]],
-                      "lease": lease, "run_id": run_id, "next": next_call}
+                      "lease": lease, "run_id": run_id, "next": next_call, "shas": shas}
             raise mc.CannotRun((rel, "committed", "%s; %d earlier write(s) of this call stand" % (why, len(written)),
                                 next_call), committed=report)
         written.append(rel)
@@ -595,7 +735,8 @@ def entry_log(strand, kind, version, key, lines):
 
 
 def strand_short(args):
-    return getattr(args, "strand", None)
+    """W92: who asked; on reconcile --classify-only, the sibling named by --asked-by."""
+    return getattr(args, "asked_by", None) or getattr(args, "strand", None)
 
 
 def ordered_row(row):
@@ -787,6 +928,17 @@ class Checker:
                                "the live_objects field as record-map.md gives it")
         for where in numeric_ids(account):
             self.block(name, where, "an id stored as a number", "every monday id a string")
+        live = account.get("live_objects") if isinstance(account.get("live_objects"), dict) else {}
+        by_id = {}
+        for key, row in sorted(live.items()):
+            if isinstance(row, dict) and row.get("monday_id"):
+                by_id.setdefault(str(row["monday_id"]), []).append(key)
+        for oid, keys in sorted(by_id.items()):  # R5: one object, one constraint, whatever keys mirror it
+            constraints = sorted({str(live[k].get("constraint")) for k in keys})
+            if len(constraints) > 1:
+                self.block(name, "live_objects.%s.constraint" % keys[0], "monday id %s is mirrored by %s with the "
+                           "constraints %s" % (oid, ", ".join(keys), ", ".join(constraints)),
+                           "one constraint for one object: ledger.py live-map set on each row to the same value")
 
     def build_shape(self, led):
         b, name = led.build, led.build_rel
@@ -875,6 +1027,13 @@ class Checker:
             if key in entry and not test(entry[key]):
                 self.block(name, "approvals[%d].%s" % (n, key), "%s is not of its shape" % json.dumps(entry[key])[:80],
                            "the approvals[] shape record-map.md gives")
+        if entry.get("approval_mode") == "own-account-poc" and self.account is not None and re.fullmatch(
+                r"v\d+\.\d+", str(entry.get("version"))):
+            derived = approval_mode(led, entry["version"], led.version_fields(entry["version"]))[0]
+            if derived != "own-account-poc":  # R13: the card's one yes is for a proof of concept in the user's account
+                self.block(name, "approvals[%d].approval_mode" % n, "own-account-poc, while the record's build target "
+                           "and the version's purpose give %s" % derived, "own-account-poc only on an own-account "
+                           "record building a proof of concept (A28, W44)")
         rows, frozen, text = self.frozen_table(led, entry, tables)
         if text is None:
             self.block(name, "approvals[%d].frozen_file" % n, "%s is missing" % frozen, "the frozen revision on disk")
@@ -1133,7 +1292,7 @@ def cmd_live_map_set(root, args):
     steps = [("account.json", json_step(root, root / "account.json", led.account), None)]
     step = map_step(led)
     steps += [step] if step else []
-    commit("live-map set", steps, next_call="ledger.py live-map, which renders the map from live_objects")
+    commit("live-map set", steps, next_call="ledger.py live-map, which renders the map from live_objects", root=root)
     return 0, {"key": args.key, "constraint": args.constraint, "source": source,
                "written": {rel: mc.sha256_file(mc.record_path(root, rel)) for rel, _, _ in steps},
                "log": [entry_log("-" if not args.strand else args.strand, "live-map", "-", args.key,
@@ -1229,15 +1388,36 @@ def cmd_workspaces(root, args):
     recorded = {str((item or {}).get("id")): product for product, item in (led.account.get("client_workspaces") or {}).items()}
     recorded.update({str(item.get("id")): item.get("product") for item in led.account.get("superseded_workspaces") or []
                      if isinstance(item, dict)})
+    built = None
+    superseded = {str(item.get("id")): item.get("direction_change") for item in led.account.get(
+        "superseded_workspaces") or [] if isinstance(item, dict)}
     if forms[0]:
         product, ws = args.product, args.id
         reasons = [None if product in ("core", "crm", "service") else (
                        "account.json", "client_workspaces", "%r is not a product" % product, "core | crm | service"),
                    digits("--id", ws) if ws else ("(flags)", "--id", "no workspace id", "the id the create returned"),
-                   None if args.name and args.name.strip() else ("(flags)", "--name", "no name", "the workspace's name"),
                    None if args.created_in == led.qualified else ("(flags)", "--created-in", "%r is not this strand's "
                                                                    "version %s" % (args.created_in, led.qualified),
                                                                    led.qualified)]
+        # R8: the workspace is one this strand's build created and read back, never an id the session names
+        rows = sorted(k for k, r in (led.objects if led.build else {}).items() if r.get("type") == "workspace"
+                      and str(r.get("id")) == str(ws) and r.get("status") in ("written", "verified"))
+        built = led.objects[rows[0]] if rows else None
+        direction = (args.direction_change or "").strip() or (built or {}).get("direction_change")  # R11
+        if built is None:
+            reasons.append((led.build_rel if led.build else "(flags)", "objects", "strand %s: no workspace row of this "
+                            "ledger was written or verified with the id %s" % (short, ws), "a workspace the build "
+                            "created: ledger.py intent, the create, record --id and verify first (W38)"))
+        elif built.get("product") != product:
+            reasons.append((led.build_rel, "objects.%s.product" % rows[0], "%s was created for %s, not %s" % (
+                rows[0], built.get("product"), product), "the product the workspace row was created for"))
+        elif args.name and args.name.strip() != built.get("name"):
+            reasons.append(("(flags)", "--name", "%r given, %r recorded on %s" % (args.name, built.get("name"), rows[0]),
+                            "the workspace row's name, or no --name"))
+        for rel_other, ids in sibling_workspaces(root):  # the cross-record check: ids only, inside this record's hold
+            if str(ws) in ids:
+                reasons.append((rel_other, "guard_index.client_workspace_ids", "workspace %s is another client "
+                                "record's" % ws, "a workspace this record's own build created (A21)"))
         if ws in operational:
             reasons.append(("account.json", "guard_index.client_workspace_ids", "strand %s: workspace %s is an operational "
                             "workspace (never-demo), never a build target: %s" % (short, ws, operational[ws]), A21))
@@ -1248,10 +1428,11 @@ def cmd_workspaces(root, args):
         if current and str(current.get("id")) == ws:
             reasons.append(("account.json", "client_workspaces.%s" % product, "workspace %s is already recorded" % ws,
                             "nothing to record: the workspace is the client's already"))
-        elif current and not args.direction_change:
+        elif current and not direction:
             reasons.append(("account.json", "client_workspaces.%s" % product, "the client already has a %s workspace, %s"
                             % (product, current.get("id")), "one workspace per product, unless the record says the "
-                            "direction changed: --direction-change with the log reference of the user's decision"))
+                            "direction changed: --direction-change with the log reference of the user's decision, given "
+                            "here or at the workspace's intent"))
         refuse(*reasons)
     elif forms[1]:
         refuse(digits("--use", args.use),
@@ -1259,7 +1440,11 @@ def cmd_workspaces(root, args):
                                                  "workspace %s is outside the client's workspaces" % (short, args.use),
                                                  A21 + ": " + (", ".join(clients) or "none")),
                None if args.use not in operational else ("account.json", "guard_index.client_workspace_ids",
-                                                         "workspace %s is operational: %s" % (args.use, operational[args.use]), A21))
+                                                         "workspace %s is operational: %s" % (args.use, operational[args.use]), A21),
+               None if args.use not in superseded or args.use in led.targets() else (  # R16
+                   "account.json", "superseded_workspaces", "strand %s: workspace %s was superseded when the user chose "
+                   "a new direction (%s)" % (short, args.use, superseded[args.use]), "the product's current workspace; "
+                   "a superseded one only for the strand that already builds there"))
     else:
         refuse(digits("--folder", args.folder) if args.folder else ("(flags)", "--folder", "no folder id", "the folder id"),
                None if args.in_workspace in led.targets() else (
@@ -1278,8 +1463,8 @@ def cmd_workspaces(root, args):
         if current:
             led.account.setdefault("superseded_workspaces", []).append(dict(
                 product=args.product, id=str(current.get("id")), name=current.get("name"),
-                created_in=current.get("created_in"), superseded_in=args.created_in, direction_change=args.direction_change))
-        workspaces[args.product] = {"id": args.id, "name": args.name.strip(), "created_in": args.created_in}
+                created_in=current.get("created_in"), superseded_in=args.created_in, direction_change=direction))
+        workspaces[args.product] = {"id": args.id, "name": built.get("name"), "created_in": args.created_in}
         for listed, value in ((ids, args.id), (targets["workspace_ids"], args.id)):
             if value not in listed:
                 listed.append(value)
@@ -1305,6 +1490,7 @@ def cmd_workspaces(root, args):
 def cmd_change_check(root, args):
     led = Ledger(root, args.strand)
     refuse(*led.newer())
+    refuse(*holder_reasons(root, led.short))  # R18: while a build is live, only its strand replaces the block
     data, name = input_json(root, args.source, "--from")
     roster = data.get("roster_diff")
     notes = data.get("release_notes_since")
@@ -1364,6 +1550,10 @@ def cmd_approval(root, args):
                srel, "kind", "the strand is %s: it has no ledger" % led.strand.get("kind"), "a platform or hybrid strand"),
            None if (led.account.get("account") or {}).get("id") not in (None, "unbound") else (
                "account.json", "account.id", "the record is not bound to an account", "ledger.py bind first"))
+    lease = mc.lease_status(root)
+    refuse(None if not (lease.get("held") and lease.get("strand") == led.short and lease.get("run_id")) else (
+        mc.LOCK_REL, "run_id", "strand %s is building: run %s is on the lease" % (led.short, lease.get("run_id")),
+        "a revision approved between runs, never under one (R20)"))
     version = args.version or led.version
     fields = led.version_fields(version)
     vpath = led.version_path(version)
@@ -1444,7 +1634,7 @@ def cmd_approval(root, args):
                          "assumed_terms": counts["AT"], "forks_on_leaning": counts["FK"]}
     entry["live_objects_touched"] = touched
     b.setdefault("approvals", []).append(entry)
-    delta = {"new": [], "kept": [], "replanned": [], "not_in_table": []}
+    delta = {"new": [], "kept": [], "replanned": [], "dropped": [], "not_in_table": []}
     objects = b.setdefault("objects", {})
     for key, (kind, name) in table.items():
         if kind == "ui_step":
@@ -1461,8 +1651,27 @@ def cmd_approval(root, args):
             if kind in PROMPT_TYPES:
                 row["prompt_ref"] = "%s#%s" % (ref, key)
             delta["replanned"].append(key)
+        elif row.get("status") == "planned":  # R12: nothing is built yet, so the row follows the latest approved plan
+            if row.get("type") != kind:
+                row = objects[key] = new_row(kind, key, name, version, ref)
+            else:
+                row = objects[key] = ordered_row(row)
+                row.update(name=name, approval_ref=ref, blueprint_ref="%s#%s" % (ref, key))
+                if kind in PROMPT_TYPES:
+                    row["prompt_ref"] = "%s#%s" % (ref, key)
+            row["origin"] = "pre-existing-referenced" if key in (args.referenced or []) else "created"
+            delta["kept"].append(key)
         else:
             delta["kept"].append(key)
+    for key in sorted(objects, key=natural):  # R12: a planned row the revision drops leaves the plan
+        row = objects[key]
+        if key not in table and row.get("status") == "planned" and row.get("type") != "item_batch":
+            objects[key] = row = ordered_row(row)
+            row["status"] = "departed"
+            b.setdefault("departures", []).append({"key": key, "version": version, "what": "dropped from the plan by "
+                                                   "revision %s" % ref, "error_code": "NONE", "attempts": [],
+                                                   "decision": "blueprint-revision"})
+            delta["dropped"].append(key)
     delta["not_in_table"] = [key for key in objects if key not in table and objects[key].get("type") != "item_batch"]
     b["reads_live"] = sorted({t["key"] for a in b["approvals"] for t in a.get("live_objects_touched") or []})
     if b.get("client_slug") in (None, ""):
@@ -1479,17 +1688,27 @@ def cmd_approval(root, args):
 
 # run start, run heartbeat, run end (W30 to W32).
 
-def next_run_id(root):
+def next_run_id(root, skip=()):
+    """W30: one more than the highest N of today among every strand's runs and the ids in `skip` (R6: the ids the
+    lease's history already carries, learnt from lease_refresh's refusal, since ledger.py never reads the lock)."""
     date, highest = mc.stamp("utc")[:10], 0
     base = root / "strands"
+    ids = list(skip)
     for folder in sorted(base.iterdir()) if base.is_dir() else []:
         path = folder / "solution" / "build.json"
         if folder.is_dir() and path.is_file():
-            for run in mc.read_json(path, mc.relative(root, path)).get("runs") or []:
-                match = re.fullmatch(r"run-(\d{4}-\d{2}-\d{2})-(\d+)", str((run or {}).get("id")))
-                if match and match.group(1) == date:
-                    highest = max(highest, int(match.group(2)))
+            ids += [str((run or {}).get("id")) for run in mc.read_json(path, mc.relative(root, path)).get("runs") or []]
+    for run_id in ids:
+        match = re.fullmatch(r"run-(\d{4}-\d{2}-\d{2})-(\d+)", run_id)
+        if match and match.group(1) == date:
+            highest = max(highest, int(match.group(2)))
     return "run-%s-%d" % (date, highest + 1)
+
+
+def ran_before(exc):
+    """True for lease_refresh's refusal of a run id an earlier lease carried (G50, finding 2 of WP2)."""
+    first = exc.findings[0] if isinstance(exc, mc.Refusal) and exc.findings else {}
+    return first.get("field") == "run_id" and "ran under the lease" in str(first.get("problem"))
 
 
 def cmd_run_start(root, args):
@@ -1538,7 +1757,7 @@ def cmd_run_start(root, args):
         reasons.append((mc.LOCK_REL, "run_id", "the lease already carries run %s" % status.get("run_id"),
                         "one run per lease: a run enters only the lease it starts under"))
     refuse(*reasons)
-    run_id, now = args.run_id or next_run_id(root), mc.stamp("utc")
+    now = mc.stamp("utc")
     yes = args.another_build_running == "yes"
     answer = "%s, answered %s" % (args.another_build_running, local_minute_of_day()) + (
         ": %s" % args.answer_words.strip() if yes else "")
@@ -1546,31 +1765,43 @@ def cmd_run_start(root, args):
     epoch = int(args.lease_epoch) if DIGITS.fullmatch(str(args.lease_epoch)) else args.lease_epoch
     interrupted = []
     for run in b.setdefault("runs", []):
-        if run.get("state") == "running" and run.get("id") != run_id:
+        if run.get("state") == "running" and run.get("id") != args.run_id:
             run["state"] = "interrupted"
             interrupted.append(run.get("id"))
-    run = {"id": run_id, "version": version, "kind": "build", "session_label": args.session_label, "lease_epoch": epoch,
-           "another_build_running": answer, "started_at": now, "heartbeat_at": now, "ended_at": now if yes else None,
-           "state": "ended" if yes else "running",
-           "calls_estimated": preflight.get("estimated_calls") if preflight.get("version") == version else None,
-           "calls_used": 0 if yes else None, "account_checks": [{"at": now, "before": "run start", "result": "match"}]}
-    b["runs"].append(run)
+    recovery = interrupted or [k for k, row in led.objects.items() if row.get("status") == "attempting"]
     if not yes:
         b["lease_epoch_at_run"] = epoch
     b["updated_at"] = now
     build_step = (led.build_rel, json_step(root, led.build_path, b), None)
-    if yes:
-        commit("run start", [build_step, (mc.LOCK_REL, lambda: mc.lease_release(root, args.lease_epoch, args.session_label),
-                                          {"released": {"epoch": epoch}})], run_id,
-               "record.py lease release --epoch %s --label %s" % (args.lease_epoch, args.session_label))
-    else:
-        commit("run start", [(mc.LOCK_REL, lambda: mc.lease_refresh(root, args.lease_epoch, args.session_label, run_id),
-                              {"refreshed": {"epoch": epoch, "session_label": args.session_label, "run_id": run_id}}),
-                             build_step], run_id,
-               "ledger.py run start --strand %s --lease-epoch %s --session-label %s --another-build-running no "
-               "--account-check match --run-id %s, with the ledger's current sha" % (
-                   led.short, args.lease_epoch, args.session_label, run_id))
-    recovery = interrupted or [k for k, row in led.objects.items() if row.get("status") == "attempting"]
+    taken = []
+    while True:  # R6: an id the lease's history carries (a run whose ledger write never landed) is skipped
+        run_id = args.run_id or next_run_id(root, taken)
+        run = {"id": run_id, "version": version, "kind": "build", "session_label": args.session_label,
+               "lease_epoch": epoch, "another_build_running": answer, "started_at": now, "heartbeat_at": now,
+               "ended_at": now if yes else None, "state": "ended" if yes else "running",
+               "calls_estimated": preflight.get("estimated_calls") if preflight.get("version") == version else None,
+               "calls_used": 0 if yes else None, "account_checks": [{"at": now, "before": "run start", "result": "match"}],
+               "recovery_first": bool(recovery) and not yes}
+        b["runs"].append(run)
+        try:
+            if yes:
+                commit("run start", [build_step, (mc.LOCK_REL, lambda: mc.lease_release(
+                    root, args.lease_epoch, args.session_label), {"released": {"epoch": epoch}})], run_id,
+                       "record.py lease release --epoch %s --label %s" % (args.lease_epoch, args.session_label), root)
+            else:
+                commit("run start", [(mc.LOCK_REL, lambda: mc.lease_refresh(root, args.lease_epoch, args.session_label,
+                                                                            run_id),
+                                      {"refreshed": {"epoch": epoch, "session_label": args.session_label,
+                                                     "run_id": run_id}}), build_step], run_id,
+                       "ledger.py run start --strand %s --lease-epoch %s --session-label %s --another-build-running no "
+                       "--account-check match --run-id %s, with the ledger's current sha" % (
+                           led.short, args.lease_epoch, args.session_label, run_id), root)
+            break
+        except mc.Refusal as exc:
+            b["runs"].pop()
+            if args.run_id or not ran_before(exc) or len(taken) >= 50:
+                raise
+            taken.append(run_id)
     return 0, {"run_id": run_id, "epoch": epoch, "session_label": args.session_label, "state": run["state"],
                "another_build_running": answer, "interrupted": interrupted, "recovery_first": bool(recovery),
                "released": yes, "written": {led.build_rel: mc.sha256_file(led.build_path)},
@@ -1579,32 +1810,42 @@ def cmd_run_start(root, args):
                                  "released, epoch %s" % epoch] if yes else ["run started"])]}
 
 
-def fenced(root, args, states=("running",)):
+def fenced(root, args, states=("running",), account=False):
     """The common opening of a fenced strand command (W28): newer schemas, the three flags, the sha, the holder and
-    the run, each refused before anything is written. Returns the Ledger."""
+    the run, each refused before anything is written; with `account`, the run's last account check too (R14).
+    Returns the Ledger."""
     led = Ledger(root, args.strand)
     refuse(*led.newer())
     led.require_build()
     reasons = flatten(fence_flags(args), sha_reason(led, args.expect_sha), holder_reasons(root, led.short))
     if args.run_id:
         reasons += run_reasons(led, args.run_id, states)
+        if account:
+            reasons += account_reasons(led, args.run_id)
     refuse(*reasons)
     return led
 
 
 def cmd_run_heartbeat(root, args):
     led = fenced(root, args)
+    words = (args.answer_words or "").strip()
+    after_mismatch = bool(account_reasons(led, args.run_id))
     refuse(None if args.account_check in (None, "match", "mismatch") else (
                "(flags)", "--account-check", "%r" % args.account_check, "match | mismatch"),
            None if not args.account_check or (args.before or "").strip() else (
-               "(flags)", "--before", "no step named", "what the check came before, such as writes 21 to 40"))
+               "(flags)", "--before", "no step named", "what the check came before, such as writes 21 to 40"),
+           None if args.account_check != "match" or not after_mismatch or (words and "\n" not in words) else (
+               "(flags)", "--answer-words", "a match after a mismatch with no words from the user",
+               "the user's own words, on one line, that the run goes on in the bound account (R14)"))
     fence(root, args)
     led.reload()
     beat(led, args.run_id)
     run = led.run(args.run_id)
     if args.account_check:
-        run.setdefault("account_checks", []).append({"at": mc.stamp("utc"), "before": args.before.strip(),
-                                                     "result": args.account_check})
+        check = {"at": mc.stamp("utc"), "before": args.before.strip(), "result": args.account_check}
+        if args.account_check == "match" and after_mismatch:
+            check["answer_words"] = words
+        run.setdefault("account_checks", []).append(check)
     written = save_build(led, "run heartbeat", args.run_id)
     return 0, {"run_id": args.run_id, "heartbeat_at": run["heartbeat_at"], "stop": args.account_check == "mismatch",
                "written": written}
@@ -1643,8 +1884,14 @@ def live_rows(led):
             continue
         built = ("native" if str(row.get("id")) in native else "client") if row.get("origin") in (
             "pre-existing-referenced", "pre-existing-modified") else "%s/%s" % (led.short, row.get("introduced_in"))
+        constraint, source = "change-with-own-yes", "pending strand close"
+        same = shared_rows(live, row.get("id"), qkey)  # R5: one object under two keys keeps one constraint
+        if same:
+            strictest = max(same, key=lambda k: STRICTNESS.get(live[k].get("constraint"), 2))
+            constraint = live[strictest].get("constraint")
+            source = "as %s: %s" % (strictest, live[strictest].get("constraint_source"))
         live[qkey] = full_live(dict(fresh, name_at_build=row.get("name"), owner_strand=led.short, introduced_in=built,
-                                    constraint="change-with-own-yes", constraint_source="pending strand close"))
+                                    constraint=constraint, constraint_source=source))
         created.append(qkey)
     for key, row in sorted(led.objects.items()):
         qkey = row.get("live_key") if row.get("origin") == "other-strand-modified" else "%s:%s" % (led.short, key)
@@ -1652,6 +1899,19 @@ def live_rows(led):
             live[qkey]["state"] = "archived"
             archived.append(qkey)
     return {"created": created, "refreshed": refreshed, "archived": archived}
+
+
+def shared_rows(live, monday_id, but=None):
+    """The qualified keys of every live row that holds this monday id, `but` aside (R5)."""
+    if not monday_id:
+        return []
+    return sorted(k for k, r in live.items() if k != but and str((r or {}).get("monday_id")) == str(monday_id))
+
+
+def protected_ids(live):
+    """{monday id: qualified key} of every live row marked do-not-change (R5: the constraint protects the object)."""
+    return {str(r.get("monday_id")): k for k, r in sorted(live.items())
+            if (r or {}).get("constraint") == "do-not-change" and r.get("monday_id")}
 
 
 def full_live(row):
@@ -1692,7 +1952,7 @@ def cmd_run_end(root, args):
     steps.append((mc.LOCK_REL, lambda: mc.lease_release(root, args.lease_epoch, args.session_label),
                   {"released": {"epoch": epoch}}))
     commit("run end", steps, args.run_id, "the same run end call again: it is safe to repeat, rewriting the live map "
-           "and releasing the lease (ledger.py run end --strand %s --run-id %s ...)" % (led.short, args.run_id))
+           "and releasing the lease (ledger.py run end --strand %s --run-id %s ...)" % (led.short, args.run_id), root)
     return 0, {"run_id": args.run_id, "state": "ended", "calls_used": int(used), "live_rows": rows, "released": True,
                "written": {rel: mc.sha256_file(mc.record_path(root, rel)) for rel, _, _ in steps if rel != mc.LOCK_REL},
                "log": [entry_log(led.short, "build", led.version, args.run_id, [
@@ -1785,7 +2045,7 @@ def scope_reason(led, ws, what, allowed, label):
 
 
 def cmd_intent(root, args):
-    led = fenced(root, args)
+    led = fenced(root, args, account=True)
     b, key, op, rel = led.build, args.key, args.operation, led.build_rel
     field = "objects." + str(key)
     refuse(None if op in OPERATIONS else ("(flags)", "--operation", "%r" % op, " | ".join(OPERATIONS)),
@@ -1793,6 +2053,8 @@ def cmd_intent(root, args):
                                         "archive, with its own yes and containment evidence"))
     row = led.objects.get(key)
     new = row is None
+    current, current_ref, fields = current_approval(led)
+    latest = latest_ref(led)
     if new:
         match = re.fullmatch(r"(B\d+)\.IB\d+", str(key))
         board = led.objects.get(match.group(1)) if match else None
@@ -1800,12 +2062,12 @@ def cmd_intent(root, args):
             rel, field, "no planned row %s: the key is in no approved revision of this strand" % key,
             "a key of an approved element-key table, or an item batch B<n>.IB<n> of a board row of this strand"))
         row = new_row("item_batch", key, args.name or "%s sample items" % board.get("name"), led.version, None)
-        current = [a for a in b.get("approvals") or [] if a.get("version") == led.version]
-        row["approval_ref"] = ("%sr%s" % (led.version, current[-1].get("revision"))) if current else board.get("approval_ref")
+        row["approval_ref"] = latest or board.get("approval_ref")
         row["blueprint_ref"] = None
     kind = row.get("type")
     reasons = [None if not args.type or args.type == kind else (rel, field + ".type", "%s given, %s planned" % (
         args.type, kind), "the planned type")]
+    reasons += recovery_reasons(led, args.run_id)
     if op in FIT and kind not in FIT[op]:
         reasons.append(("(flags)", "--operation", "%s on a %s row" % (op, kind), "%s only on a %s row" % (
             op, " or ".join(FIT[op]))))
@@ -1814,7 +2076,9 @@ def cmd_intent(root, args):
     move, status_before = intent_move(led, key, row, op, args.retry), row.get("status")
     if move:
         reasons.append((rel, field + ".status", move, "a move of the status chain record-map.md gives"))
-    # approval and the frozen table (W07, W43, W47)
+    elif args.retry and status_before == "attempting":
+        reasons += retry_reasons(led, key, row, "intent --retry")  # R10: a timeout is reconciled before any retry
+    # approval and the frozen table (W07, W43, W47); the mode is the version being built's (R1, R13)
     ref = args.approval_ref or row.get("approval_ref")
     entry = led.approval(ref) if ref else None
     if not ref:
@@ -1823,20 +2087,41 @@ def cmd_intent(root, args):
     elif entry is None:
         reasons.append((rel, field + ".approval_ref", "%s resolves to no approval of this ledger" % ref,
                         "the vNrM of an approval entry of this build.json"))
-    elif kind != "item_batch":
-        text, frel = led.frozen(entry)
-        rows = element_table(text)[0] if text is not None else None
-        table = {k: (kd, nm) for k, kd, nm in rows or []}
-        if rows is None:
-            reasons.append((frel, "## Element keys", "the frozen revision has no element-key table, so %s cannot be "
-                            "matched to it" % key, "a revision approved with the ## Element keys table"))
-        elif key not in table:
-            reasons.append((frel, "## Element keys", "%s is not a row of %s" % (key, ref), "a key of that revision's table"))
-        elif table[key][0] != kind:
-            reasons.append((frel, "## Element keys", "%s is a %s there, a %s here" % (key, table[key][0], kind), "the same kind"))
-        elif op == "create" and (args.name or row.get("name")) != table[key][1]:
-            reasons.append((frel, "## Element keys", "the name %r is not the approved %r" % (
-                args.name or row.get("name"), table[key][1]), "the planned name"))
+    else:
+        if args.approval_ref and str(entry.get("version")) != led.version and (new or op not in ("update", "archive")):
+            reasons.append(("(flags)", "--approval-ref", "%s is an approval of %s, while the strand builds %s" % (
+                args.approval_ref, entry.get("version"), led.version), "an approval of %s; an earlier version's only "
+                            "for the table of a kept row's update or archive (R1)" % led.version))
+        if op == "create" and status_before in ("planned", "departed") and ref != latest:
+            reasons.append((rel, field + ".approval_ref", "%s is not the strand's latest approval of %s (%s)" % (
+                ref, led.version, latest), "a create follows the latest approved revision: ledger.py approval moves "
+                            "every planned row it keeps onto it (R12)"))
+        if kind != "item_batch":
+            text, frel = led.frozen(entry)
+            rows = element_table(text)[0] if text is not None else None
+            table = {k: (kd, nm) for k, kd, nm in rows or []}
+            if rows is None:
+                reasons.append((frel, "## Element keys", "the frozen revision has no element-key table, so %s cannot "
+                                "be matched to it" % key, "a revision approved with the ## Element keys table"))
+            elif key not in table:
+                reasons.append((frel, "## Element keys", "%s is not a row of %s" % (key, ref),
+                                "a key of that revision's table"))
+            elif table[key][0] != kind:
+                reasons.append((frel, "## Element keys", "%s is a %s there, a %s here" % (key, table[key][0], kind),
+                                "the same kind"))
+            elif op == "create" and (args.name or row.get("name")) != table[key][1]:
+                reasons.append((frel, "## Element keys", "the name %r is not the approved %r" % (
+                    args.name or row.get("name"), table[key][1]), "the planned name"))
+    if current is None:
+        reasons.append((led.build_rel, "approvals", "no approval of %s, the revision of the version being built" %
+                        current_ref, "ledger.py approval of the revision version.md names"))
+    stored = (current or {}).get("approval_mode") or "per-list"
+    derived = approval_mode(led, led.version, fields)[0] if fields else "per-list"
+    if stored == "own-account-poc" and derived != "own-account-poc":
+        reasons.append((led.build_rel, "approvals[].approval_mode", "%s records own-account-poc, while the record and "
+                        "the version give %s" % (current_ref, derived), "own-account-poc only on an own-account record "
+                        "building a proof of concept (A28, W44, R13)"))
+    mode = "per-list" if "per-list" in (stored, derived) else stored
     if args.name and not new and args.name != row.get("name") and op == "create":
         reasons.append((rel, field + ".name", "%r given, %r planned" % (args.name, row.get("name")), "the planned name"))
     # origin and prior state (K127 to K130)
@@ -1865,6 +2150,7 @@ def cmd_intent(root, args):
     source = args.source_strand or row.get("source_strand")
     live_key = args.live_key or row.get("live_key")
     live = led.account.get("live_objects") or {}
+    owner_row = None
     if origin == "other-strand-modified":
         target = live.get(live_key) if live_key else None
         if not source or not re.fullmatch(r"\d{3}", str(source)) or source == led.short:
@@ -1878,13 +2164,26 @@ def cmd_intent(root, args):
         elif target.get("constraint") == "do-not-change":
             reasons.append(("account.json", "live_objects.%s.constraint" % live_key, "%s is marked do-not-change (%s)" % (
                 live_key, target.get("constraint_source")), "no change to it: a do-not-change row is left as it is"))
+        else:
+            owner_row = target
+            if row.get("id") and str(row["id"]) != str(target.get("monday_id")):  # R9: the object is the live row's
+                reasons.append((rel, field + ".id", "%s, while %s is %s" % (row["id"], live_key, target.get(
+                    "monday_id")), "the id of the object the live row names"))
     elif args.source_strand or args.live_key:
         reasons.append((rel, field + ".source_strand", "--source-strand or --live-key on a %s row" % origin,
                         "only on an other-strand-modified row"))
-    # parent (K132, K179, W58)
+    # parent (K132, K179, W58; R3: a parent is named by key, placed, and in the row's workspace)
     parent_key = args.parent_key if args.parent_key is not None else row.get("parent_key")
     parent_id = args.parent_id or row.get("parent_id")
     reasons.append(digits("--parent-id", args.parent_id))
+    if args.parent_id and not parent_key and ID.fullmatch(str(args.parent_id)):
+        holder = led.holder_of(args.parent_id)
+        reasons.append(("(flags)", "--parent-id", "the parent %s is named by id alone%s" % (
+            args.parent_id, ", while the record holds it as %s" % holder if holder else
+            ", and the record places it in no workspace it knows"),
+            "--parent-key with the row or the qualified live-map key that holds the parent, whose id is then read "
+            "from it" + ("" if holder else "; " + A21 + ": record it as a pre-existing-referenced row and verify it "
+                         "with a read that shows its workspace")))
     if args.parent_key and row.get("parent_key") and args.parent_key != row["parent_key"]:
         reasons.append((rel, field + ".parent_key", "%s given, %s planned" % (args.parent_key, row["parent_key"]),
                         "the planned parent"))
@@ -1961,11 +2260,13 @@ def cmd_intent(root, args):
         if args.workspace and row.get("workspace") and args.workspace != row["workspace"]:
             reasons.append((rel, field + ".workspace", "%s given, %s recorded" % (args.workspace, row["workspace"]),
                             "the recorded workspace"))
-        workspace = args.workspace or row.get("workspace") or (led.row_workspace(parent_key) if parent_key and ":" not in
-                                                               str(parent_key) else None)
-        if workspace is None and parent_key and ":" in str(parent_key):
+        placed = None
+        if parent_key and ":" not in str(parent_key):
+            placed = led.row_workspace(parent_key)
+        elif parent_key:
             target = live.get(parent_key) or {}
-            workspace = target.get("monday_id") if target.get("kind") == "workspace" else target.get("workspace")
+            placed = target.get("monday_id") if target.get("kind") == "workspace" else target.get("workspace")
+        workspace = args.workspace or row.get("workspace") or placed
         if not workspace:
             reasons.append((rel, field + ".workspace", "the row has no workspace", "--workspace, one of this strand's "
                             "build targets"))
@@ -1973,15 +2274,22 @@ def cmd_intent(root, args):
             workspace = str(workspace)
             reasons.append(scope_reason(led, workspace, "the target workspace", led.targets(),
                                         "guard_index.build_targets_by_strand.%s" % led.short))
+            if parent_key and (parent_row is not None or ":" in str(parent_key)) and str(placed or "") != workspace:
+                reasons.append((rel, field + ".parent_key", "strand %s: the parent %s is in workspace %s, the row in %s"
+                                % (led.short, parent_key, placed or "none the record knows", workspace),
+                                A21 + ": a parent in the row's own workspace (R3)"))
     refs = list(args.ref or row.get("refs") or [])
+    ref_ids = []
     for item in refs:
-        match = re.fullmatch(r"(board|workspace|doc|view|column):(\d+)", item)
+        match = REF_FORM.fullmatch(item)
         if not match:
-            reasons.append(("(flags)", "--ref", "%r" % item, "<board|workspace|doc|view|column>:<id>"))
+            reasons.append(("(flags)", "--ref", "%r" % item, "<board|workspace|doc|view|column>:<id>, the id with no "
+                            "leading zero"))
         elif match.group(1) == "workspace":
             reasons.append(scope_reason(led, match.group(2), "the referenced workspace", led.client_ids,
                                         "guard_index.client_workspace_ids"))
         else:
+            ref_ids.append(match.group(2))
             placed = led.place(match.group(2))
             if placed is None:
                 reasons.append(("account.json", "guard_index.client_workspace_ids", "strand %s: the referenced %s %s is "
@@ -1992,6 +2300,16 @@ def cmd_intent(root, args):
             else:
                 reasons.append(scope_reason(led, placed, "the referenced %s %s, in workspace" % (
                     match.group(1), match.group(2)), led.client_ids, "guard_index.client_workspace_ids"))
+    # R5: a do-not-change constraint protects the object, whatever key a strand mirrors it under
+    protected, named = protected_ids(live), set(guarded)
+    for oid, what in [((owner_row or {}).get("monday_id") or row.get("id"), "the row's own object"),
+                      (parent_id, "its parent")] + [(i, "a referenced object") for i in ref_ids]:
+        qkey = protected.get(str(oid)) if oid else None
+        if qkey and qkey not in named:
+            named.add(qkey)
+            reasons.append(("account.json", "live_objects.%s.constraint" % qkey, "%s, %s, is marked do-not-change as "
+                            "%s (%s)" % (what, oid, qkey, live[qkey].get("constraint_source")),
+                            "no change to it or under it, whatever key a strand mirrors it under"))
     # recipients, sample data, assumptions, prompt, --ir
     notifies = list(args.notifies or row.get("notifies") or [])
     reasons += [None if RECIPIENT.fullmatch(n) else ("(flags)", "--notifies", "%r" % n, "a user id, team:<id> or "
@@ -2004,11 +2322,20 @@ def cmd_intent(root, args):
                         "sample data"))
     if kind != "item_batch" and args.sample_data:
         reasons.append(("(flags)", "--sample-data", "on a %s row" % kind, "only on an item batch"))
+    direction = (args.direction_change or "").strip() or row.get("direction_change")
     if kind == "workspace" and op == "create" and args.product not in ("core", "crm", "service"):
         reasons.append(("(flags)", "--product", "%r on a workspace create" % args.product,
                         "core | crm | service: the product the workspace is for"))
+    elif kind == "workspace" and op == "create":
+        have = (led.account.get("client_workspaces") or {}).get(args.product)
+        if have and have.get("id") and not direction:  # R11: refused before the create, never after it
+            reasons.append(("account.json", "client_workspaces.%s" % args.product, "the client already has a %s "
+                            "workspace, %s" % (args.product, have.get("id")), "one workspace per product, unless the "
+                            "user decided on a new direction: --direction-change with the log reference of that decision"))
     if kind != "workspace" and args.product:
         reasons.append(("(flags)", "--product", "on a %s row" % kind, "only on a workspace row"))
+    if args.direction_change and not (kind == "workspace" and op == "create"):
+        reasons.append(("(flags)", "--direction-change", "on a %s %s" % (kind, op), "only on a workspace create"))
     assumptions = list(args.assumption_ref or row.get("assumption_refs") or [])
     text = led.frozen(entry)[0] if entry is not None else None
     for item in args.assumption_ref or []:
@@ -2040,28 +2367,36 @@ def cmd_intent(root, args):
                         "(for %s, at %s, %s)" % (led.short, check.get("for_strand"), check.get("at"), outcome),
                         "ledger.py change-check --strand %s today, with no change affecting this build or the user's yes"
                         % led.short))
-    # the class and its yes (W10, W45, W48)
+    # the class and its yes (W10, W45, W48); a yes is this run's, for this operation, and used once (R2, R15)
     cls = approval_class(dict(row, parent_key=parent_key), op, origin, args.ir, led)
-    mode = (entry or {}).get("approval_mode") or "per-list"
     need = yes_needed(cls, mode, str(key), real)
     run = led.run(args.run_id) or {}
-    yes = [e for e in b.get("irreversible_yes") or [] if e.get("key") == key and e.get("mode") in ("per-item", "grouped")
-           and str(e.get("at") or "") >= str(run.get("started_at") or "9999")]
-    chosen = [e for e in yes if e.get("mode") == need] if need else yes
+    retried = (row.get("attempt") or {}).get("started_at") if args.retry else None
+    entries = b.get("irreversible_yes") or []
+    yes = [n for n, e in enumerate(entries) if e.get("key") == key and e.get("mode") in ("per-item", "grouped")
+           and e.get("run_id") == args.run_id and (e.get("operation") or "create") == op
+           and str(e.get("at") or "") >= str(run.get("started_at") or "9999")
+           and (e.get("used_by") is None or (retried and e.get("used_by") == retried))]
+    chosen = [n for n in yes if entries[n].get("mode") == need] if need else yes
     if need and not chosen:
-        reasons.append((rel, "irreversible_yes", "%s needs its own %s yes in this run (class %s, mode %s%s)" % (
-            key, need, cls, mode, ", it notifies %s" % ", ".join(real) if real else ""),
-            "ledger.py irreversible-yes --key %s --mode %s in this run: a yes never carries to another run" % (key, need)))
-    evidence = (chosen[-1].get("evidence") if chosen else None) or args.evidence
+        reasons.append((rel, "irreversible_yes", "%s needs its own %s yes for this %s in this run (class %s, mode %s%s)" % (
+            key, need, op, cls, mode, ", it notifies %s" % ", ".join(real) if real else ""),
+            "ledger.py irreversible-yes --key %s --mode %s --operation %s in this run: a yes covers one step, never "
+            "another run or a later step" % (key, need, op)))
+    used = chosen[-1] if chosen else None
+    evidence = (entries[used].get("evidence") if used is not None else None) if need else args.evidence
     if cls == "removed" and not (evidence and evidence.strip()):
         reasons.append((rel, "irreversible_yes", "an archive of %s with no containment evidence" % key,
-                        "the evidence that nothing else uses it, on the yes or as --evidence"))
+                        "the evidence that nothing else uses it, on the archive's own yes (or as --evidence under "
+                        "the proof of concept's card)"))
     refuse(*reasons)
     fence(root, args)
     led.reload()
     b = led.build
     row = ordered_row(led.objects.get(key) or row)
     now = mc.stamp("utc")
+    if owner_row is not None:
+        row["id"] = str(owner_row.get("monday_id"))
     payload = {"key": key, "type": kind, "operation": op, "name": row.get("name"), "parent_id": parent_id,
                "workspace": workspace, "workspace_scope": sorted(scope), "refs": sorted(refs),
                "notifies": sorted(notifies), "payload_sha256": args.payload_sha}
@@ -2076,6 +2411,8 @@ def cmd_intent(root, args):
         row["workspace"] = workspace
     else:
         row["product"] = args.product or row.get("product")
+        if direction:
+            row["direction_change"] = direction
     if kind in ("publication", "activation") and parent_row is not None:
         row["id"] = parent_row.get("id")
     if prior is not None:
@@ -2087,11 +2424,14 @@ def cmd_intent(root, args):
     if op == "update" and led.version not in row["changed_in"] and led.version != row.get("introduced_in"):
         row["changed_in"].append(led.version)
     led.objects[key] = row
+    if used is not None:
+        b["irreversible_yes"][used]["used_by"] = now
     card = mode == "own-account-poc" and cls != "card" and not need and not yes
     if card:
-        b.setdefault("irreversible_yes", []).append({"key": key, "what": "%s %s %s" % (op, kind, row.get("name")),
-                                                     "at": now, "mode": "card", "approval_ref": ref,
-                                                     "evidence": (args.evidence or "").strip() or None, "log_ref": None})
+        b.setdefault("irreversible_yes", []).append({
+            "key": key, "what": "%s %s %s" % (op, kind, row.get("name")), "at": now, "mode": "card", "approval_ref": ref,
+            "evidence": (args.evidence or "").strip() or None, "log_ref": None, "run_id": args.run_id, "operation": op,
+            "used_by": now})
     beat(led, args.run_id)
     written = save_build(led, "intent", args.run_id)
     return 0, {"key": key, "status": "attempting", "class": cls, "approval_mode": mode, "yes": need or (
@@ -2100,8 +2440,19 @@ def cmd_intent(root, args):
 
 # record, verify (W50 to W54).
 
+def known_id(row):
+    """The id a modifying row's object already has (R9): an other-strand-modified row's, set by intent from its live
+    row, or the id of a pre-existing-modified row's prior state; None for every other row."""
+    if row.get("origin") == "other-strand-modified":
+        return str(row["id"]) if row.get("id") else None
+    if row.get("origin") == "pre-existing-modified" and isinstance(row.get("prior_state"), dict):
+        found = row["prior_state"].get("id")
+        return str(found) if found not in (None, "") else None
+    return None
+
+
 def cmd_record(root, args):
-    led = fenced(root, args)
+    led = fenced(root, args, account=True)
     rel, key = led.build_rel, args.key
     field = "objects." + str(key)
     row = led.objects.get(key)
@@ -2110,10 +2461,14 @@ def cmd_record(root, args):
     op = attempt.get("operation")
     items = list(args.item_id or [])
     companions = {}
+    known = known_id(row)
     reasons = [None if row.get("status") == "attempting" else (
         rel, field + ".status", "row %s is %s; record moves only an attempting row" % (key, row.get("status")),
         "ledger.py intent first"), None if kind in KEY_IDS and re.fullmatch(r"[A-Za-z0-9_]+", str(args.id or "x"))
         else digits("--id", args.id)] + [digits("--item-id", item) for item in items]
+    if known and args.id and str(args.id) != known:
+        reasons.append((rel, field + ".id", "--id %s on a %s row whose object is %s" % (args.id, row.get("origin"), known),
+                        "the id of the object the row modifies: a modification never makes the row another object"))
     for item in args.companion or []:
         name, _, value = item.partition("=")
         if name not in COMPANIONS or (name in ("tasks_board_id", "folder_id") and kind != "project"):
@@ -2134,7 +2489,8 @@ def cmd_record(root, args):
         if not DIGITS.fullmatch(str(args.polled_seconds or "")):
             reasons.append(("(flags)", "--polled-seconds", "%r" % args.polled_seconds, "the seconds polled so far"))
     landed = not (args.timed_out or args.id_from_error or args.pending)
-    if landed and op != "archive" and not (args.id or items or (kind in ("publication", "activation") and row.get("id"))):
+    if landed and op != "archive" and not (args.id or items or (kind in ("publication", "activation") and row.get("id"))
+                                           or (row.get("origin") == "other-strand-modified" and known)):
         reasons.append(("(flags)", "--id", "no id returned", "--id (or --item-id for a batch), or --timed-out, "
                         "--id-from-error or --pending when the call gave none"))
     refuse(*reasons)
@@ -2226,8 +2582,13 @@ def verify_reasons(led, key, row, result, obj, note, rel):
         halves = [tasks in [str(i) for i in obj.get(p) or []] for p in ("link_board_ids", "row_board_ids")]
         if not all(halves):
             found.append((rel, field, "one half of the link only: partial link", "needs-user with the note partial link"))
+    want = str(row["id"]) if row.get("origin") in ("other-strand-modified", "pre-existing-modified") and row.get(
+        "id") else known_id(row)
+    if want and obj.get("id") not in (None, "") and str(obj["id"]) != want:  # R9: the read is of the modified object
+        found.append((rel, field, "the read is of %s, while the row modifies %s" % (obj["id"], want),
+                      "a read of the object the row modifies"))
     if row.get("origin") == "pre-existing-referenced" and row.get("status") == "planned":
-        if not (DIGITS.fullmatch(str(obj.get("id") or "")) and DIGITS.fullmatch(str(obj.get("workspace_id") or ""))):
+        if not (ID.fullmatch(str(obj.get("id") or "")) and ID.fullmatch(str(obj.get("workspace_id") or ""))):
             found.append((rel, field, "the read does not show the object's id and workspace",
                           "object.id and object.workspace_id, the read that proves it exists"))
         if result not in ("match", "mismatch"):
@@ -2236,7 +2597,7 @@ def verify_reasons(led, key, row, result, obj, note, rel):
 
 
 def cmd_verify(root, args):
-    led = fenced(root, args)
+    led = fenced(root, args, account=True)
     rel, key = led.build_rel, args.key
     field = "objects." + str(key)
     row = led.objects.get(key)
@@ -2293,8 +2654,14 @@ def cmd_verify(root, args):
     written = save_build(led, "verify", args.run_id)
     extra = [t for t in obj.get("triggers") or [] if kind == "agent" and str(t if not isinstance(t, dict) else t.get(
         "name")) not in DEFAULT_TRIGGERS]
+    live = led.account.get("live_objects") or {}
+    shared = [{"key": k, "constraint": live[k].get("constraint"), "source": live[k].get("constraint_source")}
+              for k in shared_rows(live, row.get("id"), "%s:%s" % (led.short, key))] if referenced else []
     return 0, {"key": key, "status": row["status"], "result": result, "digest": row["verify"]["digest"],
-               "note": note, "triggers_beyond_defaults": extra, "written": written}
+               "note": note, "triggers_beyond_defaults": extra, "written": written,
+               "same_object_as": shared,  # R5: its live row will take the strictest of these constraints at run end
+               "next": None if not shared else "this object is already in the live map as %s; run end gives its row "
+               "the strictest constraint those rows hold" % ", ".join(s["key"] for s in shared)}
 
 
 # depart, ui-step, irreversible-yes (W48, W55, W56).
@@ -2332,7 +2699,9 @@ def cmd_depart(root, args):
                                                                 " | ".join(CALL_FORMS)),
            None if args.decision in DECISIONS else ("(flags)", "--decision", "%r" % args.decision, " | ".join(DECISIONS)),
            None if not ui or ((args.ui_what or "").strip() and (args.ui_owner or "").strip()) else (
-               "(flags)", "--ui-what", "a UI step decision without its step and owner", "--ui-what and --ui-owner"))
+               "(flags)", "--ui-what", "a UI step decision without its step and owner", "--ui-what and --ui-owner"),
+           *recovery_reasons(led, args.run_id),
+           *(retry_reasons(led, key, row, "depart") if row is not None and row.get("status") == "attempting" else []))
     fence(root, args)
     led.reload()
     b = led.build
@@ -2382,13 +2751,17 @@ def cmd_ui_step(root, args):
 
 
 def cmd_irreversible_yes(root, args):
-    led = fenced(root, args)
+    led = fenced(root, args, account=True)
     rel = led.build_rel
     keys = list(args.key or [])
+    op = args.operation or "create"
+    archive = op == "archive" or bool(re.search(r"\barchiv", args.what or "", re.I))
     reasons = [None if args.mode in ("per-item", "grouped") else ("(flags)", "--mode", "%r" % args.mode,
                                                                   "per-item | grouped"),
+               None if op in OPERATIONS and op != "delete" else ("(flags)", "--operation", "%r" % op, "the operation "
+                                                                 "the yes is for: " + " | ".join(OPERATIONS[:-1])),
                None if (args.what or "").strip() else ("(flags)", "--what", "no step said", "the step in plain words"),
-               None if not re.search(r"\barchiv", args.what or "", re.I) or (args.evidence or "").strip() else (
+               None if not archive or (args.evidence or "").strip() else (
                    "(flags)", "--evidence", "an archive's yes with no containment evidence", "the evidence it shows")]
     entries = []
     for key in keys:
@@ -2408,7 +2781,8 @@ def cmd_irreversible_yes(root, args):
                             "a key of irreversible_listed (per-item) or of a list (grouped)"))
         entries.append({"key": key, "what": (args.what or "").strip(), "at": None, "mode": args.mode,
                         "approval_ref": ref, "evidence": (args.evidence or "").strip() or None,
-                        "log_ref": (args.log_ref or "").strip() or None})
+                        "log_ref": (args.log_ref or "").strip() or None, "run_id": args.run_id, "operation": op,
+                        "used_by": None})  # R2, R15: this run's, this operation's, used once by the intent it covers
     refuse(*reasons)
     fence(root, args)
     led.reload()
@@ -2424,15 +2798,1776 @@ def cmd_irreversible_yes(root, args):
                    for item in entries]}
 
 
+# monday's catalogue constants (W87): copied from shared/native-objects.md sections 2.4, 2.6, 3.1 to 3.3, 4.1 to 4.4,
+# 5 and 7.2, never read from it at run time. test_ledger_read.py parses those sections and asserts these tables equal
+# them (the drift test). Template ids and template view ids are monday-owned constants, the same in every account.
+
+def _ids(text):
+    return tuple(text.split())
+
+
+CRM_TEMPLATES = {}  # template id: (family, version, entity as NO 3.1 names it)
+for _family, _version, _pairs in (
+        ("sales_crm", "v2", "5678953932 leads 5678953956 opportunities_or_deals 5678953938 contacts 5678953942 accounts "
+                            "5678953951 activities 5678953895 sales_targets"),
+        ("sales_crm", "v2", " ".join("%s companion" % i for i in _ids(
+            "5678953861 5678953867 5678953868 5678953871 5678953875 5678953876 5678953878 5678953894 5678953934 "
+            "5678953967 8975252031"))),
+        ("sales_crm", "v2", " ".join("%s subitems" % i for i in _ids("5678954845 5678955164 8975252077 9396380271"))),
+        ("crm_core", "v1", "2658101980 leads 2658101923 contacts 2658101956 accounts 2658101899 opportunities_or_deals "
+                           "2658101993 activities 8179060947 quotes_invoices 2658102037 deals_subitems "
+                           "18393462843 qi_line_items 10027024945 subitems 6131463946 project_companion "
+                           "6131463958 project_companion_subitems 8615325260 companion"),
+        (None, "unknown", "5092627193 contacts 5092627194 accounts 5092627197 opportunities_or_deals 5092627202 subitems "
+                          "5092627206 subitems 9031562048 leads 9031562049 activities 9031562051 contacts 9031562062 project "
+                          "9031562066 accounts 9031562081 opportunities_or_deals 9031562339 subitems 9031562445 subitems")):
+    _words = _pairs.split()
+    for _n in range(0, len(_words), 2):
+        CRM_TEMPLATES[_words[_n]] = (_family, _version, _words[_n + 1])
+SERVICE_TEMPLATES = {}  # template id: (family, entity as NO 4.1 names it); family E is unread (P-17) but named in NO 4
+for _family, _pairs in (
+        ("A", "7819831530 tickets 7819831540 tickets_subitems"),
+        ("B", "5727048235 tickets 5727048230 contacts 5727048234 csat_survey 5727048483 tickets_subitems "
+              "5765211778 start_here_doc"),
+        ("C", "5561655961 tickets 5561655956 incidents 5561655946 csat_survey 5561655954 employee_lifecycle "
+              "5561656011 employee_directory 5561656015 asset_management 5561656760 tickets_subitems "
+              "5561656359 lifecycle_subitems 5750119042 start_here_doc"),
+        ("D", "6410079972 tickets 6410079951 incidents 6410080630 subitems 6573685095 start_here_doc"),
+        ("E", "7830923787 tickets 7830923821 subitems"),
+        ("Portal", "9449773054 portal_custom_object")):
+    _words = _pairs.split()
+    for _n in range(0, len(_words), 2):
+        SERVICE_TEMPLATES[_words[_n]] = (_family, _words[_n + 1])
+ROLE_TEMPLATES = {"5882692393": "portfolio", "9857787491": "tasks", "6667825632": "overview", "9958257937": "planner",
+                  "105719650": "workflow_object"}  # NO 7.2: roles, never a native entity; the last never decisive alone
+CRM_VIEWS = {}  # template view id: (family, version, entity)
+for _family, _version, _entity, _views in (
+        ("sales_crm", "v2", "leads", "124433515 124433523 124433528"),
+        ("sales_crm", "v2", "opportunities_or_deals", "124433522 124433524 124433536"),
+        ("sales_crm", "v2", "contacts", "124433508 124433513"), ("sales_crm", "v2", "accounts", "124433511 124433514"),
+        ("sales_crm", "v2", "activities", "124433520"),
+        ("sales_crm", "v2", "sales_targets", "124433519 124433531 124433534 124433549"),
+        ("crm_core", "v1", "quotes_invoices", "174990912 174990913"),
+        ("crm_core", "v1", "opportunities_or_deals", "60638373 169248366"), ("crm_core", "v1", "leads", "121301932"),
+        ("crm_core", "v1", "accounts", "124032534")):
+    for _view in _ids(_views):
+        CRM_VIEWS[_view] = (_family, _version, _entity)
+SERVICE_VIEWS = {}  # template view id: (family, entity)
+for _family, _entity, _views in (
+        ("A", "tickets", "176205535"), ("B", "tickets", "125328754 125328758"), ("B", "csat_survey", "125328753"),
+        ("C", "tickets", "122226426 122606170"), ("C", "csat_survey", "122226423"),
+        ("C", "employee_lifecycle", "122226427"), ("D", "tickets", "139565036 176205700"),
+        (None, "start_here_doc", "126013264"), ("Portal", "portal_custom_object", "200776197")):
+    for _view in _ids(_views):
+        SERVICE_VIEWS[_view] = (_family, _entity)
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+SIGNATURES = {  # (product, entity): (threshold or None for lineage only or none, reserved ids), NO 3.3 and 4.3
+    ("crm", "leads"): (3, _ids("lead_status lead_email lead_company lead_phone lead_owner")),
+    ("crm", "opportunities_or_deals"): (3, _ids(
+        "deal_stage deal_owner deal_value deal_contact deal_account deal_forecast_value deal_expected_close_date "
+        "deal_close_probability deal_close_date deal_creation_date deal_length deal_actual_value")
+        + tuple("deal_%s_actual" % m for m in _MONTHS[:7]) + ("jul___actual",)
+        + tuple("deal_%s_actual" % m for m in _MONTHS[8:])),
+    ("crm", "contacts"): (3, _ids("contact_email contact_phone contact_company contact_account contact_deal")),
+    ("crm", "accounts"): (3, _ids("account_contact account_deal company_domain company_description company_profile "
+                                  "employee_count headquarters_loc industry")),
+    ("crm", "activities"): (3, _ids("activity_item activity_owner activity_type activity_start_time activity_end_time "
+                                    "activity_status")),
+    ("crm", "products_services"): (2, _ids("product_and_service_description product_and_service_price "
+                                           "product_and_service_sku product_and_service_type")),
+    ("crm", "quotes_invoices"): (3, _ids("bill_to amount issue_date type file creation_log__1")),
+    ("crm", "qi_line_items"): (6, tuple("line_item_%s" % s for s in _ids(
+        "description unit_price quantity total_multipliers base_price adjustment_rate adjustment_value fees_rate "
+        "fees_value tax_rate tax_value final_price currency product deal contact id"))),
+    ("crm", "sales_targets"): (3, ("link_to___opportunities",) + tuple("%s___target" % m for m in _MONTHS[:11])
+                               + _ids("q1_target q2_target q2_actual q4_target target_to_date target_to_date8")),
+    ("crm", "deals_subitems"): (None, ()),
+    ("service", "tickets"): (6, _ids(
+        "status95 people0 long_text7 priority request_type date6 email date subitems text files collaborators item_id_1 "
+        "time_tracking3 time_tracking formula9 formula13 formula17 status_163 date2 date20 board_relation6 "
+        "connect_boards2 board_relation21")),
+    ("service", "tickets_subitems"): (4, _ids("agent__1 status__1 priority__1 request_type__1 creation_date__1 email9__1 "
+                                              "description__1 requestor_name__1")),
+    ("service", "asset_management"): (5, _ids(
+        "serial_number recovery_key mac_address ip_address computer_name operating_system jamf_intune_agent "
+        "released_from_abm asset_tag disabled_pre_stage valid_data last_check_in dup_last_check_in more_details building "
+        "duplicate")),
+    ("service", "employee_lifecycle"): (4, _ids("subitems_status email1 email9 email95 color2 status_1")),
+    ("service", "employee_directory"): (2, _ids("site___itsm connect_boards5")),
+    ("service", "incidents"): (None, _ids("person board_relation status color date4 monday_doc")),
+    ("service", "csat_survey"): (None, _ids("rating long_text date")),
+    ("service", "service_contacts"): (None, _ids("status color__1 color2__1 email phone connect_boards5"))}
+QI_CORROBORATION = ("8179060947", ("174990912", "174990913"), "Document #")  # NO 3.3: lineage, view or terminology
+EXTENDED_TICKET_IDS = _ids("item_id_1 time_tracking3 formula9 status_163")  # NO 4.3, W84: families B and C only
+BLANK_DEFAULTS = _ids("person status date4 date0")
+SUFFIXED = re.compile(r"^[a-z_0-9]+_(mk|mm)[a-z0-9]{6,8}$")
+SLA_HELPER = re.compile(r"^formula_[a-z0-9]{6,8}_(lst|ewh|tl|itr|ts|ttp)$")
+STATIC_IMAGES = _ids("leads contacts accounts opportunities activities")
+FEATURE_PREFIXES = ("custom_", "enrolled_sequences_")
+V2_OPPS_IDS = ("2673708477", "1631647074")
+PORTAL_LINEAGE, PORTAL_VIEW, WORKFLOW_LINEAGE = "9449773054", "200776197", "105719650"
+PORTAL_KEY, WORKFLOW_KEY = "service::portal-object", "monday_workflows::workflow"
+KEY_PORTFOLIO, KEY_STANDALONE = "work-management::portfolio", "work-management::standalone"
+KEYS_PROJECT = ("work-management::portfolio-project", "work-management::project")
+TASKS_TEMPLATE = "9857787491"
+PROJECT_IDS = _ids("project_status project_timeline project_owner project_priority")
+RP_IDS = _ids("rp_placeholder rp_placeholder_index rp_assignee rp_assignee_mirror rp_timeline rp_effort_per_day "
+              "rp_total_effort rp_selected_effort rp_connected_project")
+R5_MIN, R8_MIN, R9_MIN, LINEAGE_CAP = 2, 5, 5, 5
+DEFAULT_NAMES = ("Leads", "Contacts", "Accounts", "Opportunities", "Deals", "Activities", "Sales Activities",
+                 "Sales Targets", "Products & Services", "Quotes & Invoices", "Tickets", "Incidents", "CSAT Survey",
+                 "Asset management", "Employee directory", "Employee lifecycle", "Portal", "Subitems of Tickets",
+                 "Start here")
+DEFAULT_TERMINOLOGY = ("Lead", "Deal", "Opportunity", "Contact", "Account", "Activity", "Activity ", "Document #",
+                       "Sales Rep", "Ticket", "Incident", "Ticket ID", "Contact name", "Employee name", "employee",
+                       "Serial Number")
+DETECT_QUERY = """query DetectNativeBoards($ids: [ID!], $ws: [ID!]) {
+  version { kind value }
+  complexity { after }
+  portal_active: objects(object_type_unique_keys: ["service::portal-object"], workspace_ids: $ws, state: ACTIVE, limit: 500) { id state }
+  portal_archived: objects(object_type_unique_keys: ["service::portal-object"], workspace_ids: $ws, state: ARCHIVED, limit: 500) { id state }
+  boards(ids: $ids, state: all, limit: 50) {
+    id name type state hierarchy_type object_type_unique_key board_kind
+    item_terminology created_from_board_id items_count workspace_id board_folder_id
+    inferred_metadata { item_type }
+    manual_metadata { board_md }
+    workspace { id account_product { kind } }
+    columns { id type }
+    links: columns(types: [board_relation, subtasks, mirror]) { id type settings }
+    views { id type name source_view_id }
+  }
+}"""
+SIDE_READS = {  # W01, W79, W80, W89: the reads the session makes beside the one detection query
+    "workspaces": "query ($ids: [ID!]) { workspaces(ids: $ids) { id name kind account_product { id kind } } }",
+    "account_products": "query { account { products { id kind default_workspace_id } } }",
+    "docs": "query ($ws: [ID!]) { docs(workspace_ids: $ws) { id object_id name workspace_id } }",
+    "workflow_objects": "query ($ws: [ID!]) { objects(object_type_unique_keys: [\"%s\"], workspace_ids: $ws, state: "
+                        "ACTIVE|ARCHIVED, limit: 500) { id state } }" % WORKFLOW_KEY,
+    "portfolio_items": "query ($ids: [ID!]) { boards(ids: $ids) { items_page(limit: 100) { cursor items { id "
+                       "column_values(ids: [\"portfolio_project_link\"]) { ... on BoardRelationValue { linked_item_ids "
+                       "linked_items { id board { id } } } } } } } }"}
+PAGE_KINDS = ("boards_sweep", "boards_ids") + tuple(SIDE_READS)
+PAGE_SIZE = (25, 50)  # NO 2.6, G-92: never 200
+
+# How the classifier names an entity (W16): NO's own name where it is the entity, these where NO names a template.
+ENTITY_ALIAS = {("crm", "project_companion"): "companion", ("crm", "project"): "companion",
+                ("crm", "project_companion_subitems"): "subitems", ("service", "contacts"): "service_contacts",
+                ("service", "portal_custom_object"): "portal", ("service", "subitems"): "tickets_subitems"}
+SUBITEM_PARENT = {"qi_line_items": "quotes_invoices", "deals_subitems": "opportunities_or_deals",
+                  "tickets_subitems": "tickets", "lifecycle_subitems": "employee_lifecycle", "subitems": None}
+MAP_ENTITY = {"quotes_invoices_subitems": "qi_line_items", "opportunities_or_deals_subitems": "deals_subitems",
+              "employee_lifecycle_subitems": "lifecycle_subitems"}  # the W16 name of an N5 board's map entry
+LIMIT_REASONS = {"L1": "planted reserved ids read the same as a chain-broken native",
+                 "L2": "a native stripped of its template columns with a broken chain reads as this",
+                 "L3": "a default-shaped satellite that lost its lineage"}
+LIMIT_ORDER = ("L3", "L1", "L2")  # the most specific code first (W01 as the trace check amended it)
+CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
+REVIEW_RULES = ("R7", "R9", "N7", "N10")
+NOT_INSTALLED = "product boards not installed here"
+
+
+def _template(tid):
+    """(product, family, version, entity, raw entity) of a template id in a native catalogue, else None."""
+    if tid in CRM_TEMPLATES:
+        family, version, raw = CRM_TEMPLATES[tid]
+        return "crm", family, version, ENTITY_ALIAS.get(("crm", raw), raw), raw
+    if tid in SERVICE_TEMPLATES:
+        family, raw = SERVICE_TEMPLATES[tid]
+        return "service", family, None, ENTITY_ALIAS.get(("service", raw), raw), raw
+    return None
+
+
+def _view(vid):
+    """(product, family, version, entity) of a template view id, else None."""
+    if vid in CRM_VIEWS:
+        family, version, raw = CRM_VIEWS[vid]
+        return "crm", family, version, raw
+    if vid in SERVICE_VIEWS:
+        family, raw = SERVICE_VIEWS[vid]
+        return "service", family, None, ENTITY_ALIAS.get(("service", raw), raw)
+    return None
+
+
+ALL_TEMPLATES = set(CRM_TEMPLATES) | set(SERVICE_TEMPLATES) | set(ROLE_TEMPLATES)
+DEFAULT_IDS = set(("name",) + BLANK_DEFAULTS) | {i for (product, _), (t, ids) in SIGNATURES.items() if t is None for i in ids}
+RESERVED_IDS = {i for (_, _), (t, ids) in SIGNATURES.items() if t is not None for i in ids}
+CRM_RESERVED = {i for (product, _), (t, ids) in SIGNATURES.items() if product == "crm" for i in ids}
+
+
+# classify (W78 to W86): both rule sets over the reads the session hands, in W81's order.
+
+def natural(key):
+    """A sort key that puts B2 before B10."""
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", str(key))]
+
+
+def id_sort(value):
+    return (len(str(value)), str(value))
+
+
+class Reads:
+    """The pages of a reads file (W01), the board set they return, and the side reads, diffed page by page (G-92)."""
+
+    def __init__(self, data, name, account):
+        self.name, self.notes = name, []
+        pages = data.get("pages")
+        refuse(None if isinstance(pages, list) and pages else (name, "pages", "no pages", "a list of response pages (W01)"))
+        reasons, self.rings = [], set()
+        self.boards, self.missing, self.sweeps, self.docs = {}, [], {}, {}
+        self.portal = {"active": set(), "archived": set()}
+        self.workflow_sets, self.workspace_kinds, self.products, self.items = None, {}, None, {}
+        self.workspaces_read = []
+        for n, page in enumerate(pages):
+            where = "pages[%d]" % n
+            if not isinstance(page, dict) or page.get("kind") not in PAGE_KINDS:
+                reasons.append((name, where + ".kind", "%r is not a page kind" % (page or {}).get("kind")
+                                if isinstance(page, dict) else "not an object", " | ".join(PAGE_KINDS)))
+                continue
+            response = ((page.get("response") or {}).get("data")) if isinstance(page.get("response"), dict) else None
+            lists = [page.get(k) for k in ("requested_ids", "returned_ids", "missing_ids")]
+            if not isinstance(response, dict) or not all(isinstance(v, list) for v in lists):
+                reasons.append((name, where, "no response data or no id lists", "response.data and requested_ids, "
+                                "returned_ids and missing_ids on every page (G-92)"))
+                continue
+            version = response.get("version")
+            if isinstance(version, dict) and version.get("kind") and version.get("value"):
+                self.rings.add("%s %s" % (version["kind"], version["value"]))
+            reasons += self.page(page, response, name, where)
+        if len(self.rings) > 1:
+            reasons.append((name, "pages[].response.data.version", "the pages carry more than one ring: %s" % ", ".join(
+                sorted(self.rings)), "one ring on every page; read again in one session"))
+        refuse(*reasons)
+        known = (account.get("guard_index") or {}).get("unreadable_intermediate_ids") or []
+        self.unreadable = set(self.missing) | {str(i) for i in known}
+
+    def page(self, page, data, name, where):
+        kind, variables = page["kind"], (page.get("request") or {}).get("variables") or {}
+        for state, alias in (("active", "portal_active"), ("archived", "portal_archived")):
+            for obj in data.get(alias) or []:
+                self.portal[state].add(str(obj.get("id")))
+        if kind in ("boards_sweep", "boards_ids"):
+            boards = data.get("boards")
+            if not isinstance(boards, list):
+                return [(name, where + ".response.data.boards", "not a list", "the boards the query returned")]
+            returned = [str(b.get("id")) for b in boards if isinstance(b, dict)]
+            for board in boards:
+                if isinstance(board, dict) and str(board.get("id")) not in self.boards:
+                    self.boards[str(board.get("id"))] = board
+            if kind == "boards_ids":
+                requested = [str(i) for i in (page.get("requested_ids") or variables.get("ids") or [])]
+                missing = [i for i in requested if i not in returned]  # G-92: the diff is made here, on every page
+                if sorted(missing) != sorted(str(i) for i in page.get("missing_ids") or []):
+                    self.notes.append("%s: the page's missing_ids differ from requested minus returned; the diff is used"
+                                      % where)
+                self.missing += [i for i in missing if i not in self.missing]
+            else:
+                p = variables.get("p") if isinstance(variables.get("p"), int) else 1
+                for ws in variables.get("ws") or []:
+                    self.sweeps.setdefault(str(ws), []).append((p, not boards))
+        elif kind == "workspaces":
+            for ws in data.get("workspaces") or []:
+                self.workspaces_read.append(ws)
+                kind_of = ((ws or {}).get("account_product") or {}).get("kind")
+                if kind_of:
+                    self.workspace_kinds[str(ws.get("id"))] = kind_of
+        elif kind == "account_products":
+            self.products = [{"id": str(p.get("id")), "kind": p.get("kind"),
+                              "default_workspace_id": None if p.get("default_workspace_id") is None else
+                              str(p.get("default_workspace_id"))}
+                             for p in (data.get("account") or {}).get("products") or [] if isinstance(p, dict)]
+        elif kind == "docs":
+            for doc in data.get("docs") or []:
+                self.docs[str(doc.get("object_id"))] = str(doc.get("id"))
+        elif kind == "workflow_objects":
+            self.workflow_sets = (self.workflow_sets or set()) | {str(o.get("id")) for o in data.get("objects") or []}
+        elif kind == "portfolio_items":
+            ids = [str(i) for i in (page.get("returned_ids") or page.get("requested_ids") or variables.get("ids") or [])]
+            for pid, board in zip(ids, data.get("boards") or []):
+                items_page = (board or {}).get("items_page") or {}
+                rows = {str(((linked or {}).get("board") or {}).get("id")) for item in items_page.get("items") or []
+                        for value in (item or {}).get("column_values") or [] for linked in (value or {}).get(
+                            "linked_items") or []}
+                self.items[pid] = {"cursor": items_page.get("cursor"), "rows": rows}
+        return []
+
+    @property
+    def sweep_complete(self):
+        """R0, K313: every swept workspace ended on a page with boards: []."""
+        return bool(self.sweeps) and all(max(pages)[1] for pages in self.sweeps.values())
+
+    def unfinished(self):
+        return sorted(ws for ws, pages in self.sweeps.items() if not max(pages)[1])
+
+
+def walk(board, boards, unreadable):
+    """NO 2.1, W86: the lineage walked hop by hop. Returns (lineage, pending id or None)."""
+    chain, seen, cur = [], {str(board.get("id"))}, board.get("created_from_board_id")
+    while True:
+        if cur in (None, ""):
+            return {"chain": chain, "resolved": False, "result": "NO_LINEAGE", "hops": len(chain), "note": None}, None
+        cur = str(cur)
+        if cur in seen:
+            chain.append(cur)
+            return {"chain": chain, "resolved": False, "result": "UNRESOLVED", "hops": len(chain) - 1,
+                    "note": "cycle"}, None
+        chain.append(cur)
+        if cur in ALL_TEMPLATES:
+            return {"chain": chain, "resolved": True, "result": "RESOLVED_TEMPLATE", "hops": len(chain) - 1,
+                    "note": None}, None
+        if cur in unreadable:
+            return {"chain": chain, "resolved": False, "result": "UNRESOLVED", "hops": len(chain) - 1, "note": None}, None
+        if cur not in boards:
+            return {"chain": chain, "resolved": False, "result": None, "hops": len(chain) - 1,
+                    "note": "waiting on the read of %s" % cur}, cur
+        if len(chain) > LINEAGE_CAP:
+            return {"chain": chain, "resolved": False, "result": "UNRESOLVED", "hops": len(chain) - 1,
+                    "note": "longer than %d hops" % LINEAGE_CAP}, None
+        seen.add(cur)
+        cur = boards[cur].get("created_from_board_id")
+
+
+class Facts:
+    """What the rules read on one board: column ids, marks, signatures, lineage and views (NO 2.1 to 2.5)."""
+
+    def __init__(self, board, reads, account):
+        self.board, self.id = board, str(board.get("id"))
+        self.type, self.key = board.get("type") or "board", board.get("object_type_unique_key")
+        self.state, self.name, self.term = board.get("state"), board.get("name"), board.get("item_terminology")
+        ws = board.get("workspace") or {}
+        self.workspace = str(board.get("workspace_id") or ws.get("id") or "")
+        self.product = ((ws.get("account_product") or {}).get("kind") or reads.workspace_kinds.get(self.workspace)
+                        or "none")
+        self.columns = [c for c in board.get("columns") or [] if isinstance(c, dict)]
+        self.links = [c for c in board.get("links") or [] if isinstance(c, dict)]
+        self.col_ids = [str(c.get("id")) for c in self.columns]
+        self.types = {str(c.get("id")): c.get("type") for c in self.columns}
+        plain = [i for i in self.col_ids if not SUFFIXED.match(i) and i not in BLANK_DEFAULTS]
+        self.plain = plain
+        self.lineage, self.pending = walk(board, reads.boards, reads.unreadable)
+        terminal = self.lineage["chain"][-1] if self.lineage["resolved"] else None
+        self.terminal = terminal
+        self.template = _template(terminal) if terminal else None
+        self.views = sorted({str(v.get("source_view_id")) for v in board.get("views") or []
+                             if isinstance(v, dict) and _view(str(v.get("source_view_id")))}, key=id_sort)
+        self.counts = {pe: sum(1 for i in plain if i in ids) for pe, (t, ids) in SIGNATURES.items() if t is not None}
+        self.reserved_count = sum(1 for i in plain if i in RESERVED_IDS)
+        self.marks = self.find_marks()
+        corroborated = (terminal == QI_CORROBORATION[0] or any(v in QI_CORROBORATION[1] for v in self.views)
+                        or self.term == QI_CORROBORATION[2])
+        self.met = [pe for pe, (t, ids) in SIGNATURES.items() if t is not None and self.counts[pe] >= t
+                    and (pe != ("crm", "quotes_invoices") or corroborated)]
+
+    def find_marks(self):
+        marks = []
+        relations = [c for c in self.links if c.get("type") == "board_relation"]
+        mirrors = [c for c in self.links if c.get("type") == "mirror"]
+        if any((c.get("settings") or {}).get("staticImage") in STATIC_IMAGES for c in relations):
+            marks.append("CRM_RELATION_MARK")
+        if any(c.get("type") == "unsupported" and str(c.get("id")).startswith(FEATURE_PREFIXES) for c in self.columns):
+            marks.append("CRM_FEATURE_MARK")
+        if any(set(map(str, d.get("column_ids") or [])) & CRM_RESERVED for c in mirrors
+               for d in (c.get("settings") or {}).get("displayed_linked_columns") or [] if isinstance(d, dict)):
+            marks.append("CRM_MIRROR_MARK")
+        if any(str(c.get("id")) == "deal_account" and set(map(str, (c.get("settings") or {}).get("boardIds") or []))
+               & set(V2_OPPS_IDS) for c in mirrors):
+            marks.append("V2_OPPS_FINGERPRINT")
+        stems = {}
+        for cid in self.col_ids:
+            match = SLA_HELPER.match(cid)
+            if match:
+                stem = cid[:-len(match.group(1)) - 1]
+                stem = stem[:-1] if match.group(1) in ("tl", "ts") else stem
+                stems[stem] = stems.get(stem, 0) + 1
+        if any(n >= 4 for n in stems.values()):
+            marks.append("SERVICE_SLA_MARK")
+        return marks
+
+    def prefix_count(self, prefix):
+        return sum(1 for i in self.col_ids if i.startswith(prefix) and not SUFFIXED.match(i))
+
+    def signals(self, reads):
+        out = ["type:%s" % self.type] if self.type != "board" else []
+        out += ["key:%s" % self.key] if self.key else []
+        out.append("N0:%s" % self.product)
+        out += ["lineage:%s" % self.terminal] if self.terminal else []
+        out += ["view:%s" % v for v in self.views]
+        out += ["reserved:%s/%s" % pe for pe in self.met]
+        out += self.marks
+        if self.type == "custom_object":
+            for state in ("active", "archived"):
+                if self.id in reads.portal[state]:
+                    out.append("portal_objects:%s" % state)
+            out.append("workflow_objects:unread" if reads.workflow_sets is None else
+                       "workflow_objects:in" if self.id in reads.workflow_sets else "workflow_objects:out")
+        if self.type == "document" and self.id in reads.docs:
+            out.append("doc:%s" % reads.docs[self.id])
+        for prefix, label in (("rp_", "rp_ids"), ("project_", "project_ids"), ("portfolio_project_", "portfolio_project_ids")):
+            count = self.prefix_count(prefix)
+            if count:
+                out.append("%s:%d" % (label, count))
+        if self.board.get("hierarchy_type") == "multi_level":
+            out.append("hierarchy:multi_level")
+        return out
+
+    def imitation(self):
+        return (["imitation:name"] if self.name in DEFAULT_NAMES else []) + (
+            ["imitation:terminology"] if self.term in DEFAULT_TERMINOLOGY else [])
+
+    def default_shaped(self):
+        """L3: every column id a monday default, and some column read."""
+        return bool(self.col_ids) and all(i in DEFAULT_IDS for i in self.col_ids)
+
+
+def _install(lineage, view=False):
+    if lineage["resolved"]:
+        return "direct_install" if lineage["hops"] == 0 else "descendant_copy(%d)" % lineage["hops"]
+    if view:
+        return "direct_install"
+    return "lineage_unresolved" if lineage["result"] == "UNRESOLVED" else None
+
+
+def _crm_version(facts):
+    """W84: the CRM generation from the types first, then the lineage's catalogue row."""
+    types = facts.types
+    v2 = types.get("deal_close_probability") == "formula" or types.get("account_deal") == "board_relation" or \
+        "V2_OPPS_FINGERPRINT" in facts.marks
+    v1 = types.get("deal_close_probability") == "numbers" or types.get("account_deal") == "mirror"
+    if v2 and not v1:
+        return "sales_crm", "v2"
+    if v1 and not v2:
+        return "crm_core", "v1"
+    if facts.template and facts.template[0] == "crm":
+        return facts.template[1], facts.template[2]
+    return None, "unknown"
+
+
+def _service_family(facts, entity):
+    if facts.template and facts.template[0] == "service":
+        return facts.template[1]
+    for view in facts.views:
+        info = _view(view)
+        if info and info[0] == "service" and info[1]:
+            return info[1]
+    if entity == "tickets":
+        return "B or C" if any(i in facts.col_ids for i in EXTENDED_TICKET_IDS) else "A or D"
+    return None
+
+
+def _attributes(facts, product=None, entity=None, install=None, native=False):
+    attrs = {"family": None, "version": None, "install_kind": None, "sla_mark": None, "state": facts.state,
+             "items_count": facts.board.get("items_count")}
+    if native:
+        if product == "crm":
+            attrs["family"], attrs["version"] = _crm_version(facts)
+        elif product == "service":
+            attrs["family"] = _service_family(facts, entity)
+        attrs["install_kind"], attrs["sla_mark"] = install, "SERVICE_SLA_MARK" in facts.marks
+    return attrs
+
+
+def _fingerprint(facts):
+    """N2, N3, N4 in that order: (rule, product, entity, install kind, tie) of the first that names a native entity."""
+    tpl = facts.template
+    if tpl and tpl[3] not in ("start_here_doc",):
+        return "N2", tpl[0], tpl[3], _install(facts.lineage), False
+    for view in facts.views:
+        info = _view(view)
+        if info and info[3] not in ("start_here_doc",):
+            return "N3", info[0], info[3], "direct_install", False
+    if facts.met:
+        ranked = sorted(facts.met, key=lambda pe: (-facts.counts[pe], pe[0] != facts.product,
+                                                   list(SIGNATURES).index(pe)))  # W84
+        best = ranked[0]
+        tie = len(ranked) > 1
+        return "N4", best[0], best[1], "descendant_fingerprint", tie
+    return None
+
+
+def native_class(product, entity, parent=None):
+    if entity == "companion":
+        return "native_crm_companion_board"
+    if entity in SUBITEM_PARENT:
+        return "native_%s_%s_subitems" % (product, parent or SUBITEM_PARENT[entity] or "unknown")
+    return "native_%s_%s" % (product, entity)
+
+
+def _result(cls, rule, confidence, facts, attrs, signals, review=None, limits=()):
+    return {"class": cls, "rule": rule, "attributes": attrs, "confidence": confidence, "signals": signals,
+            "lineage": dict(facts.lineage), "review": rule in REVIEW_RULES if review is None else review,
+            "limits": list(limits)}
+
+
+def classify_board(facts, reads, ctx):
+    """One board through R1 to R11 and N0 to N11 in W81's order; ctx carries the first pass's classes."""
+    signals, attrs = facts.signals(reads), _attributes(facts)
+    if facts.pending is not None:
+        return dict(_result("pending", None, None, facts, attrs, signals, review=False), pending=facts.pending)
+    if facts.type == "document":  # R1; a native lineage is an attribute (NO 4.1:104)
+        if facts.template and facts.template[0] in ("crm", "service"):
+            attrs = _attributes(facts, facts.template[0], facts.template[3], _install(facts.lineage), native=True)
+        return _result("doc_container", "R1", "high", facts, attrs, signals)
+    if facts.type == "sub_items_board":  # R2 with N5 inside it
+        parents = ctx["parents"].get(facts.id, [])
+        signals += ["parent:%s" % p for p in parents]
+        sub = facts.template if facts.template and facts.template[3] in SUBITEM_PARENT else None
+        met = [pe for pe in facts.met if pe in (("crm", "qi_line_items"), ("service", "tickets_subitems"))]
+        if sub or met:
+            product = sub[0] if sub else met[0][0]
+            parent = next((ctx["entity"][p] for p in parents if ctx["entity"].get(p)), None)
+            if parent is None and sub:
+                parent = SUBITEM_PARENT[sub[3]]
+            if parent is None and met:
+                parent = SUBITEM_PARENT[met[0][1]]
+            high = facts.lineage["resolved"] or any(pe[0] == facts.product for pe in met)
+            attrs = _attributes(facts, product, "subitems", _install(facts.lineage), native=True)
+            return _result(native_class(product, "subitems", parent), "N5", "high" if high else "medium", facts,
+                           attrs, signals)
+        return _result("subitems_board", "R2", "high", facts, attrs, signals)
+    if facts.type == "custom_object":  # R3 with N1 inside it
+        if any(facts.id in reads.portal[s] for s in ("active", "archived")):
+            attrs = _attributes(facts, "service", "portal", _install(facts.lineage, PORTAL_VIEW in facts.views), True)
+            attrs["family"] = "Portal"
+            return _result("native_service_portal", "N1a", "high", facts, attrs, signals)
+        if facts.terminal == PORTAL_LINEAGE or PORTAL_VIEW in facts.views:
+            attrs = _attributes(facts, "service", "portal", _install(facts.lineage, PORTAL_VIEW in facts.views), True)
+            attrs["family"] = "Portal"
+            return _result("native_service_portal", "N1b", "high", facts, attrs, signals)
+        if reads.workflow_sets is None:
+            return _result("custom_object_other", "R3", "low", facts, attrs, signals)
+        cls = "workflow_object" if facts.id in reads.workflow_sets else "custom_object_other"
+        return _result(cls, "R3", "high", facts, attrs, signals)
+    if facts.key:  # R4 to R7, before any N rule
+        if facts.key == KEY_PORTFOLIO:
+            return _result("portfolio_board", "R4", "high", facts, attrs, signals)
+        if facts.key in KEYS_PROJECT:
+            ids = sum(1 for i in PROJECT_IDS if i in facts.col_ids)
+            if ids >= R5_MIN or facts.terminal == TASKS_TEMPLATE:
+                cls = "project_tasks_board"
+            elif not facts.columns:
+                cls = "project_board_origin_unknown"
+            else:
+                cls = "converted_project_board"
+            return _result(cls, "R5", "high", facts, attrs, signals)
+        if facts.key == KEY_STANDALONE:
+            return _result("project_overview_companion", "R6", "high", facts, attrs, signals)
+        return _result("keyed_board_unrecognized_key", "R7", "low", facts, attrs, signals)
+    found = _fingerprint(facts)  # N0 is the soft gate: both catalogues ran above
+    if found:
+        rule, product, entity, install, tie = found
+        native = _attributes(facts, product, entity, install, native=True)
+        if facts.product not in ("crm", "service"):  # N10
+            native["fingerprint"] = "%s/%s" % (product, entity)
+            return _result("native_descendant_misplaced", "N10", "low", facts, native, signals)
+        if rule == "N4":
+            high = (product == facts.product or bool(facts.marks)) and not tie
+            return _result(native_class(product, entity), rule, "high" if high else "medium", facts, native, signals,
+                           limits=["L1"] if install == "descendant_fingerprint" else [])
+        parent = next((ctx["entity"][p] for p in ctx["parents"].get(facts.id, []) if ctx["entity"].get(p)), None)
+        return _result(native_class(product, entity, parent), rule, "high", facts, native, signals)
+    if facts.product == "crm" and ("CRM_RELATION_MARK" in facts.marks or "CRM_MIRROR_MARK" in facts.marks):  # N6
+        native = _attributes(facts, "crm", "companion", _install(facts.lineage) if not facts.lineage["resolved"]
+                             else None, native=True)
+        return _result("native_crm_companion_board", "N6", "medium", facts, native, signals)
+    imitation = facts.imitation()
+    targets = ctx["targets"].get(facts.id, [])
+    if facts.product == "service" and "imitation:terminology" in imitation and targets:  # N7
+        native = _attributes(facts, "service", "satellite_probable", _install(facts.lineage) if not
+                             facts.lineage["resolved"] else None, native=True)
+        native["family"] = None
+        return _result("native_service_satellite_probable", "N7", "low", facts, native,
+                       signals + ["imitation:terminology"] + ["relation_target:%s" % t for t in targets])
+    if facts.product in ("crm", "service"):
+        limits = ["L2"] + (["L3"] if facts.product == "service" and facts.default_shaped() and not
+                           facts.lineage["resolved"] else [])
+        if facts.lineage["result"] in ("NO_LINEAGE", "UNRESOLVED") and facts.reserved_count == 0 and not facts.marks \
+                and imitation:  # N8: shape, never intent
+            return _result("lookalike_board", "N8", "medium", facts, attrs, signals + imitation, limits=["L2"])
+        return _result("ordinary_board_in_product_workspace", "N9", "high", facts, attrs, signals, limits=limits)
+    signals.append("N11")  # handed back to R8 to R11
+    limits = ["L3"] if facts.product == "service" and facts.default_shaped() and not facts.lineage["resolved"] else []
+    if sum(1 for i in RP_IDS if i in facts.col_ids) >= R8_MIN:
+        return _result("resource_planner_companion", "R8", "high", facts, attrs, signals, limits=limits)
+    if facts.prefix_count("portfolio_project_") >= R9_MIN:
+        return _result("portfolio_shaped_board_without_key", "R9", "low", facts, attrs, signals, limits=limits)
+    if facts.board.get("hierarchy_type") == "multi_level":
+        return _result("multi_level_board_not_project", "R10", "high", facts, attrs, signals, limits=limits)
+    return _result("normal_classic_board", "R11", "high", facts, attrs, signals, limits=limits)
+
+
+def _projects(boards, facts, reads):
+    """W80: C1 to C4 for every project board against every portfolio, from both halves."""
+    portfolios = sorted((i for i, r in boards.items() if r["class"] == "portfolio_board"), key=id_sort)
+    projects = sorted((i for i, r in boards.items() if r["rule"] == "R5"), key=id_sort)
+    incomplete = any((reads.items.get(x) or {}).get("cursor") is not None or x not in reads.items for x in portfolios)
+    targets = {}
+    for x in portfolios:
+        links = facts[x].links
+        link = next((c for c in links if str(c.get("id")) == "portfolio_project_link"), None) or next(
+            (c for c in links if c.get("type") == "board_relation" and (c.get("settings") or {}).get("type") ==
+             "hierarchy"), None)
+        targets[x] = {str(i) for i in ((link or {}).get("settings") or {}).get("boardIds") or []}
+    out = []
+    for p in projects:
+        f = facts[p]
+        relations = [c for c in f.links if c.get("type") == "board_relation"]
+        reflected = {str(i) for c in relations for i in (c.get("settings") or {}).get("boardIds") or []}
+        touched = []
+        for x in portfolios:
+            c1, c2 = p in targets[x], p in (reads.items.get(x) or {}).get("rows", set())
+            if c1 or c2:
+                rules = (["C1"] if c1 else []) + (["C2"] if c2 else [])
+                result = "connected" if c1 and c2 else "partial link - review"
+                if result == "connected" and x in reflected:
+                    rules.append("C3")
+                touched.append({"portfolio_id": x, "tasks_board_id": p, "result": result, "rules": rules, "note": None})
+        if touched:
+            out += touched
+            continue
+        overview = sorted((i for i in reflected if (boards.get(i) or {}).get("rule") == "R6"), key=id_sort)
+        if incomplete:
+            out.append({"portfolio_id": None, "tasks_board_id": p, "result": "incomplete read - review", "rules": [],
+                        "note": None})
+            continue
+        shares = any((f.board.get("board_folder_id") and f.board.get("board_folder_id") ==
+                      facts[x].board.get("board_folder_id")) or f.workspace == facts[x].workspace for x in portfolios)
+        out.append({"portfolio_id": None, "tasks_board_id": p, "result": "unconnected", "rules": ["C4"] if shares else [],
+                    "note": "overview %s" % overview[0] if overview else None})
+    return out
+
+
+def classify(reads, account):
+    """Both rule sets over every board the pages return (W78): the shape the answer keys pin."""
+    facts = {bid: Facts(board, reads, account) for bid, board in reads.boards.items()}
+    parents = {}
+    for bid, f in facts.items():
+        for link in f.links:
+            if link.get("type") == "subtasks":
+                for child in (link.get("settings") or {}).get("boardIds") or []:
+                    parents.setdefault(str(child), []).append(bid)
+    ctx = {"parents": parents, "entity": {}, "targets": {}}
+    first = {bid: classify_board(f, reads, ctx) for bid, f in facts.items()}
+    entity = {}
+    for bid, r in first.items():
+        if r["class"].startswith("native_") and not r["class"].endswith("_subitems") and r["rule"] in ("N2", "N3", "N4"):
+            entity[bid] = r["class"].split("_", 2)[2]
+    targets = {}
+    for bid, r in first.items():
+        if r["class"] == "native_service_tickets":
+            for link in facts[bid].links:
+                if link.get("type") == "board_relation":
+                    for target in (link.get("settings") or {}).get("boardIds") or []:
+                        targets.setdefault(str(target), []).append(bid)
+    ctx = {"parents": parents, "entity": entity, "targets": {k: sorted(set(v), key=id_sort) for k, v in targets.items()}}
+    boards = {bid: classify_board(facts[bid], reads, ctx) for bid in sorted(facts, key=id_sort)}
+    totals, limits, pending = {}, [], []
+    for bid, r in boards.items():
+        if r["class"] == "pending":
+            pending.append(r.pop("pending"))
+            continue
+        if r["limits"]:
+            code = next(c for c in LIMIT_ORDER if c in r["limits"])
+            limits.append({"board_id": bid, "code": code, "codes": sorted(r["limits"]), "class": r["class"],
+                           "reason": LIMIT_REASONS[code]})
+        else:
+            totals[r["class"]] = totals.get(r["class"], 0) + 1
+    client = [str(i) for i in (account.get("guard_index") or {}).get("client_workspace_ids") or []]
+    kinds = dict(((account.get("guard_index") or {}).get("product_workspaces") or {}), **reads.workspace_kinds)
+    reports = [{"workspace_id": ws, "product": kinds.get(ws), "report": NOT_INSTALLED} for ws in client
+               if kinds.get(ws) in ("crm", "service") and not any(
+                   facts[b].workspace == ws and r["class"].startswith("native_") for b, r in boards.items())]
+    review = [{"board_id": bid, "class": r["class"], "rule": r["rule"], "confidence": r["confidence"],
+               "action": "protect as native and ask"} for bid, r in boards.items()
+              if r["class"].startswith("native_") and r["confidence"] != "high"]
+    notes = list(reads.notes)
+    if reads.workflow_sets is None and any(f.type == "custom_object" for f in facts.values()):
+        notes.append("workflow objects set not read: custom objects that are not a Portal are custom_object_other at "
+                     "low confidence (W79)")
+    next_ids = sorted(set(pending), key=id_sort)
+    return {"board_count": len(boards), "boards": boards, "totals": dict(sorted(totals.items())), "limits": limits,
+            "projects": _projects(boards, facts, reads), "reports": reports,
+            "unreadable_ids": sorted(set(reads.missing), key=id_sort), "next_ids": next_ids,
+            "next_query": DETECT_QUERY if next_ids else None, "page_size": list(PAGE_SIZE),
+            "sweep_complete": reads.sweep_complete, "unfinished_sweeps": reads.unfinished(),
+            "needs_review": review, "notes": notes}, facts
+
+
+def cmd_classify(root, args):
+    led = Ledger(root)
+    refuse(*led.newer())
+    data, name = input_json(root, args.reads, "--reads")
+    reads = Reads(data, name, led.account)
+    result, _ = classify(reads, led.account)
+    result["ring"] = next(iter(reads.rings), None)
+    return 0, result
+
+
+# native-map (W16, W18, W88 to W90): the classification stored in account.json, record level.
+
+def index_value(result):
+    """"<product>/<entity>" of a board native_board_index takes (W16), or None."""
+    cls = result["class"]
+    if result["rule"] == "N10":
+        return result["attributes"].get("fingerprint")
+    if not cls.startswith("native_"):
+        return None
+    product, entity = cls.split("_", 2)[1:]
+    return "%s/%s" % (product, "companion" if entity == "companion_board" else entity)
+
+
+def native_index(result, facts):
+    """The parts of guard_index and native_map one classification gives (W16, W18, W80, W89)."""
+    boards, index, by_entity, portals = result["boards"], {}, {}, {"active": [], "archived": []}
+    for bid, r in boards.items():
+        value = index_value(r)
+        if value:
+            index[bid] = value
+            by_entity.setdefault(value, []).append(bid)
+            if r["class"] == "native_service_portal":
+                portals["archived" if r["attributes"].get("state") == "archived" else "active"].append(bid)
+    candidates = {}
+    for bid, value in index.items():
+        product, entity = value.split("/", 1)
+        candidates.setdefault((product, MAP_ENTITY.get(entity, entity)), []).append(bid)
+    native_map = {"crm": {}, "service": {}, "portfolio": {}}
+    for (product, entity), ids in sorted(candidates.items()):
+        best = sorted(ids, key=lambda b: (CONFIDENCE_RANK[boards[b]["confidence"]], boards[b]["lineage"]["hops"],
+                                          id_sort(b)))[0]
+        native_map.setdefault(product, {})[entity] = map_entry(best, boards[best], product == "service")
+    for bid, r in boards.items():
+        if r["class"] == "portfolio_board":
+            entry = map_entry(bid, r, False)
+            entry["projects"] = []
+            for project in result["projects"]:
+                if project["portfolio_id"] != bid:
+                    continue
+                tasks = project["tasks_board_id"]
+                folder = facts[tasks].board.get("board_folder_id") if tasks in facts else None
+                entry["projects"].append({"tasks_board_id": tasks, "overview_board_id": None, "overview_state": None,
+                                          "planner_board_id": None, "folder_id": None if folder is None else str(folder),
+                                          "connected": project["result"]})
+            native_map["portfolio"][bid] = entry
+    return {"native_map": native_map, "native_board_index": index,
+            "native_board_ids_by_entity": {k: sorted(v, key=id_sort) for k, v in sorted(by_entity.items())},
+            "portal_object_ids": {k: sorted(v, key=id_sort) for k, v in portals.items()}}
+
+
+def map_entry(bid, r, service):
+    entry = {"board_id": bid, "rule": r["rule"], "confidence": r["confidence"], "signals": list(r["signals"]),
+             "lineage": {"chain": list(r["lineage"]["chain"]), "resolved": r["lineage"]["resolved"],
+                         "note": r["lineage"]["note"]}, "confirmed_by_user": False}
+    if service:
+        entry["family"] = r["attributes"].get("family")
+    return entry
+
+
+def catalogue_ids(products, met_templates, met_views):
+    """W18, W87: the template and template view ids of every product the account carries, and those the reads met."""
+    templates, views = set(met_templates), set(met_views)
+    if "crm" in products:
+        templates |= set(CRM_TEMPLATES)
+        views |= set(CRM_VIEWS)
+    if "service" in products:
+        templates |= set(SERVICE_TEMPLATES)
+        views |= set(SERVICE_VIEWS)
+    if "core" in products:
+        templates |= set(ROLE_TEMPLATES)
+    return sorted(templates, key=id_sort), sorted(views, key=id_sort)
+
+
+def cmd_native_map(root, args):
+    led = Ledger(root)
+    refuse(*led.newer())
+    data, name = input_json(root, args.reads, "--reads")
+    coverage = (args.coverage or "").strip()
+    days = args.staleness_days
+    refuse(None if coverage and "\n" not in coverage else ("(flags)", "--coverage", "no one-line coverage", "one line "
+                                                           "stating what was read, as record_provenance.coverage"),
+           None if days is None or DIGITS.fullmatch(str(days)) else ("(flags)", "--staleness-days", "%r" % days,
+                                                                     "a whole number of days"))
+    reads = Reads(data, name, led.account)
+    result, facts = classify(reads, led.account)
+    index = led.index
+    clients = [str(i) for i in index.get("client_workspace_ids") or []]
+    reasons = [None if not result["next_ids"] else (name, "next_ids", "lineage still waits on %s" % ", ".join(
+        result["next_ids"]), "a boards_ids page for those ids appended to the reads file (W78), then native-map again"),
+               None if result["sweep_complete"] else (name, "pages", "the sweep of %s did not end on an empty page" % (
+                   ", ".join(result["unfinished_sweeps"]) or "any workspace"), "every swept workspace paged until "
+                   "boards is [] (R0)")]
+    for strand, target in sorted((index.get("build_targets_by_strand") or {}).items()):
+        outside = [ws for ws in (target or {}).get("workspace_ids") or [] if str(ws) not in clients]
+        if outside:
+            reasons.append(("account.json", "guard_index.build_targets_by_strand.%s" % strand, "strand %s targets %s, "
+                            "outside the client's workspaces" % (strand, ", ".join(map(str, outside))), A21))
+    parts = native_index(result, facts)
+    for item in args.confirm or []:
+        product, _, entity = item.partition("/")
+        entry = (parts["native_map"].get(product) or {}).get(entity)
+        if entry is None:
+            reasons.append(("(flags)", "--confirm", "%s is no entry of this map" % item, "<product>/<entity> of an entry"))
+        elif entry["confidence"] != "high":
+            reasons.append(("account.json", "native_map.%s.%s.confirmed_by_user" % (product, entity), "the entry is %s "
+                            "confidence: nothing below high is confirmed (W88)" % entry["confidence"],
+                            "protect it as native and ask the user each time it matters"))
+    refuse(*reasons)
+    old = led.account.get("native_map") or {}
+    for product in ("crm", "service"):
+        for entity, entry in parts["native_map"].get(product, {}).items():
+            before = (old.get(product) or {}).get(entity) or {}
+            if before.get("confirmed_by_user") is True and before.get("board_id") == entry["board_id"] and \
+                    before.get("rule") == entry["rule"] and entry["confidence"] == "high":
+                entry["confirmed_by_user"] = True
+            if "%s/%s" % (product, entity) in (args.confirm or []):
+                entry["confirmed_by_user"] = True
+    for bid, entry in parts["native_map"]["portfolio"].items():
+        if (((old.get("portfolio") or {}).get(bid)) or {}).get("confirmed_by_user") is True:
+            entry["confirmed_by_user"] = True
+    products = {p.get("kind") for p in (reads.products or [])} | {
+        p.get("kind") for p in (led.account.get("account") or {}).get("products") or [] if isinstance(p, dict)}
+    met_templates = {f.terminal for f in facts.values() if f.terminal}
+    met_views = {v for f in facts.values() for v in f.views}
+    templates, views = catalogue_ids(products, met_templates, met_views)
+    workspaces = dict(index.get("product_workspaces") or {})
+    for ws, kind in sorted(dict({f.workspace: f.product for f in facts.values() if f.workspace and f.product != "none"},
+                                **reads.workspace_kinds).items()):
+        if ws not in clients or ws not in workspaces:
+            workspaces[ws] = kind
+    entities = sorted({value for value in parts["native_board_index"].values()})
+    reserved = {}
+    for value in entities:
+        product, entity = value.split("/", 1)
+        key = (product, MAP_ENTITY.get(entity, entity))
+        if key in SIGNATURES:
+            threshold, ids = SIGNATURES[key]
+            reserved["%s/%s" % key] = {"ids": list(ids), "threshold": threshold}
+    reserved["blank_default_exclusions"] = list(BLANK_DEFAULTS)
+    staleness = int(days) if days is not None else (index.get("record_provenance") or {}).get("staleness_budget_days", 7)
+    captured = data.get("captured_at") if is_utc(data.get("captured_at")) else mc.stamp("utc")
+    unreadable = sorted({str(i) for i in index.get("unreadable_intermediate_ids") or []} | set(result["unreadable_ids"]),
+                        key=id_sort)
+    fresh = {"captured_at": captured, "ring": next(iter(reads.rings), None) or index.get("ring"),
+             "product_workspaces": workspaces,
+             "account_products": reads.products if reads.products is not None else index.get("account_products") or [],
+             "native_board_index": parts["native_board_index"],
+             "native_board_ids_by_entity": parts["native_board_ids_by_entity"], "template_source_ids": templates,
+             "unreadable_intermediate_ids": unreadable, "template_view_ids": views, "reserved_column_ids": reserved,
+             "native_default_names_and_terminology": list(DEFAULT_NAMES) + list(DEFAULT_TERMINOLOGY),
+             "portal_object_ids": parts["portal_object_ids"],
+             "record_provenance": {"coverage": coverage, "staleness_budget_days": staleness}}
+    for key in list(index):  # client_workspace_ids, build_targets_by_strand and lease stay exactly as found
+        if key in fresh:
+            index[key] = fresh.pop(key)
+    index.update(fresh)
+    led.account["native_map"] = parts["native_map"]
+    led.account["updated_at"] = mc.stamp("utc")
+    commit("native-map", [("account.json", json_step(root, root / "account.json", led.account), None)])
+    steps = [{"workspace_id": r["workspace_id"], "ui_step": "ask the user to add the %s board set to workspace %s "
+              "from monday's UI, recorded with ledger.py ui-step, then run native-map again (A11.5)" % (
+                  r["product"], r["workspace_id"])} for r in result["reports"]]
+    return 0, {"native_map": parts["native_map"], "native_board_index": parts["native_board_index"],
+               "portal_object_ids": parts["portal_object_ids"], "totals": result["totals"], "limits": result["limits"],
+               "reports": result["reports"], "ui_steps_to_record": steps, "needs_review": result["needs_review"],
+               "unreadable_ids": unreadable, "captured_at": captured, "notes": result["notes"],
+               "written": {"account.json": mc.sha256_file(root / "account.json")}}
+
+
+# snapshot and compare (W73 to W77, A9.7): digests of the reads the session hands, compared offline.
+
+BOARD_KINDS = ("board", "subitems", "portfolio", "project")
+PROTECTED = ("do-not-change", "change-with-own-yes")
+SNAPSHOT_PARTS = ("inventory", "boards", "automations", "forms", "docs", "dashboards", "agents", "workflows", "vibe_apps")
+UNCHANGED = "unchanged during the audit window"
+OUTSIDE = "a finding against the record, reported as changed outside this strand, never fixed here"
+COMPARED = (("inventory", "board", "id", ("name", "type", "state", "description", "board_folder_id", "board_kind",
+                                          "workspace_id")),
+            ("boards", "board", "id", ("columns_digest", "groups_digest", "views_digest", "owners", "subscribers")),
+            ("automations", "automation", "id", ("active", "updated_at")), ("forms", "form", "view_id", ("form_digest",)),
+            ("docs", "doc", "id", ("block_count",)), ("dashboards", "dashboard", "id", ("name", "kind", "workspace_id")),
+            ("agents", "agent", "id", ("state", "version_id", "plan_digest", "triggers_digest", "grants_digest")),
+            ("workflows", "workflow", "id", ("name", "state")),
+            ("vibe_apps", "vibe_app", "id", ("status", "is_published", "code_version")))  # W75; updated_at never
+
+
+def shown(value):
+    return value if isinstance(value, str) else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
+def snapshot_scope(led):
+    """W74, K287: the strand's own rows that have ids, and every protected live row whatever strand built it."""
+    rows = [r for r in led.objects.values() if r.get("id")]
+    protected = {k: r for k, r in sorted((led.account.get("live_objects") or {}).items())
+                 if (r or {}).get("constraint") in PROTECTED and r.get("monday_id")}
+    boards = sorted({str(r["id"]) for r in rows if r.get("type") in BOARD_KINDS} | {
+        str(r["monday_id"]) for r in protected.values() if r.get("kind") in BOARD_KINDS}, key=id_sort)
+    ids = {str(r["id"]) for r in rows} | {str(r["monday_id"]) for r in protected.values()}
+    return boards, ids, protected
+
+
+def cmd_snapshot(root, args):
+    led = Ledger(root, args.strand)
+    refuse(*led.newer())
+    led.require_build()
+    refuse(None if args.label in ("before", "after") else ("(flags)", "--label", "%r" % args.label, "before | after"))
+    read, name = input_json(root, args.read, "--read")
+    refuse(*[None if isinstance(read.get(part), list) else (name, part, "not a list", "the %s part of a snapshot read, "
+                                                             "[] when none was read (W74)" % part)
+             for part in SNAPSHOT_PARTS],
+           None if is_utc(read.get("read_at")) else (name, "read_at", "%r" % read.get("read_at"), "the UTC time of the read"),
+           None if is_str(read.get("ring")) else (name, "ring", "no ring", "the ring read, such as release_candidate 2026-10"))
+    boards, ids, protected = snapshot_scope(led)
+    clients = set(led.client_ids)
+    dropped = []
+
+    def keep(entry, inside):
+        if inside:
+            return True
+        dropped.append(str(entry.get("id") or entry.get("view_id") or entry.get("board_id")))
+        return False
+    inventory = [{k: e.get(k) for k in ("id", "name", "type", "state", "description", "updated_at", "board_folder_id",
+                                        "board_kind", "workspace_id")} for e in read["inventory"]
+                 if keep(e, str(e.get("workspace_id")) in clients)]
+    snap_boards = [{"id": str(e.get("id")), "columns_digest": digest("columns", e.get("columns") or []),
+                    "groups_digest": digest("groups", e.get("groups") or []),
+                    "views_digest": digest("views", e.get("views") or []),
+                    "owners": sorted(map(str, e.get("owners") or [])), "subscribers": sorted(map(str, e.get("subscribers")
+                                                                                              or []))}
+                   for e in read["boards"] if keep(e, str(e.get("id")) in boards)]
+    automations = [{"id": str(e.get("id")), "board_id": str(e.get("board_id")), "active": e.get("active"),
+                    "updated_at": e.get("updated_at")} for e in read["automations"]
+                   if keep(e, str(e.get("id")) in ids or str(e.get("board_id")) in boards)]
+    forms = [{"board_id": str(e.get("board_id")), "view_id": str(e.get("view_id")), "form_digest": digest(
+        "form", e.get("form"))} for e in read["forms"] if keep(e, str(e.get("view_id")) in ids or str(e.get("board_id"))
+                                                               in boards)]
+    docs = [{"id": str(e.get("id")), "block_count": e.get("block_count")} for e in read["docs"]
+            if keep(e, str(e.get("id")) in ids)]
+    dashboards = [{k: e.get(k) for k in ("id", "name", "workspace_id", "kind")} for e in read["dashboards"]
+                  if keep(e, str(e.get("id")) in ids)]
+    agents = [{"id": str(e.get("id")), "state": e.get("state"), "version_id": e.get("version_id"),
+               "plan_digest": digest("plan", e.get("plan")), "triggers_digest": digest("triggers", e.get("triggers") or []),
+               "grants_digest": digest("grants", e.get("knowledge") or [])} for e in read["agents"]
+              if keep(e, str(e.get("id")) in ids)]
+    workflows = [{k: e.get(k) for k in ("id", "name", "state")} for e in read["workflows"] if keep(e, str(e.get("id")) in ids)]
+    vibe = [{k: e.get(k) for k in ("id", "status", "is_published", "code_version")} for e in read["vibe_apps"]
+            if keep(e, str(e.get("id")) in ids)]
+    covered = {"board": read["inventory"], "subitems": read["inventory"], "portfolio": read["inventory"],
+               "project": read["inventory"], "automation": read["automations"], "dashboard": read["dashboards"],
+               "agent": read["agents"], "workflow": read["workflows"], "vibe_app": read["vibe_apps"]}
+    rows = []
+    for key, row in protected.items():
+        if row.get("kind") not in covered:
+            continue
+        entry = next((e for e in covered[row["kind"]] if str(e.get("id")) == str(row["monday_id"])), None)
+        now = digest(key.split(":", 1)[1].lower(), identity(row["kind"], entry)) if entry is not None else None
+        rows.append({"key": key, "monday_id": str(row["monday_id"]), "recorded_digest": row.get("digest"),
+                     "digest_at_snapshot": now, "moved": now != row.get("digest")})
+    folder = root / "live" / "snapshots"
+    base = "%s-%s-%s-%s" % (mc.stamp("date"), led.short, led.version, args.label)
+    count, path = 1, folder / (base + ".json")
+    while path.exists():
+        count += 1
+        path = folder / ("%s-%d.json" % (base, count))
+    rel = led.rel(path)
+    data = {"schema": "snapshot/1", "strand": led.short, "version": led.version, "label": args.label,
+            "taken_at": mc.stamp("utc"), "read_at": read["read_at"], "ring": read["ring"],
+            "ledger_sha256": mc.sha256_file(led.build_path), "account_sha256": mc.sha256_file(root / "account.json"),
+            "scope": {"boards": boards, "live_rows": list(protected), "dropped": sorted(set(dropped), key=id_sort)},
+            "inventory": inventory, "boards": snap_boards, "automations": automations, "forms": forms, "docs": docs,
+            "dashboards": dashboards, "agents": agents, "workflows": workflows, "vibe_apps": vibe, "protected": rows}
+    commit("snapshot", [(rel, json_step(root, path, data), None)])
+    return 0, {"path": rel, "label": args.label, "scope": data["scope"], "dropped": data["scope"]["dropped"],
+               "protected": rows, "written": {rel: mc.sha256_file(path)}}
+
+
+# The documents-appendix scan (W77): a small tokenizer after GraphQL's lexical grammar, failing closed.
+
+GQL_PUNCT = "!$&()=:@[]{|}"
+GQL_NAME = re.compile(r"[_A-Za-z][_0-9A-Za-z]*")
+GQL_NUMBER = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
+TYPE_SYSTEM = ("schema", "scalar", "type", "interface", "union", "enum", "input", "directive", "extend")
+OPENS, CLOSES = {"{": "}", "(": ")", "[": "]"}, {"}": "{", ")": "(", "]": "["}
+
+
+def gql_tokens(text):
+    """(kind, value) tokens of a GraphQL document; ValueError names the syntax error."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in " \t\r\n,﻿":
+            i += 1
+        elif c == "#":
+            while i < n and text[i] not in "\r\n":
+                i += 1
+        elif text.startswith('"""', i):
+            j = i + 3
+            while True:
+                k = text.find('"""', j)
+                if k < 0:
+                    raise ValueError("an unterminated block string")
+                if text[k - 1] == "\\":
+                    j = k + 3
+                    continue
+                break
+            out.append(("string", text[i + 3:k]))
+            i = k + 3
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                if text[j] in "\r\n":
+                    raise ValueError("an unterminated string")
+                j += 2 if text[j] == "\\" else 1
+            if j >= n:
+                raise ValueError("an unterminated string")
+            out.append(("string", text[i + 1:j]))
+            i = j + 1
+        elif text.startswith("...", i):
+            out.append(("punct", "..."))
+            i += 3
+        elif c in GQL_PUNCT:
+            out.append(("punct", c))
+            i += 1
+        elif GQL_NAME.match(text, i):
+            word = GQL_NAME.match(text, i).group(0)
+            out.append(("name", word))
+            i += len(word)
+        elif GQL_NUMBER.match(text, i) and GQL_NUMBER.match(text, i).group(0) not in ("", "-"):
+            number = GQL_NUMBER.match(text, i).group(0)
+            out.append(("number", number))
+            i += len(number)
+        else:
+            raise ValueError("a stray character %r" % c)
+    return out
+
+
+def scan_document(text):
+    """(verdict, reason): `pass` for one query, else `refused` with what it holds (W77, K303 to K307)."""
+    try:
+        tokens = gql_tokens(text)
+    except ValueError as exc:
+        return "refused", "a syntax error: %s" % exc
+    operations, i = [], 0
+    while i < len(tokens):
+        kind, value = tokens[i]
+        if (kind, value) == ("punct", "{"):
+            start = "query"
+        elif kind == "name" and value in ("query", "mutation", "subscription", "fragment"):
+            start, i = value, i + 1
+        elif kind == "name" and value in TYPE_SYSTEM:
+            return "refused", "a type-system definition"
+        else:
+            return "refused", "a syntax error: %s %r where a definition starts" % (kind, value)
+        stack = []
+        while i < len(tokens) and not (tokens[i] == ("punct", "{") and not stack):
+            token = tokens[i][1] if tokens[i][0] == "punct" else None
+            if token in OPENS:
+                stack.append(token)
+            elif token in CLOSES:
+                if not stack or stack.pop() != CLOSES[token]:
+                    return "refused", "a syntax error: unbalanced brackets"
+            i += 1
+        if i >= len(tokens):
+            return "refused", "a syntax error: a definition with no selection set"
+        while i < len(tokens):
+            token = tokens[i][1] if tokens[i][0] == "punct" else None
+            if token in OPENS:
+                stack.append(token)
+            elif token in CLOSES:
+                if not stack or stack.pop() != CLOSES[token]:
+                    return "refused", "a syntax error: unbalanced brackets"
+                if not stack:
+                    break
+            i += 1
+        if stack:
+            return "refused", "a syntax error: unbalanced brackets"
+        if start != "fragment":
+            operations.append(start)
+        i += 1
+    for kind in ("mutation", "subscription"):
+        if kind in operations:
+            return "refused", kind
+    if len(operations) > 1:
+        return "refused", "more than one operation"
+    if not operations:
+        return "refused", "no operation"
+    return "pass", "one query"
+
+
+def appendix_documents(text):
+    """The documents of the `## Documents appendix` section (W77), numbered from 1: (number, source, text or None,
+    why unreadable), or None when there is no such section."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    start = next((n for n, line in enumerate(lines) if line.rstrip() == "## Documents appendix"), None)
+    if start is None:
+        return None
+    end = next((n for n in range(start + 1, len(lines)) if re.match(r"##(?!#)", lines[n])), len(lines))
+    found, n = [], start + 1
+    while n < end:
+        opening = re.match(r"\s*(`{3,}|~{3,})\s*([^\s`]*)", lines[n])
+        if not opening:
+            n += 1
+            continue
+        fence, info = opening.group(1), opening.group(2).lower()
+        close = next((m for m in range(n + 1, end) if re.fullmatch(r"\s*%s%s*\s*" % (
+            re.escape(fence), re.escape(fence[0])), lines[m])), None)
+        body = "\n".join(lines[n + 1:close if close is not None else end])
+        where = "line %d" % (n + 1)
+        if close is None:
+            found.append((where, None, "a fenced block that never closes"))
+        elif info in ("graphql", "gql"):
+            found.append((where, body, None))
+        elif info == "json":
+            try:
+                value = json.loads(body)
+            except ValueError:
+                found.append((where, None, "a json block that does not parse"))
+            else:
+                stack = [value]
+                while stack:
+                    item = stack.pop(0)
+                    if isinstance(item, dict):
+                        for key, inner in item.items():
+                            if key == "query" and isinstance(inner, str):
+                                found.append((where, inner, None))
+                            elif isinstance(inner, (dict, list)):
+                                stack.append(inner)
+                    elif isinstance(item, list):
+                        stack.extend(item)
+        else:
+            found.append((where, None, "a %s block the scan cannot read" % (info or "plain")))
+        n = (close if close is not None else end) + 1
+    return [(number, where, body, why) for number, (where, body, why) in enumerate(found, 1)]
+
+
+def input_text(root, value, flag):
+    """A text file the session names, inside the record (W91)."""
+    raw = Path(value)
+    rel = value
+    if raw.is_absolute():
+        try:
+            rel = raw.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            refuse((raw.as_posix(), flag, "the file lies outside the record", "a file inside the record"))
+    path = mc.record_path(root, rel)
+    name = mc.relative(root, path)
+    if not path.is_file():
+        raise mc.CannotRun((name, mc.WHOLE_FILE, "the file %s names is missing" % flag, "a file the session wrote"))
+    return mc.read_text(path, name), name
+
+
+def cmd_compare(root, args):
+    led = Ledger(root)
+    refuse(*led.newer())
+    before, bname = input_json(root, args.before, "--before")
+    after, aname = input_json(root, args.after, "--after")
+    refuse(*[None if snap.get("schema") == "snapshot/1" else (name, "schema", "%r" % snap.get("schema"), "snapshot/1, "
+                                                              "a file ledger.py snapshot wrote")
+             for snap, name in ((before, bname), (after, aname))],
+           None if before.get("label") == "before" else (bname, "label", "%r" % before.get("label"), "before"),
+           None if after.get("label") == "after" else (aname, "label", "%r" % after.get("label"), "after"),
+           None if (before.get("strand"), before.get("version")) == (after.get("strand"), after.get("version")) else (
+               aname, "strand", "strand %s %s against %s %s" % (before.get("strand"), before.get("version"),
+                                                             after.get("strand"), after.get("version")),
+               "two snapshots of one strand and version"))
+    flags, blocking, warnings = [], [], []
+
+    def flag(kind, oid, field, was, now):
+        where = "%s:%s.%s" % (kind, oid, field) if field else "%s:%s" % (kind, oid)
+        problem = "%s to %s" % (shown(was), shown(now))
+        flags.append({"field": where, "before": was, "after": now, "problem": problem, "expected": UNCHANGED})
+        blocking.append({"file": aname, "field": where, "problem": problem, "expected": UNCHANGED})
+    for part, kind, ident, fields in COMPARED:
+        old = {str(e.get(ident)): e for e in before.get(part) or []}
+        new = {str(e.get(ident)): e for e in after.get(part) or []}
+        for oid in sorted(set(old) | set(new), key=id_sort):
+            if oid not in new or oid not in old:
+                flag(kind, oid, None if part == "inventory" else "read", "present" if oid in old else "absent",
+                     "present" if oid in new else "absent")
+                continue
+            for field in fields:
+                if old[oid].get(field) != new[oid].get(field):
+                    flag(kind, oid, field, old[oid].get(field), new[oid].get(field))
+    for field, kind, oid in (("ledger_sha256", "ledger", before.get("strand")), ("account_sha256", "account", "record")):
+        if before.get(field) != after.get(field):
+            flag(kind, oid, field, before.get(field), after.get(field))
+    moved_after = {p.get("key") for p in after.get("protected") or [] if p.get("moved")}
+    outside = []
+    for row in before.get("protected") or []:
+        if not row.get("moved"):
+            continue
+        problem = "%s to %s" % (shown(row.get("recorded_digest")), shown(row.get("digest_at_snapshot")))
+        outside.append({"key": row.get("key"), "monday_id": row.get("monday_id"), "recorded_digest": row.get(
+            "recorded_digest"), "digest_at_snapshot": row.get("digest_at_snapshot"),
+            "moved_in": ["before"] + (["after"] if row.get("key") in moved_after else []), "problem": problem,
+            "expected": OUTSIDE})
+        warnings.append({"file": bname, "field": "%s.digest" % row.get("key"), "problem": "changed outside this strand "
+                         "before the audit window: %s" % problem, "expected": OUTSIDE})
+    documents = []
+    if args.appendix:
+        text, name = input_text(root, args.appendix, "--appendix")
+        found = appendix_documents(text)
+        if found is None:
+            blocking.append({"file": name, "field": "## Documents appendix", "problem": "the audit file has no documents "
+                             "appendix", "expected": "a ## Documents appendix section holding every read-only document "
+                             "the audit ran (W77)"})
+        for number, where, body, why in found or []:
+            verdict, reason = ("refused", why) if body is None else scan_document(body)
+            documents.append({"number": number, "at": where, "verdict": verdict, "reason": reason})
+            if verdict != "pass":
+                blocking.append({"file": name, "field": "document %d (%s)" % (number, where), "problem": "refused: %s"
+                                 % reason, "expected": "one read-only query per document: no mutation, no subscription, "
+                                 "a single operation"})
+    code = 1 if blocking else 2 if warnings else 0
+    return code, {"findings": {"blocking": blocking, "warnings": warnings}, "flags": flags, "changed_outside": outside,
+                  "documents": documents, "write_detected": bool(flags) or any(d["verdict"] != "pass" for d in documents),
+                  "written": {}}
+
+
+# reconcile (W70 to W72, A8.11): the strand's rows against a live inventory, automations first.
+
+INVENTORY_LISTS = ("workspaces", "boards", "folders", "docs", "automations", "agents", "vibe_apps", "workflows")
+ORDER_FIRST = ("automation", "agent", "vibe_app", "workflow")  # K274, K275
+NOT_IN_INVENTORY = ("group", "column", "view", "form", "widget", "item_batch", "ai_column", "sequence", "webhook")
+PART_TYPES = {"dashboard": ("widget",)}  # W71 as the trace check clarified it: an object's own parts
+for _kind in BOARD_KINDS:
+    PART_TYPES[_kind] = ("group", "column", "view", "form", "subitems", "ai_column", "item_batch")
+PUBLISHED = {"workflow": ("published", True), "vibe_app": ("is_published", True), "agent": ("state", "ACTIVE")}
+
+
+class Inventory:
+    """A live-inventory/1 file (W70), indexed by id."""
+
+    def __init__(self, data):
+        self.data = data
+        for part in INVENTORY_LISTS:
+            setattr(self, part, {str(e.get("id")): e for e in data.get(part) or [] if isinstance(e, dict)})
+        dashboards = data.get("dashboards") or {}
+        self.dashboards = {str(e.get("id")): e for e in dashboards.get("returned") or [] if isinstance(e, dict)}
+        self.dashboards_missing = {str(i) for i in dashboards.get("missing_ids") or []}
+        self.doc_boards = {str(e.get("object_id")): str(e.get("id")) for e in self.docs.values()}
+
+    def entry(self, kind, oid):
+        """(live entry or None, why it is absent)."""
+        oid = str(oid)
+        if kind in BOARD_KINDS:
+            found = self.boards.get(oid)
+        elif kind == "dashboard":
+            if oid in self.dashboards_missing:
+                return None, "%s in the dashboards read's missing_ids" % oid
+            found = self.dashboards.get(oid)
+        else:
+            found = getattr(self, {"workspace": "workspaces", "folder": "folders", "doc": "docs",
+                                   "automation": "automations", "agent": "agents", "vibe_app": "vibe_apps",
+                                   "workflow": "workflows"}.get(kind, "boards"), {}).get(oid)
+        return found, None if found is not None else "%s not in the inventory" % oid
+
+
+def inventory_reasons(data, name, short):
+    schema = str(data.get("schema"))
+    reasons = [None if schema == "live-inventory/1" else (name, "schema", "%r: %s" % (
+        schema, "newer than this plugin's: the ledger refuses it" if re.fullmatch(r"live-inventory/\d+", schema)
+        else "not a live inventory"), "live-inventory/1"),
+               None if str(data.get("strand")) == str(short) else (name, "strand", "%r, while --strand is %s" % (
+                   data.get("strand"), short), "the strand the inventory was read for"),
+               None if is_utc(data.get("read_at")) else (name, "read_at", "%r" % data.get("read_at"), "a UTC stamp"),
+               None if not is_utc(data.get("read_at")) or mc.parse_utc(data["read_at"]) <= mc.now_utc() else (
+                   name, "read_at", "%s is later than this machine's clock" % data["read_at"],
+                   "the moment the read was made, never later than now"),
+               None if is_str(data.get("ring")) else (name, "ring", "no ring", "\"<kind> <value>\"")]
+    reasons += [None if isinstance(data.get(part), list) else (name, part, "not a list", "the %s read, [] when none"
+                                                               % part) for part in INVENTORY_LISTS]
+    dash = data.get("dashboards")
+    reasons.append(None if isinstance(dash, dict) and all(isinstance(dash.get(k), list) for k in (
+        "requested_ids", "returned", "missing_ids")) else (name, "dashboards", "not the by-id read", "{requested_ids, "
+                                                           "returned, missing_ids}, read by stored id (G-92)"))
+    return reasons
+
+
+def _title(text):
+    return " ".join(str(text or "").split()).casefold()
+
+
+def _after(entry, started):
+    """True when the live object was created at or after the attempt, None when the read carries no time."""
+    created = (entry or {}).get("created_at")
+    if not is_utc(created):
+        return None
+    return not is_utc(started) or mc.parse_utc(created) >= mc.parse_utc(started)
+
+
+def read_for(led, row):
+    board = row.get("parent_id") or (led.objects.get(row.get("parent_key")) or {}).get("id") or "<board id>"
+    return {"column": "boards(ids: [%s]) { columns { id title type settings } }" % board,
+            "group": "boards(ids: [%s]) { groups { id title color position } }" % board,
+            "view": "boards(ids: [%s]) { views { id name type settings } }" % board,
+            "form": "get_form on board %s" % board, "item_batch": "items(ids: [the batch's item ids]) { id }",
+            "widget": "none: a widget cannot be read back (G-11); check it by eye on the dashboard"}.get(
+        row.get("type"), "not-checkable until it is probed (A18); the user checks it by eye")
+
+
+class Reconciler:
+    """W71: at most one class per row and one per unclaimed live object."""
+
+    def __init__(self, led, inv):
+        self.led, self.inv, self.objects = led, inv, led.objects
+        self.claimed, self.consumed, self.predates = set(), set(), set()
+        for row in self.objects.values():
+            self.claimed |= {str(i) for i in [row.get("id")] + list(row.get("item_ids") or []) + list(
+                (row.get("companions") or {}).values()) if i}
+            if row.get("type") == "doc" and row.get("id") and str(row["id"]) in inv.docs:
+                self.claimed.add(str(inv.docs[str(row["id"])].get("object_id")))
+        self.claimed |= {str((r or {}).get("monday_id")) for r in (led.account.get("live_objects") or {}).values()}
+        self.claimed |= set((led.index.get("native_board_index") or {}))
+        starts = [(r.get("attempt") or {}).get("started_at") for r in self.objects.values()]
+        starts = [s for s in starts if is_utc(s)]
+        self.earliest = min(starts, key=mc.parse_utc) if starts else None
+
+    def element(self, key, kind, cls, live, confirm=False, needs=None, predates=False, note=None):
+        return {"key": key, "kind": kind, "class": cls, "live_ids": [str(i) for i in live], "confirm": confirm,
+                "needs_read": needs, "predates_attempt": predates, "note": note}
+
+    def candidates(self, key, row):
+        kind, name, inv = row.get("type"), row.get("name"), self.inv
+        ws = row.get("workspace") or self.led.row_workspace(key)
+        parent = self.objects.get(row.get("parent_key")) if row.get("parent_key") else None
+        if kind == "workspace":
+            return [e for e in inv.workspaces.values() if e.get("name") == name]
+        if kind in BOARD_KINDS:
+            folder = str(parent.get("id")) if parent and parent.get("type") == "folder" and parent.get("id") else None
+
+            def fits(e):
+                key_of = e.get("object_type_unique_key")
+                if kind == "board":
+                    return e.get("type") == "board" and key_of not in (KEY_PORTFOLIO,) + KEYS_PROJECT
+                if kind == "subitems":
+                    return e.get("type") == "sub_items_board"
+                return key_of in ((KEY_PORTFOLIO,) if kind == "portfolio" else KEYS_PROJECT)
+            return [e for e in inv.boards.values() if e.get("name") == name and e.get("state") != "deleted" and fits(e)
+                    and (str(e.get("board_folder_id")) == folder if folder else str(e.get("workspace_id")) == str(ws))]
+        if kind in ("folder", "doc", "workflow"):
+            pool = {"folder": inv.folders, "doc": inv.docs, "workflow": inv.workflows}[kind]
+            return [e for e in pool.values() if e.get("name") == name and str(e.get("workspace_id")) == str(ws)]
+        if kind == "automation":
+            board = str(row.get("parent_id") or (parent or {}).get("id"))
+            want = _title(name)
+            return [e for e in inv.automations.values() if str(e.get("board_id")) == board and (
+                _title(e.get("title")) == want or (len(_title(e.get("title"))) >= 40 and want.startswith(
+                    _title(e.get("title")))))]
+        if kind == "agent":
+            return [e for e in inv.agents.values() if e.get("name") == name]
+        if kind == "vibe_app":
+            bound = {r.split(":", 1)[1] for r in row.get("refs") or [] if str(r).startswith("board:")}
+            return [e for e in inv.vibe_apps.values() if e.get("name") == name and set(map(str, e.get("board_ids") or []))
+                    == bound]
+        return []  # a dashboard is matched by stored id only
+
+    def adopt_note(self, row, entry, timed):
+        notes = []
+        if row.get("type") == "automation":
+            live = _title(entry.get("title"))
+            if live != _title(row.get("name")):
+                notes.append("live title is the request cut short at %d characters" % len(str(entry.get("title"))))
+            notes.append("the user confirms after seeing the board's automation list")
+        if row.get("type") == "workflow":
+            notes.append("a workflow match always carries confirm")
+        if timed is None:
+            notes.append("the %ss read carries no created_at" % row.get("type"))
+        return "; ".join(notes) or None
+
+    def change_note(self, key, row, entry, old, new):
+        pairs, kind = [], row.get("type")
+        fields = IDENTITY.get(kind, ())
+        if "name" in fields and row.get("name") is not None and entry.get("name") != row.get("name"):
+            pairs.append(("name", row.get("name"), entry.get("name")))
+        if kind in BOARD_KINDS and row.get("state") in STATES and entry.get("state") != row.get("state"):
+            pairs.append(("state", row.get("state"), entry.get("state")))
+        if kind == "automation" and row.get("state") in ("active", "inactive") and \
+                entry.get("active") is not (row.get("state") == "active"):
+            pairs.append(("active", row.get("state") == "active", entry.get("active")))
+        values = dict(row.get("read_values") or {})
+        if kind == "agent" and row.get("version_id_at_build") and "version_id" not in values:
+            values["version_id"] = row["version_id_at_build"]
+        pairs += [(f, v, entry.get(f)) for f, v in values.items() if f in entry and entry.get(f) != v]
+        if pairs:
+            return "; ".join("%s %s to %s" % (f, shown(a), shown(b)) for f, a, b in pairs)
+        return "identity digest %s to %s" % (old, new)
+
+    def publication(self, key, row):
+        parent = self.objects.get(row.get("parent_key")) or {}
+        kind = parent.get("type")
+        if kind not in PUBLISHED or not (parent.get("id") or row.get("id")):
+            return None, None
+        entry, _ = self.inv.entry(kind, parent.get("id") or row.get("id"))
+        field, want = PUBLISHED[kind]
+        return entry, bool(entry) and entry.get(field) == want
+
+    def row(self, key, row):
+        kind, status, rid = row.get("type"), row.get("status"), row.get("id")
+        if kind in ("publication", "activation"):
+            entry, done = self.publication(key, row)
+            if entry is None and done is None:
+                return None
+            live = [str(entry.get("id"))] if entry else []
+            if status == "attempting":
+                return self.element(key, kind, "adopt", live, confirm=True, note="the parent's live read shows the "
+                                    "step done") if done else self.element(key, kind, "retry", [])
+            if status in ("written", "mismatch"):
+                return self.element(key, kind, "partial" if entry else "missing", live, note="written, parent live"
+                                    if entry else "the parent is not in the inventory")
+            if entry is None:
+                return self.element(key, kind, "missing", [], note="the parent is not in the inventory")
+            return "unchanged" if done else self.element(key, kind, "changed-since-verified", live,
+                                                         note="the parent's live read no longer shows the step")
+        if status == "attempting":
+            started = (row.get("attempt") or {}).get("started_at")
+            if rid:
+                entry, why = self.inv.entry(kind, rid)
+                if entry is not None and entry.get("state") != "deleted":
+                    self.consumed.add(str(rid))
+                    return self.element(key, kind, "adopt", [rid], confirm=kind in ("automation", "workflow"),
+                                        needs="manage_agent get" if kind == "agent" else None,
+                                        note="the recorded id is live")
+                return self.element(key, kind, "retry", [], note="the recorded id %s is not live" % rid)
+            matches = [e for e in self.candidates(key, row) if str(e.get("id")) not in self.claimed
+                       and str(e.get("id")) not in self.consumed]
+            timed = [(e, _after(e, started)) for e in matches]
+            after = [e for e, t in timed if t is not False]
+            early = [e for e, t in timed if t is False]
+            self.predates |= {str(e.get("id")) for e in early}
+            if len(after) == 1:
+                entry, when = after[0], _after(after[0], started)
+                self.consumed.add(str(entry.get("id")))
+                return self.element(key, kind, "adopt", [entry.get("id")],
+                                    confirm=kind in ("automation", "workflow") or when is None,
+                                    needs="manage_agent get" if kind == "agent" else None,
+                                    note=self.adopt_note(row, entry, when))
+            if len(after) > 1:
+                self.consumed |= {str(e.get("id")) for e in after}
+                return self.element(key, kind, "duplicate", sorted((e.get("id") for e in after), key=id_sort))
+            note = None
+            if early:
+                ids = ", ".join(sorted((str(e.get("id")) for e in early), key=id_sort))
+                note = "its one match, %s, predates the attempt" % ids if len(early) == 1 else \
+                    "its matches, %s, predate the attempt" % ids
+            return self.element(key, kind, "retry", [], note=note)
+        entry, why = self.inv.entry(kind, rid) if rid else (None, "no id recorded")
+        if status in ("written", "mismatch"):
+            if entry is None or entry.get("state") == "deleted":
+                return self.element(key, kind, "missing", [rid] if entry else [], note=why or "live in state deleted")
+            note = "%s, id live" % status
+            if kind == "vibe_app" and entry.get("status") != "READY":
+                note = "%s, live status %s" % (status, entry.get("status"))
+            return self.element(key, kind, "partial", [rid], note=note)
+        if entry is None:
+            return self.element(key, kind, "missing", [], note=why)
+        if entry.get("state") == "deleted":
+            return self.element(key, kind, "missing", [rid], note="live in state deleted")
+        if kind == "vibe_app" and entry.get("status") != "READY":
+            return self.element(key, kind, "partial", [rid], note="live status %s" % entry.get("status"))
+        old = (row.get("verify") or {}).get("digest")
+        new = digest(str(key).lower(), identity(kind, entry))
+        if new != old:
+            return self.element(key, kind, "changed-since-verified", [rid], note=self.change_note(key, row, entry, old, new))
+        parts = [(k, r.get("status")) for k, r in sorted(self.objects.items(), key=lambda kr: natural(kr[0]))
+                 if r.get("parent_key") == key and r.get("type") in PART_TYPES.get(kind, ()) and r.get("status") != "verified"]
+        if parts:
+            if len(parts) == 1:
+                note = "%s under it is %s, not verified" % parts[0]
+            else:
+                note = "%s under it are not verified (%s)" % (", ".join(k for k, _ in parts), ", ".join(s for _, s in parts))
+            return self.element(key, kind, "partial", [rid], note=note)
+        return "unchanged"
+
+    def extras(self):
+        inv, targets = self.inv, set(self.led.targets())
+        taken = self.claimed | self.consumed
+        workflow_ids = set(inv.workflows)
+        found = []
+
+        def add(kind, entry):
+            oid = str(entry.get("id"))
+            if oid not in taken:
+                found.append(self.element(None, kind, "unrecorded-extra", [oid], predates=oid in self.predates))
+        for entry in inv.workspaces.values():
+            if str(entry.get("id")) in targets:
+                add("workspace", entry)
+        for entry in inv.boards.values():
+            oid = str(entry.get("id"))
+            if str(entry.get("workspace_id")) in targets and oid not in inv.doc_boards and oid not in workflow_ids:
+                add("board", entry)
+        for kind, pool in (("folder", inv.folders), ("doc", inv.docs), ("dashboard", inv.dashboards),
+                           ("workflow", inv.workflows)):
+            for entry in pool.values():
+                if str(entry.get("workspace_id")) in targets and not (
+                        kind == "doc" and str(entry.get("object_id")) in taken):
+                    add(kind, entry)
+        for entry in inv.automations.values():
+            board = inv.boards.get(str(entry.get("board_id"))) or {}
+            if str(board.get("workspace_id")) in targets:
+                add("automation", entry)
+        for kind, pool in (("agent", inv.agents), ("vibe_app", inv.vibe_apps)):
+            for entry in pool.values():
+                if self.earliest and _after(entry, self.earliest):
+                    add(kind, entry)
+        return found
+
+    def run(self):
+        elements, unchanged, not_started, not_reconciled, not_in = [], [], [], [], []
+        for key in sorted(self.objects, key=natural):
+            row = self.objects[key]
+            status, kind = row.get("status"), row.get("type")
+            if status == "planned":
+                not_started.append(key)
+            elif status in ("departed", "removed"):
+                not_reconciled.append(key)
+            elif kind in NOT_IN_INVENTORY:
+                not_in.append({"key": key, "kind": kind, "status": status, "read": read_for(self.led, row)})
+            else:
+                found = self.row(key, row)
+                if found is None:
+                    not_in.append({"key": key, "kind": kind, "status": status, "read": read_for(self.led, row)})
+                elif found == "unchanged":
+                    unchanged.append(key)
+                else:
+                    elements.append(found)
+        elements += self.extras()
+        groups = {}
+        for element in elements:
+            groups.setdefault(element["kind"], []).append(element)
+
+        def kind_order(kind):
+            if kind in ORDER_FIRST:
+                return (0, ORDER_FIRST.index(kind), [])
+            keys = [e["key"] for e in groups[kind] if e["key"]]
+            return (1, 0, natural(min(keys, key=natural))) if keys else (2, 0, [kind])
+        ordered = []
+        for kind in sorted(groups, key=kind_order):
+            rows = sorted((e for e in groups[kind] if e["key"]), key=lambda e: natural(e["key"]))
+            extra = sorted((e for e in groups[kind] if not e["key"]), key=lambda e: id_sort(e["live_ids"][0]))
+            ordered += rows + extra
+        classes = {name: 0 for name in RECONCILE_CLASSES}
+        for element in ordered:
+            classes[element["class"]] += 1
+        proposals = [{"key": e["key"], "keep_one_of": e["live_ids"], "each_other": "a switch-off step" if e["kind"] ==
+                      "automation" else "a deactivation proposal" if e["kind"] == "agent" else "an archive proposal",
+                      "yes": "its own yes, per proposal"} for e in ordered if e["class"] == "duplicate"]
+        return {"elements": ordered, "classes": classes, "unchanged": unchanged, "not_started": not_started,
+                "not_reconciled": not_reconciled, "not_in_inventory": not_in, "proposals": proposals}
+
+
+def cmd_reconcile(root, args):
+    led = Ledger(root, args.strand)
+    refuse(*led.newer())
+    led.require_build()
+    copy = root / ".work" / "strands" / led.short / "live-inventory.json"
+    copy_rel = led.rel(copy)
+    if args.inventory:
+        data, name = input_json(root, args.inventory, "--inventory")
+    elif copy.is_file():
+        data, name = input_json(root, copy_rel, "--inventory")
+    else:
+        raise mc.CannotRun((copy_rel, mc.WHOLE_FILE, "no live inventory has been handed for strand %s" % led.short,
+                            "ledger.py reconcile --strand %s --inventory <file the session wrote>" % led.short))
+    refuse(*inventory_reasons(data, name, led.short))
+    plan = Reconciler(led, Inventory(data)).run()
+    steps = []
+    if args.inventory and name != copy_rel:
+        steps.append((copy_rel, json_step(root, copy, data), None))
+    if not args.classify_only:
+        commit("reconcile", steps)
+        return 0, dict({"mode": "full", "strand": led.short, "inventory": copy_rel}, **plan, written={
+            rel: mc.sha256_file(mc.record_path(root, rel)) for rel, _, _ in steps}, next=(
+            "show the user this plan; adoption, retry and departure then go through record, intent --retry and depart, "
+            "each with the user's approval (A8.11); a retry or a departure of a row left attempting needs this plan to "
+            "class it retry, over a read made after its attempt began (R10)"))
+    status = mc.lease_status(root)
+    reasons = [None if status.get("held") else (mc.LOCK_REL, "state", "no lease is held (state %s)" % status.get("state"),
+                                                "a lease held by strand %s whose heartbeat is stale" % led.short),
+               None if not status.get("held") or status.get("strand") == led.short else (
+                   mc.LOCK_REL, "strand", "the lease is held by strand %s, not strand %s" % (status.get("strand"),
+                                                                                         led.short),
+                   "--strand naming the strand that holds the lease"),
+               None if status.get("fresh") is not True else (
+                   mc.LOCK_REL, "heartbeat_at", "the holder's heartbeat is %s minutes old: fresh" %
+                   status.get("heartbeat_age_minutes"), "a stale holder: a live holder's run is never marked from outside")]
+    run_id = status.get("run_id") if status.get("held") else None
+    run = led.run(run_id) if run_id else None
+    # R7: the classes a break reads are the account's after the holder's last heartbeat, never an older read
+    beat_at, read_at = status.get("heartbeat_at"), data.get("read_at")
+    starts = [(r.get("attempt") or {}).get("started_at") for r in led.objects.values()
+              if run_id and (r.get("attempt") or {}).get("run_id") == run_id]
+    if status.get("held") and not is_utc(beat_at):
+        reasons.append((mc.LOCK_REL, "heartbeat_at", "the holder's heartbeat does not read (%r)" % (beat_at,),
+                        "a heartbeat the inventory's read can be placed after; record.py lease repair for a "
+                        "malformed lock"))
+    elif status.get("held") and not after(read_at, beat_at):
+        reasons.append((name, "read_at", "the inventory was read at %s, not after the holder's last heartbeat, %s" % (
+            read_at, beat_at), "a read of the account made after the holder went quiet: hand a new read as "
+                        "--inventory; the copy an earlier reconcile left is read only by the retry of the same call"))
+    late = sorted(s for s in starts if is_utc(s) and not after(read_at, s))
+    if late:
+        reasons.append((name, "read_at", "the inventory was read at %s, not after the attempt of run %s that began "
+                        "at %s" % (read_at, run_id, late[-1]), "a read made after every attempt of the run began"))
+    refuse(*reasons)
+    findings = [{"key": e["key"], "class": e["class"], "live_ids": e["live_ids"], "note": e["note"]}
+                for e in plan["elements"]]
+    block = {"at": mc.stamp("utc"), "mode": "classify-only", "read_at": read_at, "classes": plan["classes"],
+             "findings": findings}
+    missing = run_id is not None and run is None
+    if missing:  # R6: run start's ledger write failed after the refresh, so nothing was written under this run
+        epoch = status.get("epoch")
+        run = {"id": run_id, "version": status.get("version"), "kind": "build", "session_label": status.get(
+            "session_label"), "lease_epoch": epoch if is_int(epoch) else None, "another_build_running": None,
+               "started_at": beat_at, "heartbeat_at": beat_at, "ended_at": None, "state": "interrupted",
+               "calls_estimated": None, "calls_used": None, "account_checks": [],
+               "note": "never reached the ledger: run start entered this id into the lease and its ledger write "
+                       "failed, so no write was made under it; recorded by the classify-only reconcile"}
+        led.build.setdefault("runs", []).append(run)
+    if run is not None:
+        run["state"] = "interrupted"
+        run["reconcile"] = block
+        led.build["updated_at"] = mc.stamp("utc")
+        steps.append((led.build_rel, json_step(root, led.build_path, led.build), None))
+    commit("reconcile", steps, run_id, "ledger.py reconcile --strand %s --classify-only, without --inventory: it "
+           "reads the copy already made" % led.short, root)
+    return 0, {"mode": "classify-only", "holder": led.short, "run_id": run_id, "run_state": run["state"] if run else None,
+               "reconcile": block, "marked": run is not None, "recorded_missing_run": missing,
+               "classes": plan["classes"], "elements": plan["elements"],
+               "note": None if run is not None else "the lock carries no run id: no run was written, so none is marked",
+               "written": {rel: mc.sha256_file(mc.record_path(root, rel)) for rel, _, _ in steps}}
+
+
+# estimate (W64 to W69, A9.9): the cost table, the classification query paid once per staleness window, no credits.
+
+ESTIMATE_COUNTS = ("used_today", "client_reserve", "items", "updates", "automation_actions_monthly", "boards_to_classify",
+                   "portfolios", "doc_pages")
+COST = {  # W65; complexity is reported beside the calls, never added to them
+    "preflight": 12,  # A9.9: about 12 calls
+    "items_per_call": 20, "updates_per_call": 40,  # create_items and update_items batches (A8.6:798, A9.9)
+    "retry_share": 5,  # the high figure adds a fifth for the one different call form (A8.6:799)
+    "polls_low": {"portfolio": 4, "project": 4, "vibe_app": 6}, "polls_high": {"portfolio": 12, "project": 12,
+                                                                               "vibe_app": 30},  # W54's ceilings
+    "checks_per": 20,  # an account check every 20 writes (SF 3)
+    "audit": {"board": 3, "subitems": 3, "portfolio": 3, "project": 3, "agent": 3, "vibe_app": 1, "workflow": 1},
+    "query_pages": (50, 25), "query_complexity": (3600, 5300),  # NO 2.6:57, per board
+    "items_page_complexity": (167000, 334000), "unread_daily_total": 1000, "unread_warning": 250, "headroom_share": 0.3}
+AI_POWERED, MAY_BE_AI = ("agent", "ai_column", "vibe_app"), ("workflow", "sequence")  # W69, A17
+
+
+def open_rows(build):
+    return {k: r for k, r in ((build or {}).get("objects") or {}).items() if r.get("status") in ("planned", "attempting")}
+
+
+def write_figures(led, rows, items=None, updates=0):
+    """(writes, read-backs, polls, account checks) as [low, high] pairs over the open rows (W65, W67). With no item
+    count (a sibling strand, whose inputs this strand never sees) each item_batch row is one create_items call."""
+    plain = sum(1 for r in rows.values() if r.get("type") != "item_batch")
+    batches = sum(1 for r in rows.values() if r.get("type") == "item_batch")
+    seeded = batches if items is None else math.ceil(items / COST["items_per_call"])
+    low = plain + seeded + math.ceil(updates / COST["updates_per_call"])
+    writes = [low, low + math.ceil(low / COST["retry_share"])]
+    polls = [sum(COST[band].get(r.get("type"), 0) for r in rows.values()) for band in ("polls_low", "polls_high")]
+    checks_low = 1 + math.ceil(low / COST["checks_per"])
+    other = sum(1 for k, r in rows.items() if approval_class(r, "create", r.get("origin"), None, led) != "card")
+    return writes, list(writes), polls, [checks_low, checks_low + other]
+
+
+def cmd_estimate(root, args):
+    led = Ledger(root, args.strand)
+    refuse(*led.newer())
+    led.require_build()
+    inputs, name = (input_json(root, args.inputs, "--inputs") if args.inputs else ({}, "(flags)"))
+    reasons = [None if not args.write or args.inputs else ("(flags)", "--write", "--write with no inputs file",
+                                                           "--inputs <the preflight reads> beside --write")]
+    if args.write:
+        reasons.append(sha_reason(led, args.expect_sha))
+    counts = {}
+    for key in ESTIMATE_COUNTS + ("daily_total", "plan_allowance"):
+        value = inputs.get(key)
+        if value is None:
+            counts[key] = None if key in ("daily_total", "plan_allowance") else 0
+        elif not is_int(value) or value < 0:
+            reasons.append((name, key, "%r" % (value,), "a count, 0 or more"))
+        else:
+            counts[key] = value
+    refuse(*reasons)
+    rows = open_rows(led.build)
+    writes, readbacks, polls, checks = write_figures(led, rows, counts["items"], counts["updates"])
+    audit = sum(COST["audit"].get(r.get("type"), 0) for r in rows.values()) + counts["doc_pages"]
+    n, p = counts["boards_to_classify"], counts["portfolios"]
+    index = led.index
+    window = (index.get("record_provenance") or {}).get("staleness_budget_days")
+    captured = index.get("captured_at")
+    paid = bool(is_utc(captured) and isinstance(window, (int, float)) and
+                (mc.now_utc() - mc.parse_utc(captured)).total_seconds() < window * 86400)
+    query = {"calls": [0, 0] if paid else [math.ceil(n / COST["query_pages"][0]), math.ceil(n / COST["query_pages"][1])],
+             "complexity": [0, 0] if paid else [COST["query_complexity"][0] * n, COST["query_complexity"][1] * n],
+             "paid": paid, "window_days": window, "captured_at": captured, "page_size": list(PAGE_SIZE),
+             "note": "paid once per record per staleness window: counted at nothing inside it" if paid else
+             "counted here; once native-map stores this read, later estimates inside the window see it paid"}
+    side = {"calls": [0, 0] if paid else [4 + p, 4 + 2 * p + math.ceil(n / COST["query_pages"][1])],
+            "complexity": [0, 0] if paid else [COST["items_page_complexity"][0] * p, COST["items_page_complexity"][1] * p]}
+    components = {"preflight": [COST["preflight"]] * 2, "writes": writes, "read_backs": readbacks, "polls": polls,
+                  "account_checks": checks, "audit": [audit, audit]}
+    calls = [sum(c[i] for c in components.values()) + query["calls"][i] + side["calls"][i] for i in (0, 1)]
+    others = []
+    for folder in sorted((root / "strands").iterdir()) if (root / "strands").is_dir() else []:
+        short = folder.name[:3]
+        if not folder.is_dir() or not re.match(r"\d{3}-", folder.name) or short == led.short:
+            continue
+        sibling = Ledger(root, short)
+        if sibling.strand.get("state") not in ("active", "paused") or sibling.build is None:
+            continue
+        open_ = {k: {"type": r.get("type"), "status": r.get("status"), "origin": r.get("origin"),
+                     "parent_key": r.get("parent_key")} for k, r in open_rows(sibling.build).items()}
+        if not open_:
+            continue
+        figures = write_figures(sibling, open_)  # W67: writes, read-backs, polls and account checks only
+        others.append({"strand": short, "calls": [sum(f[i] for f in figures) for i in (0, 1)]})
+    daily = counts["daily_total"]
+    headroom = (daily if daily is not None else COST["unread_daily_total"]) - counts["used_today"] - counts["client_reserve"]
+    after_others = headroom - sum(o["calls"][1] for o in others)
+    warnings = []
+    if calls[1] > COST["headroom_share"] * headroom:
+        warnings.append("the high figure, %d calls, is above 30%% of today's headroom of %d: offer to split the build "
+                        "across days" % (calls[1], headroom))
+    if daily is None and calls[1] > COST["unread_warning"]:
+        warnings.append("platform_api could not be read: 1,000 calls a day are assumed, and the high figure, %d, is "
+                        "above %d" % (calls[1], COST["unread_warning"]))
+    monthly, allowance = counts["automation_actions_monthly"], counts["plan_allowance"]
+    automation = {"monthly": monthly, "allowance": allowance, "over": None if allowance is None else monthly > allowance}
+    ai = sorted((k for k, r in rows.items() if r.get("type") in AI_POWERED), key=natural)
+    maybe = sorted((k for k, r in rows.items() if r.get("type") in MAY_BE_AI), key=natural)
+    batch = {"create_items": math.ceil(counts["items"] / COST["items_per_call"]),
+             "update_items": math.ceil(counts["updates"] / COST["updates_per_call"])}
+    payload = {"calls": calls, "components": components, "batches": batch, "classification_query": query,
+               "classification_side_reads": side, "automation_actions": automation, "ai_powered": ai,
+               "may_be_ai_powered": [{"key": k, "note": "AI-powered when the blueprint gives them an AI step"}
+                                     for k in maybe], "other_strands": others, "headroom": headroom,
+               "headroom_after_others": after_others, "warnings": warnings,
+               "fields_present_not_read": sorted(k for k in inputs if re.search(r"credit|price|package", str(k), re.IGNORECASE)),
+               "written": {}}
+    if not args.write:
+        return 0, payload
+    preflight = {"at": mc.stamp("utc"), "version": led.version, "daily_total": daily, "used_today": counts["used_today"],
+                 "client_reserve": counts["client_reserve"], "estimated_calls": calls,
+                 "roster_ok": inputs.get("roster_ok"), "stale_gotchas": list(inputs.get("stale_gotchas") or []),
+                 "workspaces_ok": inputs.get("workspaces_ok"), "findings": list(inputs.get("findings") or [])}
+    led.build["preflight"] = preflight
+    for run in led.build.get("runs") or []:
+        if run.get("state") == "running":
+            run["calls_estimated"] = list(calls)
+    payload["preflight"] = preflight
+    payload["written"] = save_build(led, "estimate")
+    return 0, payload
+
+
 # The catalogue, the parser and main.
 
-COMMANDS = {  # A5.4:356, K20: the 22 command forms; part 2 fills in the six left None
+COMMANDS = {  # A5.4:356, K20: the 22 command forms
     "check": cmd_check, "bind": cmd_bind, "workspaces": cmd_workspaces, "approval": cmd_approval,
     "change-check": cmd_change_check, "run start": cmd_run_start, "run heartbeat": cmd_run_heartbeat,
     "run end": cmd_run_end, "intent": cmd_intent, "record": cmd_record, "verify": cmd_verify, "depart": cmd_depart,
     "ui-step": cmd_ui_step, "irreversible-yes": cmd_irreversible_yes, "live-map": cmd_live_map,
-    "live-map set": cmd_live_map_set, "classify": None, "native-map": None, "snapshot": None, "compare": None,
-    "reconcile": None, "estimate": None}
+    "live-map set": cmd_live_map_set, "classify": cmd_classify, "native-map": cmd_native_map, "snapshot": cmd_snapshot,
+    "compare": cmd_compare, "reconcile": cmd_reconcile, "estimate": cmd_estimate}
 FENCED = ("workspaces", "run heartbeat", "run end", "intent", "record", "verify", "depart", "irreversible-yes")
 
 
@@ -2483,13 +4618,14 @@ def build_parser():
     start.add_argument("--kind", default="build")
     groups["run heartbeat"].add_argument("--account-check")
     groups["run heartbeat"].add_argument("--before")
+    groups["run heartbeat"].add_argument("--answer-words")
     groups["run end"].add_argument("--calls-used", required=True)
     intent = groups["intent"]
     intent.add_argument("--key", required=True)
     intent.add_argument("--operation", required=True)
     for flag in ("--type", "--name", "--origin", "--parent-key", "--parent-id", "--workspace", "--approval-ref",
                  "--prompt-ref", "--ir", "--prior-state", "--source-strand", "--live-key", "--evidence", "--payload-sha",
-                 "--product"):
+                 "--product", "--direction-change"):
         intent.add_argument(flag)
     for flag in ("--scope", "--ref", "--notifies", "--assumption-ref"):
         intent.add_argument(flag, action="append")
@@ -2520,10 +4656,27 @@ def build_parser():
     yes.add_argument("--key", action="append", required=True)
     for flag in ("--mode", "--what"):
         yes.add_argument(flag, required=True)
-    for flag in ("--evidence", "--log-ref", "--approval-ref"):
+    for flag in ("--evidence", "--log-ref", "--approval-ref", "--operation"):
         yes.add_argument(flag)
     for flag in ("--key", "--constraint", "--source"):
         groups["live-map"].add_argument(flag)
+    groups["classify"].add_argument("--reads", required=True)
+    native = groups["native-map"]
+    for flag in ("--reads", "--coverage"):
+        native.add_argument(flag, required=True)
+    native.add_argument("--staleness-days")
+    native.add_argument("--confirm", action="append")
+    groups["snapshot"].add_argument("--label", required=True)
+    groups["snapshot"].add_argument("--read", required=True)
+    for flag in ("--before", "--after"):
+        groups["compare"].add_argument(flag, required=True)
+    groups["compare"].add_argument("--appendix")
+    groups["reconcile"].add_argument("--inventory")
+    groups["reconcile"].add_argument("--classify-only", action="store_true")
+    groups["reconcile"].add_argument("--asked-by")
+    groups["estimate"].add_argument("--inputs")
+    groups["estimate"].add_argument("--write", action="store_true")
+    groups["estimate"].add_argument("--expect-sha")
     return parser
 
 
@@ -2532,18 +4685,20 @@ def main(argv=None):
     try:
         args, extra = parser.parse_known_args(argv)
         name = " ".join(word for word in (args.command, getattr(args, "sub", None)) if word)
-        if extra and COMMANDS.get(name) is not None:
+        if extra:
             raise Usage("unrecognized arguments: %s" % " ".join(extra))
         if name == "live-map set" and not (args.key and args.constraint and args.source is not None and args.strand):
             raise Usage("live-map set needs --key, --constraint, --source and --strand")
+        if name in ("snapshot", "reconcile", "estimate") and not args.strand:
+            raise Usage("%s needs --strand" % name)
+        if name == "reconcile" and args.asked_by is not None and not re.fullmatch(r"\d{3}", args.asked_by):
+            raise Usage("--asked-by takes a strand's three-digit short id")
     except Usage as exc:
         emit({"ok": False, "command": None, "asked_by": None, "error": dict(zip(KEYS, (
             "ledger.py", "arguments", str(exc), parser.format_usage().strip())))})
         return 3
     asked = strand_short(args)
     try:
-        if COMMANDS[name] is None:
-            raise mc.CannotRun(("ledger.py", name, "%s is not built yet" % name, "ledger.py part 2 (WP3 step 6)"))
         root = Path(args.record) if args.record else Path.cwd()
         for needed in ("CLIENT.md", "account.json"):
             if not (root / needed).is_file():

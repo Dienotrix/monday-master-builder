@@ -315,6 +315,20 @@ class Base(unittest.TestCase):
     def lease(self):
         return mc.lease_status(self.root)
 
+    def inventory(self, name="inventory.json", read_at=None, **lists):
+        """A live-inventory/1 file the session hands to reconcile (W70), read now unless `read_at` says otherwise."""
+        data = {"schema": "live-inventory/1", "strand": "001", "read_at": read_at or mc.stamp("utc"),
+                "ring": "release_candidate 2026-10"}
+        for part in ("workspaces", "boards", "folders", "docs", "automations", "agents", "vibe_apps", "workflows"):
+            data[part] = list(lists.get(part, []))
+        data["dashboards"] = {"requested_ids": [], "returned": [], "missing_ids": []}
+        return self.put(name, data)
+
+    def reconcile(self, **lists):
+        """The full reconcile over a read made half a minute after the last step (R10's precondition of a retry)."""
+        self.now += timedelta(seconds=30)
+        return self.ok("reconcile", "--strand", "001", "--inventory", self.inventory(**lists))
+
     def retake(self):
         """Release whatever is held and take a new lease, through the primitives only (K37)."""
         status = self.lease()
@@ -409,9 +423,9 @@ class FrameTest(Base):
                      "compare", "classify", "native-map", "live-map", "live-map set", "workspaces"}
         self.assertEqual(set(self.led.COMMANDS), catalogue)
         for name in ("classify", "native-map", "snapshot", "compare", "reconcile", "estimate"):
-            self.assertIsNone(self.led.COMMANDS[name])
+            self.assertIsNotNone(self.led.COMMANDS[name])  # part 2 built them (test_ledger_read.py)
             code, data = self.ledger(name)
-            self.assertEqual((code, data["error"]["problem"]), (3, "%s is not built yet" % name))
+            self.assertEqual((code, data["error"]["field"]), (3, "arguments"))  # each needs its flags
         for argv in (("migrate",), (), ("run",), ("intent", "--strand", "001"), ("check", "--bogus"),
                      ("live-map", "set", "--key", "001:B1"), ("bind",)):
             code, data = self.ledger(*argv)
@@ -569,8 +583,8 @@ class SubprocessTest(Base):
                       "--decision", "blueprint-revision")):
             code, data = launch(*(list(argv) + ["--strand", "001"] + fence() + ["--expect-sha", sha()]))
             case.assertEqual(code, 0, data)
-        case.assertEqual(launch("workspaces", "--strand", "001", "--product", "crm", "--id", SALES_WS, "--name", "Sales",
-                                "--created-in", "001/v0.2", *fence())[0], 0)
+        case.assertEqual(launch("workspaces", "--strand", "001", "--product", "crm", "--id", SALES_WS, "--name",
+                                "Larkmoor Joinery – Sales", "--created-in", "001/v0.2", *fence())[0], 0)
         case.assertEqual(launch("ui-step", "--strand", "001", "--what", "turn on the Kanban view", "--owner", "the user",
                                 "--target-version", "v0.2", "--expect-sha", sha())[0], 0)
         case.assertEqual(launch("live-map")[0], 0)
@@ -652,8 +666,9 @@ class MutexTest(Base):
                     continue
                 self.assertEqual(data["error"]["field"], "committed")
                 report = data["committed"]
-                self.assertEqual(set(report), {"command", "written", "not_written", "lease", "run_id", "next"})
+                self.assertEqual(set(report), {"command", "written", "not_written", "lease", "run_id", "next", "shas"})
                 self.assertEqual((report["command"], report["written"], report["run_id"]), ("run end", written, self.run_id))
+                self.assertEqual(report["shas"], {rel: self.sha(rel) for rel in written})  # R19
                 self.assertIn(".work/lock.json", report["not_written"])
                 self.assertIn("same run end call", report["next"])
                 self.ok(*self.argv("run end", "--calls-used", "4"))  # the repeat completes it
@@ -675,6 +690,110 @@ class MutexTest(Base):
         self.assertEqual((done["run_id"], self.data()["runs"][-1]["id"]), (run, run))
         self.refused("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
                      "--another-build-running", "no", "--account-check", "match", "--run-id", run, "--expect-sha", self.sha())
+
+
+class FenceFirstTest(Base):
+    """K104: each of the eight fenced commands calls lease_fence before its first write, and a stale fence writes nothing."""
+
+    def setUp(self):
+        super().setUp()
+        self.client()
+        self.approve()
+        self.start()
+
+    def spied(self, run):
+        events, real_write, real_fence = [], mc.write_file, mc.lease_fence
+
+        def write(path, data, root, backup=True, backup_dir=None):
+            events.append("write " + Path(path).name)
+            return real_write(path, data, root, backup, backup_dir)
+
+        def fence(*args):
+            events.append("fence")
+            return real_fence(*args)
+        with mock.patch.object(mc, "write_file", write), mock.patch.object(mc, "lease_fence", fence):
+            result = run()
+        return events, result
+
+    def fenced(self, make_argv):
+        """Fence first on the valid call; then a stale epoch and a wrong label each refused at the fence, nothing written."""
+        events, data = self.spied(lambda: self.ok(*make_argv()))
+        self.assertEqual(events[0], "fence", events)
+        self.assertTrue(any(e.startswith("write ") for e in events), events)
+        self.assertEqual(events.count("fence"), 1, events)
+        return data
+
+    def stale(self, prepare, make_argv):
+        for what in ("epoch", "label"):
+            with self.subTest(stale=what):
+                self.copy_home()
+                os.environ["MMB_HOME"] = str(self.home)
+                self.client()
+                self.approve()
+                self.start()
+                prepare()
+                if what == "epoch":
+                    self.epoch = "1"
+                else:
+                    self.label = "another session label"
+                argv = make_argv()
+                events, found = self.spied(lambda: self.refused(*argv))  # exit 1 and the tree unchanged
+                self.assertEqual(events, ["fence"])
+                self.assertTrue(found)
+
+    def check_command(self, prepare, make_argv):
+        prepare()
+        self.fenced(make_argv)
+        self.stale(prepare, make_argv)
+
+    def prep_workspace(self):
+        self.yes("W2")
+        self.intent("W2", "--product", "crm")
+        self.record("W2", "--id", SALES_WS)
+        self.verify("W2", {"name": "Larkmoor Joinery – Sales", "kind": "open"})
+
+    def prep_intent(self):
+        self.sales(client=True)
+
+    def prep_record(self):
+        self.prep_intent()
+        self.intent("B2", "--workspace", SALES_WS)
+
+    def prep_verify(self):
+        self.prep_record()
+        self.record("B2", "--id", "90300000002")
+
+    def test_K104_workspaces_fences_before_its_first_write(self):
+        self.check_command(self.prep_workspace, lambda: [
+            "workspaces", "--strand", "001", "--product", "crm", "--id", SALES_WS, "--name", "Larkmoor Joinery – Sales",
+            "--created-in", "001/v0.2"] + self.fence())
+
+    def test_K104_run_heartbeat_fences_before_its_first_write(self):
+        self.check_command(lambda: None, lambda: self.argv("run heartbeat"))
+
+    def test_K104_run_end_fences_before_its_first_write(self):
+        self.check_command(lambda: None, lambda: self.argv("run end", "--calls-used", 3))
+
+    def test_K104_intent_fences_before_its_first_write(self):
+        self.check_command(self.prep_intent, lambda: self.argv("intent", "--key", "B2", "--operation", "create",
+                                                               "--workspace", SALES_WS))
+
+    def test_K104_record_fences_before_its_first_write(self):
+        self.check_command(self.prep_record, lambda: self.argv("record", "--key", "B2", "--id", "90300000002"))
+
+    def test_K104_verify_fences_before_its_first_write(self):
+        def prepare():
+            self.prep_verify()
+            self.read = self.read_file("B2", {"name": "Jobs", "kind": "open"})
+        self.check_command(prepare, lambda: self.argv("verify", "--key", "B2", "--result", "match", "--read", self.read))
+
+    def test_K104_depart_fences_before_its_first_write(self):
+        self.check_command(lambda: None, lambda: self.argv("depart", "--key", "B1.G2", "--what", "w", "--error-code", "E",
+                                                               "--decision", "later-retry"))
+
+    def test_K104_irreversible_yes_fences_before_its_first_write(self):
+        self.check_command(lambda: None, lambda: self.argv("irreversible-yes", "--key", "F1", "--mode", "per-item",
+                                                           "--what", "the step for F1"))
 
 
 class BindTest(Base):
@@ -766,21 +885,31 @@ class BindTest(Base):
 
 
 class WorkspacesTest(Base):
+    """W38 as R8 reads it: `--product` records only a workspace row this strand's build wrote or verified."""
+
+    SALES = "Larkmoor Joinery – Sales"
 
     def setUp(self):
         super().setUp()
+        self.approve(rows=TABLE + (("W3", "workspace", "Larkmoor Joinery – Sales two"),),
+                     extra=["--irreversible", "W3"])
         self.start()
 
     def ws(self, *argv):
         return ["workspaces", "--strand", "001"] + list(argv) + self.fence()
 
+    def built(self, key, ws_id, name, *argv, product="crm"):
+        self.intent(key, "--product", product, *argv)
+        self.record(key, "--id", ws_id)
+        self.verify(key, {"name": name, "kind": "open"})
+
     def test_K36_K62_K64_K66_K68_a_product_workspace_is_recorded_beside_the_others(self):
         core = self.data("account.json")["client_workspaces"]["core"]
-        data = self.ok(*self.ws("--product", "crm", "--id", SALES_WS, "--name", "Larkmoor Joinery – Sales",
-                                "--created-in", "001/v0.1"))
+        self.built("W2", SALES_WS, self.SALES)
+        data = self.ok(*self.ws("--product", "crm", "--id", SALES_WS, "--name", self.SALES, "--created-in", "001/v0.2"))
         account = self.data("account.json")
-        self.assertEqual(account["client_workspaces"]["crm"], {"id": SALES_WS, "name": "Larkmoor Joinery – Sales",
-                                                               "created_in": "001/v0.1"})
+        self.assertEqual(account["client_workspaces"]["crm"], {"id": SALES_WS, "name": self.SALES,
+                                                               "created_in": "001/v0.2"})
         self.assertEqual(account["client_workspaces"]["core"], core)
         self.assertIn(SALES_WS, account["guard_index"]["client_workspace_ids"])
         self.assertIn(SALES_WS, account["guard_index"]["build_targets_by_strand"]["001"]["workspace_ids"])
@@ -792,8 +921,8 @@ class WorkspacesTest(Base):
 
     def test_K63_K65_K67_K138_the_refusals(self):
         self.assertIn("core | crm | service", words(self.refused(*self.ws("--product", "dev", "--id", "90100000003",
-                                                                         "--name", "Dev", "--created-in", "001/v0.1"))))
-        found = self.refused(*self.ws("--product", "service", "--id", OPS_WS, "--name", "x", "--created-in", "001/v0.1"))
+                                                                         "--name", "Dev", "--created-in", "001/v0.2"))))
+        found = self.refused(*self.ws("--product", "service", "--id", OPS_WS, "--name", "x", "--created-in", "001/v0.2"))
         self.assertIn("never-demo", words(found))
         self.assertIn("Internal Planning", words(found))
         found = self.refused(*self.ws("--use", "90100000444"))
@@ -802,13 +931,15 @@ class WorkspacesTest(Base):
             "--product", "crm", "--id", SALES_WS, "--name", "x", "--created-in", "002/v0.1"))))
 
     def test_K145_W39_a_second_workspace_in_a_product_needs_the_direction_change(self):
-        self.ok(*self.ws("--product", "crm", "--id", SALES_WS, "--name", "Sales", "--created-in", "001/v0.1"))
-        argv = ("--product", "crm", "--id", "90100000003", "--name", "Sales two", "--created-in", "001/v0.1")
-        self.assertIn(("account.json", "client_workspaces.crm"), pairs(self.refused(*self.ws(*argv))))
-        self.ok(*self.ws(*(argv + ("--direction-change", "2026-11-05 14:30 · 001 · decision · v0.1 · fresh start"))))
+        self.built("W2", SALES_WS, self.SALES)
+        self.ok(*self.ws("--product", "crm", "--id", SALES_WS, "--created-in", "001/v0.2"))
+        change = "2026-11-05 14:30 · 001 · decision · v0.2 · fresh start"
+        self.built("W3", "90100000003", "Larkmoor Joinery – Sales two", "--direction-change", change)
+        self.ok(*self.ws("--product", "crm", "--id", "90100000003", "--created-in", "001/v0.2"))  # the row's reference
         account = self.data("account.json")
         self.assertEqual(account["client_workspaces"]["crm"]["id"], "90100000003")
-        self.assertEqual(account["superseded_workspaces"][0]["id"], SALES_WS)
+        self.assertEqual((account["superseded_workspaces"][0]["id"], account["superseded_workspaces"][0][
+            "direction_change"]), (SALES_WS, change))
         self.assertTrue({SALES_WS, "90100000003"} <= set(account["guard_index"]["client_workspace_ids"]))
 
 
@@ -886,6 +1017,7 @@ class ApprovalTest(Base):
 class ChangeCheckTest(Base):
 
     def test_K88_K89_K90_K93_K95_the_block_and_nothing_else(self):
+        mc.lease_release(self.root, "2", LABEL)  # R18: with strand 001 holding the lease, 002's check is refused
         before = self.data("account.json")
         data = self.change_check(strand="002")
         after = self.data("account.json")
@@ -897,6 +1029,10 @@ class ChangeCheckTest(Base):
         for key in before:
             if key not in ("change_check", "updated_at"):
                 self.assertEqual(after[key], before[key], key)
+        mc.lease_take(self.root, "001")
+        self.assertIn("held by strand 001", " ".join(f["problem"] for f in self.refused(
+            "change-check", "--strand", "002", "--from", self.put("cc2.json", {k: v for k, v in block.items() if k not in (
+                "at", "for_strand")}))))
 
     def test_K91_K92_K94_values_and_the_two_outcomes(self):
         bad = {"ring": "r", "versions_seen": [], "release_notes_since": "yesterday",
@@ -920,7 +1056,8 @@ class RunTest(Base):
         run = build["runs"][-1]
         self.assertEqual(list(run), ["id", "version", "kind", "session_label", "lease_epoch", "another_build_running",
                                      "started_at", "heartbeat_at", "ended_at", "state", "calls_estimated", "calls_used",
-                                     "account_checks"])
+                                     "account_checks", "recovery_first"])
+        self.assertFalse(run["recovery_first"])
         self.assertEqual((build["lease_epoch_at_run"], run["state"], run["ended_at"], run["calls_used"]), (2, "running", None, None))
         self.assertRegex(run["another_build_running"], r"^no, answered \d\d:\d\d$")
         self.assertEqual(run["account_checks"], [{"at": "2026-11-05T14:31:00Z", "before": "run start", "result": "match"}])
@@ -1051,6 +1188,7 @@ class RefusalTest(Base):
                                                     self.read_file("B2", {"name": "Orders"}))))
         self.intent("B2", "--workspace", OWN_WS)  # planned to attempting
         self.no("intent", "--key", "B2", "--operation", "create")
+        self.reconcile()  # R10: B2 is not live, so the reconcile classes it retry
         self.go("intent", "--key", "B2", "--operation", "create", "--retry")  # attempting to attempting
         self.record("B2", "--id", "90300000002")  # attempting to written
         self.verify("B2", {"name": "Orders"}, result="not-checkable", note="the user checks the board by eye")
@@ -1244,7 +1382,8 @@ class ModesTest(Base):
         self.start()
         self.assertIn("in this run", words(self.no("intent", "--key", "F1", "--operation", "create", "--workspace", OWN_WS)))
         self.edit_json(B1J, lambda d: d["approvals"][-1].update(approval_mode="own-account-poc"))
-        self.assertEqual(self.intent("F1", "--workspace", OWN_WS)["yes"], "card")
+        found = self.no("intent", "--key", "F1", "--operation", "create", "--workspace", OWN_WS)  # R13: no card ride
+        self.assertIn((B1J, "approvals[].approval_mode"), pairs(found))
 
 
 class RowsTest(Base):
@@ -1521,19 +1660,28 @@ class DepartTest(Base):
         self.assertEqual(self.data()["ui_steps"][0]["status"], "done")
 
     def test_K210_K211_K212_K215_K216_irreversible_yes(self):
+        self.copy_home()  # R13: a client record approved as such, not an own-account approval made client afterwards
+        os.environ["MMB_HOME"] = str(self.home)
         self.client()
+        self.approve()
+        self.start()
         data = self.yes("F1", "per-item", "--log-ref", "2026-11-05 14:30 · 001 · irreversible · v0.2 · F1")
         entry = self.data()["irreversible_yes"][-1]
-        self.assertEqual(list(entry), ["key", "what", "at", "mode", "approval_ref", "evidence", "log_ref"])
+        self.assertEqual(list(entry), ["key", "what", "at", "mode", "approval_ref", "evidence", "log_ref", "run_id",
+                                       "operation", "used_by"])
+        self.assertEqual((entry["run_id"], entry["operation"], entry["used_by"]), (self.run_id, "create", None))
         self.assertEqual((entry["at"], entry["approval_ref"], data["log"][0]["type"]),
                          ("2026-11-05T14:30:00Z", "v0.2r1", "irreversible"))
         self.assertIn("not listed", words(self.no("irreversible-yes", "--key", "B2", "--mode", "per-item", "--what", "w")))
         self.assertIn("evidence", words(self.no("irreversible-yes", "--key", "B1", "--mode", "per-item", "--what",
                                                 "archive the old Jobs board")))
-        self.yes("B1", "per-item", "--approval-ref", "v0.2r1")
-        self.assertIn("containment evidence", words(self.no("intent", "--key", "B1", "--operation", "archive",
-                                                            "--approval-ref", "v0.2r1")))
-        self.yes("B1", "per-item", "--approval-ref", "v0.2r1", "--evidence", "no view, automation or other strand reads it")
+        self.assertIn("--evidence", " ".join(f["field"] for f in self.no(
+            "irreversible-yes", "--key", "B1", "--mode", "per-item", "--what", "the step", "--operation", "archive")))
+        self.yes("B1", "per-item", "--approval-ref", "v0.2r1")  # a create's yes, which no archive rides (R2)
+        self.assertIn("per-item yes for this archive", words(self.no("intent", "--key", "B1", "--operation", "archive",
+                                                                     "--approval-ref", "v0.2r1")))
+        self.yes("B1", "per-item", "--approval-ref", "v0.2r1", "--operation", "archive", "--evidence",
+                 "no view, automation or other strand reads it")
         self.assertEqual(self.intent("B1", "--approval-ref", "v0.2r1", op="archive")["class"], "removed")
         self.assertTrue(self.row("B1")["irreversible"])
         self.assertIn("B1", [e["key"] for e in self.data()["irreversible_yes"]])
@@ -1670,6 +1818,381 @@ class CheckTest(Base):
         self.assertIn((B1J, "runs"), blocking)
         self.assertIn(("live/live-map.md", "001:B1.state"), blocking)
         self.assertIn((B1J, "runs[1].heartbeat_at"), warnings)
+
+
+class ReviewFixTest(Base):
+    """The fixes of ledger-review.md (WP3 step 8): one test per finding, R1 to R20, each failing on the code the review
+    read and passing now. The scenarios are the review's probes, rebuilt in this test's own record copy."""
+
+    SALES = "Larkmoor Joinery – Sales"
+    TWO = (("W3", "workspace", "Larkmoor Joinery – Ops two"),)
+
+    def make_version(self, version, rows=TABLE, purpose="working-solution", revision=1):
+        """A version folder of this strand with one frozen revision carrying the element-key table."""
+        vdir = self.root / S1 / "versions" / version
+        vdir.mkdir(parents=True, exist_ok=True)
+        frozen = vdir / ("blueprint-r%d.md" % revision)
+        text = blueprint(rows).replace("v0.2", version).replace('revision: "1"', 'revision: "%d"' % revision)
+        frozen.write_bytes(text.encode("utf-8"))
+        sha = mc.sha256_file(frozen)
+        text = version_md(sha, purpose).replace('"v0.2"', '"%s"' % version).replace("001/v0.2", "001/" + version)
+        text = text.replace('revision: "1"', 'revision: "%d"' % revision).replace("of v0.2", "of " + version)
+        (vdir / "version.md").write_bytes(text.encode("utf-8"))
+        self.edit_fm(S1 + "/STRAND.md", version=version, version_state="approved")
+        return sha
+
+    def board(self, bid, at):
+        return {"id": bid, "name": "Orders", "type": "board", "state": "active", "created_at": at,
+                "workspace_id": OWN_WS, "board_folder_id": None, "object_type_unique_key": None,
+                "hierarchy_type": "classic"}
+
+    def fresh_core(self):
+        """A second core workspace W3, intended with the user's direction change and recorded as the client's."""
+        self.approve(rows=TABLE + self.TWO, extra=["--irreversible", "W3"])
+        self.start()
+        change = "2026-11-05 14:30 · 001 · decision · v0.2 · a fresh workspace"
+        self.intent("W3", "--product", "core", "--direction-change", change)
+        self.record("W3", "--id", "40000009")
+        self.verify("W3", {"name": "Larkmoor Joinery – Ops two", "kind": "open"})
+        self.ok("workspaces", "--strand", "001", "--product", "core", "--id", "40000009", "--created-in", "001/v0.2",
+                *self.fence())
+        return change
+
+    def test_R1_W44_a_working_solution_takes_its_own_mode_never_the_proof_of_concepts_card(self):
+        self.approve()  # v0.2: a proof of concept in the user's own account, own-account-poc
+        self.start()
+        self.intent("A1", "--parent-key", "B1")
+        self.record("A1", "--id", "91100000001")
+        self.verify("A1", {"active": True, "updated_at": "2026-11-05T14:30:00Z"})
+        self.sales()
+        self.end()
+        self.ok(*self.approval_argv(self.make_version("v1.0")))  # v1.0: a working solution, per-list (W44)
+        self.retake()
+        self.start()
+        self.assertEqual(self.row("A1")["approval_ref"], "v0.2r1")  # the kept row keeps its planning ref
+        found = self.no("intent", "--key", "A1", "--operation", "update")
+        self.assertIn("grouped yes for this update", words(found))
+        self.assertIn("mode per-list", words(found))
+        self.assertIn("per-item", words(self.no("intent", "--key", "W2", "--operation", "archive", "--evidence",
+                                                "nothing uses it")))
+        found = self.no("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS, "--approval-ref", "v0.2r1")
+        self.assertIn(("(flags)", "--approval-ref"), pairs(found))
+        self.yes("A1", "grouped", "--operation", "update")
+        data = self.intent("A1", op="update")
+        self.assertEqual((data["approval_mode"], data["yes"]), ("per-list", "grouped"))
+
+    def test_R2_K215_one_yes_covers_one_step_and_an_archive_takes_its_own_with_its_evidence(self):
+        self.client()
+        self.approve()
+        self.start()
+        self.yes("W2")
+        self.intent("W2", "--product", "crm")
+        self.record("W2", "--timed-out")
+        self.reconcile()  # nothing live: retry, which the same attempt's yes still covers
+        self.assertEqual(self.go("intent", "--key", "W2", "--operation", "create", "--product", "crm", "--retry")["yes"],
+                         "per-item")
+        self.record("W2", "--id", SALES_WS)
+        self.verify("W2", {"name": self.SALES, "kind": "open"})
+        entry = self.data()["irreversible_yes"][-1]
+        self.assertEqual((entry["run_id"], entry["operation"], entry["used_by"]), (self.run_id, "create", self.row("W2")[
+            "attempt"]["started_at"]))
+        for op in ("archive", "update"):
+            self.assertIn("yes for this %s" % op, words(self.no("intent", "--key", "W2", "--operation", op,
+                                                                "--evidence", "nothing uses it")))
+        self.yes("W2", "per-item", "--operation", "archive", "--evidence", "no board, doc or strand uses it")
+        self.assertEqual(self.intent("W2", op="archive")["class"], "removed")
+
+    def test_R3_W40_a_parent_is_named_by_key_placed_and_in_the_rows_own_workspace(self):
+        self.approve()
+        self.start()
+        found = self.no("intent", "--key", "A1", "--operation", "create", "--parent-id", "88800000001", "--workspace", OWN_WS)
+        self.assertIn("no workspace it knows", words(found))
+        self.ok("live-map", "set", "--key", "001:B1", "--constraint", "do-not-change", "--source",
+                "calls/2026-10-20-discovery.md@00:14:02", "--strand", "001")
+        self.assertIn("do-not-change", words(self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1")))
+        found = self.no("intent", "--key", "A1", "--operation", "create", "--parent-id", BOARD, "--workspace", OWN_WS)
+        self.assertIn("holds it as B1", words(found))
+        self.assertIn("do-not-change", words(found))
+        self.ok("live-map", "set", "--key", "001:B1", "--constraint", "free", "--source", "decision 2026-11-05",
+                "--strand", "001")
+        self.sales()
+        found = self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1", "--workspace", SALES_WS)
+        self.assertIn("the parent B1 is in workspace %s" % OWN_WS, words(found))
+        self.intent("A1", "--parent-key", "B1")
+        self.assertEqual((self.row("A1")["parent_id"], self.row("A1")["workspace"]), (BOARD, OWN_WS))
+
+    def test_R4_W35_one_monday_id_has_one_spelling(self):
+        self.approve()
+        self.start()
+        zero = "0" + OPS_WS
+        found = self.refused("workspaces", "--strand", "001", "--product", "crm", "--id", zero, "--name", "x",
+                             "--created-in", "001/v0.2", *self.fence())
+        self.assertIn("leading zero", words(found))
+        for argv in (("B2", "--workspace", zero), ("AG1", "--scope", zero),
+                     ("AG1", "--scope", OWN_WS, "--ref", "board:0" + BOARD), ("A1", "--parent-key", "B1", "--parent-id",
+                                                                                "0" + BOARD)):
+            self.assertIn("leading zero", words(self.no("intent", "--key", argv[0], "--operation", "create", *argv[1:])),
+                          argv)
+        found = self.no("verify", "--key", "B9", "--result", "match", "--read", self.read_file("B9", {
+            "id": "0" + BOARD, "workspace_id": OWN_WS, "name": "Supplier list"}))
+        self.assertIn("leading zero", words(found))
+        self.assertIn("leading zero", words(self.refused("workspaces", "--strand", "001", "--use", zero, *self.fence())))
+
+    def test_R5_K157_do_not_change_protects_the_object_under_every_key(self):
+        self.approve()
+        self.start()
+        theirs = {"monday_id": "50000099", "kind": "board", "workspace": OWN_WS, "name_at_build": "Supplier list",
+                  "owner_strand": "002", "introduced_in": "client", "state": "active", "constraint": "do-not-change",
+                  "constraint_source": "calls/2026-10-20-discovery.md@00:12:10", "digest": None,
+                  "last_verified": "2026-11-01", "dependants": []}
+        self.edit_json("account.json", lambda d: d["live_objects"].update({"002:B9": theirs}))
+        data = self.verify("B9", {"id": "50000099", "workspace_id": OWN_WS, "name": "Supplier list"})
+        self.assertEqual([s["key"] for s in data["same_object_as"]], ["002:B9"])
+        found = self.no("intent", "--key", "B9.C1", "--operation", "create")
+        self.assertIn("marked do-not-change as 002:B9", words(found))
+        self.end()
+        self.assertEqual(self.data("account.json")["live_objects"]["001:B9"]["constraint"], "do-not-change")
+        self.edit_json("account.json", lambda d: d["live_objects"]["001:B9"].update(constraint="free"))
+        self.assertIn(("account.json", "live_objects.001:B9.constraint"), self.check()[1])
+
+    def test_R6_W25_a_run_start_whose_ledger_write_failed_is_recovered_by_the_classify_only_reconcile(self):
+        self.approve()
+        self.change_check()
+        with self.failing("build.json"):
+            code, data = self.ledger("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                                     "--another-build-running", "no", "--account-check", "match", "--expect-sha", self.sha())
+        run = data["committed"]["run_id"]
+        self.assertEqual((code, self.lease()["run_id"], self.led.Ledger(self.root, "001").run(run)), (3, run, None))
+        self.now = CLOCK + timedelta(hours=3)  # the session is gone and the heartbeat goes stale
+        found = self.ok("reconcile", "--strand", "001", "--classify-only", "--asked-by", "002", "--inventory",
+                        self.inventory())
+        self.assertEqual((found["marked"], found["recorded_missing_run"]), (True, True))
+        entry = next(r for r in self.data()["runs"] if r["id"] == run)
+        self.assertEqual(entry["state"], "interrupted")
+        self.assertIn("never reached the ledger", entry["note"])
+        self.assertEqual([p for p in self.check()[1] if p[1].startswith("runs")], [])
+        broken = mc.lease_break(self.root, "2", LABEL, "001", "yes, break the lease of strand 001", "10000001", "resume")
+        self.assertEqual((broken["choice"], self.lease()["state"]), ("resume", "broken"))
+
+    def test_R6_W30_a_run_id_the_lease_history_carries_is_skipped(self):
+        self.approve()
+        self.change_check()
+        with self.failing("build.json"):
+            data = self.ledger("run", "start", "--strand", "001", "--lease-epoch", "2", "--session-label", LABEL,
+                               "--another-build-running", "no", "--account-check", "match", "--expect-sha", self.sha())[1]
+        self.assertEqual(data["committed"]["run_id"], "run-2026-11-05-1")
+        mc.lease_release(self.root, "2", LABEL)  # the session released without the retry: run 1 is in the history only
+        self.retake()
+        self.assertEqual(self.start(cc=False)["run_id"], "run-2026-11-05-2")
+
+    def test_R7_G04_a_classify_only_reconcile_reads_the_account_after_the_last_heartbeat(self):
+        self.approve()
+        self.start()
+        self.intent("B2", "--workspace", OWN_WS)  # the attempt begins at 14:30:00
+        old = self.inventory("old.json", read_at="2026-11-05T14:30:30Z")
+        self.now = CLOCK + timedelta(minutes=1)
+        self.record("B2", "--timed-out")  # the heartbeat moves to 14:31:00
+        self.ok("reconcile", "--strand", "001", "--inventory", old)  # a full reconcile leaves its copy
+        self.now = CLOCK + timedelta(hours=2)
+        for argv in (["--inventory", old], []):
+            found = self.refused("reconcile", "--strand", "001", "--classify-only", "--asked-by", "002", *argv)
+            self.assertIn("not after the holder's last heartbeat", words(found), argv)
+        twice = [self.board("90300000002", "2026-11-05T14:30:10Z"), self.board("90300000003", "2026-11-05T14:30:20Z")]
+        data = self.ok("reconcile", "--strand", "001", "--classify-only", "--asked-by", "002", "--inventory",
+                       self.inventory("today.json", boards=twice))
+        self.assertEqual((data["classes"]["duplicate"], data["reconcile"]["read_at"]), (1, "2026-11-05T16:30:00Z"))
+        with self.assertRaises(mc.Refusal) as caught:
+            mc.lease_break(self.root, "2", LABEL, "002", "yes, break strand 001", "10000001", "park", park_yes="yes, park")
+        self.assertIn("duplicate", json.dumps(caught.exception.findings))
+
+    def test_R8_W38_workspaces_records_only_a_workspace_this_build_created(self):
+        self.approve()
+        self.start()
+        ws = ["workspaces", "--strand", "001", "--product", "crm", "--id", SALES_WS, "--name", self.SALES,
+              "--created-in", "001/v0.2"]
+        self.assertIn("no workspace row", words(self.refused(*(ws + self.fence()))))
+        other = self.home / "clients" / "other-client"
+        other.mkdir()
+        sibling = {"schema": "account/1", "guard_index": {"client_workspace_ids": [SALES_WS]}}
+        (other / "account.json").write_bytes(mc.json_text(sibling).encode("utf-8"))
+        self.intent("W2", "--product", "crm")
+        self.record("W2", "--id", SALES_WS)
+        self.verify("W2", {"name": self.SALES, "kind": "open"})
+        found = self.refused(*(ws + self.fence()))
+        self.assertIn(("clients/other-client/account.json", "guard_index.client_workspace_ids"), pairs(found))
+        self.assertIn("not service", words(self.refused("workspaces", "--strand", "001", "--product", "service", "--id",
+                                                        SALES_WS, "--created-in", "001/v0.2", *self.fence())))
+        sibling["guard_index"]["client_workspace_ids"] = ["90100000999"]
+        (other / "account.json").write_bytes(mc.json_text(sibling).encode("utf-8"))
+        self.ok(*(ws + self.fence()))
+        account = self.data("account.json")
+        self.assertEqual(account["client_workspaces"]["crm"]["name"], self.SALES)  # the name is the row's
+
+    def test_R9_W61_a_modifying_row_stays_the_object_it_modifies(self):
+        self.approve()
+        self.start()
+        live_row = {"monday_id": "90300000077", "kind": "board", "workspace": OWN_WS, "name_at_build": "Stock",
+                    "owner_strand": "002", "introduced_in": "002/v0.1", "state": "active",
+                    "constraint": "change-with-own-yes", "constraint_source": "decision 2026-11-01",
+                    "digest": None, "last_verified": "2026-11-01", "dependants": []}
+        self.edit_json("account.json", lambda d: d["live_objects"].update({"002:B7": live_row}))
+        prior = self.put("prior.json", {"id": "90300000077", "name": "Stock"})
+        self.intent("B5", "--workspace", OWN_WS, "--origin", "other-strand-modified", "--prior-state", prior,
+                    "--source-strand", "002", "--live-key", "002:B7")
+        self.assertEqual(self.row("B5")["id"], "90300000077")
+        self.assertIn("whose object is 90300000077", words(self.no("record", "--key", "B5", "--id", "59999999")))
+        self.record("B5")
+        self.assertIn("modifies 90300000077", words(self.no("verify", "--key", "B5", "--result", "match", "--read",
+                                                            self.read_file("B5", {"id": "59999999", "name": "Stock"}))))
+        self.verify("B5", {"id": "90300000077", "name": "Stock", "type": "board", "state": "active",
+                           "workspace_id": OWN_WS})
+        theirs = self.put("prior-b2.json", {"id": "90300000066", "name": "Orders"})
+        self.intent("B2", "--workspace", OWN_WS, "--origin", "pre-existing-modified", "--prior-state", theirs)
+        self.assertIn("whose object is 90300000066", words(self.no("record", "--key", "B2", "--id", "90300000067")))
+        self.record("B2", "--id", "90300000066")
+        self.assertIn("modifies 90300000066", words(self.no("verify", "--key", "B2", "--result", "match", "--read",
+                                                            self.read_file("B2", {"id": "90300000067"}))))
+        self.end()
+        row = self.data("account.json")["live_objects"]["002:B7"]
+        self.assertEqual((row["monday_id"], row["owner_strand"]), ("90300000077", "002"))
+
+    def test_R10_A86_a_timeout_and_an_interrupted_run_are_reconciled_before_any_write(self):
+        self.approve()
+        self.start()
+        self.intent("B2", "--workspace", OWN_WS)
+        self.record("B2", "--timed-out")
+        self.assertIn("no reconcile made", words(self.no("intent", "--key", "B2", "--operation", "create", "--retry")))
+        self.reconcile(boards=[self.board("90300000002", "2026-11-05T14:30:10Z")])
+        self.assertIn("classes B2 adopt", words(self.no("intent", "--key", "B2", "--operation", "create", "--retry")))
+        self.reconcile()
+        self.go("intent", "--key", "B2", "--operation", "create", "--retry")
+        self.record("B2", "--timed-out")
+        self.retake()  # the session is lost; a new run starts with the old one running and B2 attempting
+        self.assertTrue(self.start(cc=False)["recovery_first"])
+        self.assertTrue(self.data()["runs"][-1]["recovery_first"])
+        for argv in (("intent", "--key", "B1.G2", "--operation", "create"), ("intent", "--key", "B2", "--operation",
+                                                                              "create", "--retry"),
+                     ("depart", "--key", "B2", "--what", "w", "--error-code", "E1", "--decision", "later-retry")):
+            self.assertIn("recovery first", words(self.no(*argv)), argv)
+        self.reconcile()
+        self.go("depart", "--key", "B2", "--what", "the create timed out twice", "--error-code", "TIMEOUT", "--decision",
+                "later-retry")
+        self.intent("B1.G2")
+
+    def test_R11_BP136_a_second_workspace_in_a_product_is_refused_before_it_is_created(self):
+        self.approve(rows=TABLE + self.TWO, extra=["--irreversible", "W3"])
+        self.start()
+        found = self.no("intent", "--key", "W3", "--operation", "create", "--product", "core")
+        self.assertIn(("account.json", "client_workspaces.core"), pairs(found))
+        self.copy_home()
+        os.environ["MMB_HOME"] = str(self.home)
+        change = self.fresh_core()
+        account = self.data("account.json")
+        self.assertEqual((self.row("W3")["direction_change"], account["client_workspaces"]["core"]["id"],
+                          account["superseded_workspaces"][0]["direction_change"]), (change, "40000009", change))
+
+    def test_R12_W27_a_later_revision_renames_and_withdraws_the_planned_rows_it_changes(self):
+        self.approve()
+        rows = tuple(("B2", "board", "Purchase orders") if r[0] == "B2" else r for r in TABLE if r[0] != "B5")
+        data = self.ok(*self.approval_argv(self.make_version("v0.2", rows=rows, purpose="proof-of-concept", revision=2)))
+        self.assertEqual(data["delta"]["dropped"], ["B5"])
+        row = self.row("B2")
+        self.assertEqual((row["name"], row["approval_ref"], row["blueprint_ref"]), ("Purchase orders", "v0.2r2", "v0.2r2#B2"))
+        self.assertEqual((self.row("B5")["status"], self.data()["departures"][-1]["decision"]), ("departed",
+                                                                                                "blueprint-revision"))
+        self.start()
+        self.assertIn("departed", words(self.no("intent", "--key", "B5", "--operation", "create", "--workspace", OWN_WS)))
+        self.edit_json(B1J, lambda d: d["objects"]["B2"].update(approval_ref="v0.2r1"))
+        self.assertIn("latest approval", words(self.no("intent", "--key", "B2", "--operation", "create", "--workspace",
+                                                       OWN_WS)))
+        self.edit_json(B1J, lambda d: d["objects"]["B2"].update(approval_ref="v0.2r2"))
+        self.intent("B2", "--workspace", OWN_WS)
+        self.assertEqual(self.check()[1], set())
+
+    def test_R13_A28_a_proof_of_concept_mode_the_record_does_not_allow_is_refused_and_checked(self):
+        self.client()
+        self.approve()
+        self.start()
+        self.edit_json(B1J, lambda d: d["approvals"][-1].update(approval_mode="own-account-poc"))
+        self.assertIn((B1J, "approvals[1].approval_mode"), self.check()[1])
+        self.assertIn("A28", words(self.no("intent", "--key", "F1", "--operation", "create", "--workspace", OWN_WS)))
+
+    def test_R14_SF3_a_recorded_account_mismatch_stops_every_write(self):
+        self.approve()
+        self.start()
+        self.intent("B2", "--workspace", OWN_WS)
+        self.assertTrue(self.go("run heartbeat", "--account-check", "mismatch", "--before", "writes 21 to 40")["stop"])
+        for argv in (("intent", "--key", "D1", "--operation", "create", "--workspace", OWN_WS),
+                     ("record", "--key", "B2", "--id", "90300000002"),
+                     ("verify", "--key", "B9", "--result", "match", "--read", self.read_file(
+                         "B9", {"id": "90300000009", "workspace_id": OWN_WS})),
+                     ("irreversible-yes", "--key", "F1", "--mode", "per-item", "--what", "create the folder")):
+            self.assertIn("another account", words(self.no(*argv)), argv[0])
+        self.assertIn(("(flags)", "--answer-words"), pairs(self.no("run heartbeat", "--account-check", "match", "--before",
+                                                                   "writes 21 to 40")))
+        words_ = "yes, the connector is on the client's account again"
+        self.go("run heartbeat", "--account-check", "match", "--before", "writes 21 to 40", "--answer-words", words_)
+        self.assertEqual(self.data()["runs"][-1]["account_checks"][-1]["answer_words"], words_)
+        self.record("B2", "--id", "90300000002")
+
+    def test_R15_K214_a_yes_belongs_to_its_run_whatever_the_clock_does(self):
+        self.client()
+        self.approve()
+        self.start()
+        self.now = CLOCK + timedelta(minutes=5)
+        self.yes("F1")
+        self.end()
+        self.retake()
+        self.now = CLOCK + timedelta(minutes=3)  # a time-sync step puts the clock two minutes back
+        self.start()
+        self.assertIn("in this run", words(self.no("intent", "--key", "F1", "--operation", "create", "--workspace", OWN_WS)))
+
+    def test_R16_W39_a_superseded_workspace_is_not_taken_up_again(self):
+        self.fresh_core()
+        targets = lambda d: d["guard_index"]["build_targets_by_strand"]["001"]["workspace_ids"]  # noqa: E731
+        self.edit_json("account.json", lambda d: targets(d).remove(OWN_WS))
+        self.assertIn("superseded", words(self.refused("workspaces", "--strand", "001", "--use", OWN_WS, *self.fence())))
+        self.edit_json("account.json", lambda d: targets(d).append(OWN_WS))
+        self.ok("workspaces", "--strand", "001", "--use", OWN_WS, *self.fence())  # the strand that builds there
+
+    def test_R18_W49_only_the_lease_holders_strand_runs_the_change_check_while_a_build_is_live(self):
+        found = self.refused("change-check", "--strand", "002", "--from", self.put("cc.json", {
+            "ring": "release_candidate 2026-10", "versions_seen": ["2026-10"], "release_notes_since": "not-read",
+            "roster_diff": {"added": [], "removed": [], "renamed": []}, "schema_diff": [],
+            "result": "no change affecting this build", "approved_by_user": None}))
+        self.assertIn((mc.LOCK_REL, "strand"), pairs(found))
+        self.change_check()  # the holder's own strand
+
+    def test_R19_W33_a_first_write_that_fails_says_what_the_fence_moved(self):
+        self.approve()
+        self.start()
+        self.now = CLOCK + timedelta(minutes=1)
+        with self.failing("build.json"):
+            code, data = self.ledger(*self.argv("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS))
+        self.assertEqual(code, 3)
+        self.assertNotIn("nothing was written", data["error"]["problem"])
+        self.assertIn("moved the lease heartbeat", data["error"]["problem"])
+
+    def test_R20_an_approval_waits_for_the_run_any_failure_after_a_write_is_reported_and_a_bad_heartbeat_refuses(self):
+        self.approve()
+        self.start()
+        self.sales()
+        self.now = CLOCK + timedelta(minutes=1)
+        real = mc.write_file
+
+        def write(path, data, root, backup=True, backup_dir=None):
+            if Path(path).name == "live-map.md":
+                raise ValueError("a planted failure of another kind")
+            return real(path, data, root, backup, backup_dir)
+        with mock.patch.object(mc, "write_file", write):
+            code, data = self.ledger(*self.argv("run end", "--calls-used", "4"))
+        self.assertEqual((code, data["error"]["field"], data["committed"]["written"]), (3, "committed", ["account.json"]))
+        sha = self.make_version("v0.2", purpose="proof-of-concept", revision=2)
+        self.assertIn("between runs", words(self.refused(*self.approval_argv(sha))))
+        status = dict(self.lease(), heartbeat_at=None, fresh=None)
+        with mock.patch.object(mc, "lease_status", lambda root: status):
+            found = self.refused("reconcile", "--strand", "001", "--classify-only", "--inventory", self.inventory())
+        self.assertIn("does not read", words(found))
 
 
 if __name__ == "__main__":
