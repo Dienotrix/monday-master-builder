@@ -83,6 +83,10 @@ ID = re.compile(r"[1-9][0-9]*")  # R4: a monday id has one spelling, digits with
 LEADING_ZERO = re.compile(r"0[0-9]*")
 REF_FORM = re.compile(r"(board|workspace|doc|view|column):([1-9][0-9]*)")
 STRICTNESS = {"do-not-change": 2, "change-with-own-yes": 1, "free": 0}
+# R17: a client quote's location (a call or input file, then a location of its grammar), and a log entry's header line
+QUOTE_AT = re.compile(r"(?:calls|inputs)/[^\s@]+\.md(?:@\d{2}:\d{2}:\d{2}|\s+(?:cues? \d+(?:-\d+)?|L\d+(?:-\d+)?|"
+                      r"paragraph \d+|§\d+(?:\.\d+)*|p\.\s?\d+))")
+LOG_AT = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} · (?:\d{3}|-) · [a-z-]+ · \S")
 MAP_HEAD = "| key | monday id | kind | workspace | built by | state | constraint | source | dependants | last verified |"
 MAP_SEP = "|---|---|---|---|---|---|---|---|---|---|"
 MAP_COLUMNS = ("monday id", "kind", "workspace", "built by", "state", "constraint", "source", "dependants",
@@ -268,12 +272,17 @@ def normalise_prompt(text):
 
 # The frozen blueprint: the element-key table and the prompt blocks (U1, W42).
 
-def element_table(text):
-    """(rows [(key, kind, name)], problems [text]) of the `## Element keys` table; rows None when there is none."""
+def unquote(cell):
+    """A cell with one pair of backticks around it stripped."""
+    return cell[1:-1] if len(cell) > 1 and cell.startswith("`") and cell.endswith("`") else cell
+
+
+def table_cells(text):
+    """(header, [cells per row], problems) of the `## Element keys` table; header None when there is no heading."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     start = next((n for n, line in enumerate(lines) if line.rstrip() == "## Element keys"), None)
     if start is None:
-        return None, []
+        return None, [], []
     rows, problems, header, n = [], [], None, start + 1
     while n < len(lines) and not lines[n].strip():
         n += 1
@@ -284,17 +293,25 @@ def element_table(text):
             header = [cell.lower() for cell in cells]
             if header[:3] != ["key", "kind", "name"]:
                 problems.append("the header reads %s" % " | ".join(header))
-                return [], problems
+                return header, [], problems
             continue
         if cells and all(cell and set(cell) <= set("-: ") for cell in cells):
             continue
-        cells += [""] * (3 - len(cells))
-        key, kind, name = cells[0], cells[1], cells[2]
-        if len(key) > 1 and key.startswith("`") and key.endswith("`"):
-            key = key[1:-1]
-        rows.append((key, kind, name))
+        rows.append(cells)
     if header is None:
         problems.append("no table follows the heading")
+    return header or [], rows, problems
+
+
+def element_table(text):
+    """(rows [(key, kind, name)], problems [text]) of the `## Element keys` table; rows None when there is none."""
+    header, cells_rows, problems = table_cells(text)
+    if header is None:
+        return None, []
+    rows = []
+    for cells in cells_rows:
+        cells = cells + [""] * (3 - len(cells))
+        rows.append((unquote(cells[0]), cells[1], cells[2]))
     seen = set()
     for key, kind, name in rows:
         if key in seen:
@@ -307,6 +324,33 @@ def element_table(text):
         if not name:
             problems.append("%s has no name" % key)
     return rows, problems
+
+
+def element_recipients(text):
+    """({key: [recipient]}, problems) of the table's `notifies` column (R20 (a)); None when the column is absent.
+
+    A cell is empty for nobody, `user` for the user alone, or recipients in W45's forms (a user id, team:<id>,
+    email:<address>), several separated by commas, `user` among them if the user is one."""
+    header, cells_rows, problems = table_cells(text)
+    if header is None or problems or "notifies" not in header[3:]:
+        return None, []
+    column, found, problems = header.index("notifies", 3), {}, []
+    for cells in cells_rows:
+        key = unquote(cells[0]) if cells else ""
+        cell = cells[column] if column < len(cells) else ""
+        parts = [unquote(part.strip()) for part in cell.split(",")] if cell.strip() else []
+        recipients = []
+        for part in parts:
+            if part != "user" and not RECIPIENT.fullmatch(part):
+                problems.append("%s notifies %r, which is not user, a user id, team:<id> or email:<address>" % (key, part))
+            elif part in recipients:
+                problems.append("%s names the recipient %s twice" % (key, part))
+            else:
+                recipients.append(part)
+        if recipients and len(cells) > 1 and cells[1] == "ui_step":
+            problems.append("%s is a UI step, which notifies nobody" % key)
+        found[key] = recipients
+    return found, problems
 
 
 def prompt_block(text, key):
@@ -810,6 +854,7 @@ APPROVAL_FIELDS = (("version", lambda v: is_str(v) and bool(re.fullmatch(r"v\d+\
                        isinstance(t, dict) and is_str(t.get("key")) and t.get("constraint") in CONSTRAINTS for t in v)))
 APPROVAL_OPTIONAL = (("approval_mode", lambda v: v in APPROVAL_MODES), ("workflows_listed", str_list),
                      ("agents_listed", str_list), ("sequences_listed", str_list),
+                     ("notifies_approved", lambda v: isinstance(v, dict) and all(str_list(r) for r in v.values())),
                      ("rests_on", lambda v: v is None or (isinstance(v, dict) and all(
                          k in v for k in ("clearance", "purpose", "assumptions", "assumed_terms", "forks_on_leaning")))))
 RUN_FIELDS = (("id", lambda v: is_str(v) and bool(re.fullmatch(r"run-\d{4}-\d{2}-\d{2}-\d+", v))), ("version", is_str),
@@ -839,7 +884,7 @@ ROW_OPTIONAL = (("url", opt_str), ("item_ids", str_list), ("product", lambda v: 
                 ("prompt_ref", opt_str), ("version_id_at_build", opt_str), ("live_key", opt_str),
                 ("read_values", lambda v: isinstance(v, dict)))
 LIVE_CHECKS = (("monday_id", is_str), ("kind", lambda v: v in TYPES), ("name_at_build", lambda v: isinstance(v, str)),
-               ("owner_strand", lambda v: isinstance(v, str) and bool(re.fullmatch(r"\d{3}", v))),
+               ("owner_strand", lambda v: v is None or (isinstance(v, str) and bool(re.fullmatch(r"\d{3}", v)))),
                ("introduced_in", lambda v: isinstance(v, str) and bool(re.fullmatch(r"\d{3}/v\d+\.\d+|client|native", v))),
                ("state", lambda v: v in STATES), ("constraint", lambda v: v in CONSTRAINTS),
                ("constraint_source", is_str), ("digest", opt_str), ("last_verified", opt_str),
@@ -926,6 +971,10 @@ class Checker:
                 if not test(value):
                     self.block(name, "live_objects.%s.%s" % (key, field), "%s is not an allowed value" % json.dumps(value),
                                "the live_objects field as record-map.md gives it")
+            if isinstance(row, dict) and row.get("owner_strand") is None and not client_built(row):
+                self.block(name, "live_objects.%s.owner_strand" % key, "a row built by %s with no owning strand" % (
+                    row.get("introduced_in")), "the short id of the strand that built it; only a client or native row "
+                    "has none (R17)")
         for where in numeric_ids(account):
             self.block(name, where, "an id stored as a number", "every monday id a string")
         live = account.get("live_objects") if isinstance(account.get("live_objects"), dict) else {}
@@ -1271,12 +1320,26 @@ def cmd_live_map(root, args):
         "live/live-map.md": mc.sha256_file(root / "live" / "live-map.md")} if step else {}}
 
 
+def client_built(row):
+    """True for a live row of an object the client or the platform made (`built by` client or native): no strand owns
+    it (R17)."""
+    return (row or {}).get("introduced_in") in ("client", "native")
+
+
+def stated_source(source):
+    """True when a source names a client quote with its location (a call or input file and a location of its
+    grammar) or a user decision with its log reference (the entry's header line), as the live map's source rules
+    give (R17)."""
+    return bool(QUOTE_AT.search(source) or LOG_AT.search(source))
+
+
 def cmd_live_map_set(root, args):
     led = Ledger(root)
     refuse(*led.newer())
     live = led.account.get("live_objects") or {}
     row = live.get(args.key)
     source = (args.source or "").strip()
+    unowned = row is not None and client_built(row)
     refuse(None if row is not None else ("account.json", "live_objects." + str(args.key), "no live-map row %s" % args.key,
                                          "a qualified key of a row the live map holds"),
            None if args.constraint in CONSTRAINTS else ("account.json", "live_objects.%s.constraint" % args.key,
@@ -1284,7 +1347,13 @@ def cmd_live_map_set(root, args):
            None if source and source != "pending strand close" and "\n" not in source else (
                "account.json", "live_objects.%s.constraint_source" % args.key, "the source is empty or the interim value",
                "a client quote with its call location, or a user decision with its log reference"),
-           None if row is None or row.get("owner_strand") == args.strand else (
+           None if not unowned or stated_source(source) else (
+               "(flags)", "--source", "%s is built by %s, and %r names neither a client quote with its location nor a "
+               "user decision with its log reference" % (args.key, row.get("introduced_in"), source),
+               "for a client or native row, which no strand owns: the client's words with their location "
+               "(calls/<file>.md@HH:MM:SS, or an inputs/<file>.md location), or the user's decision with the header "
+               "line of its log entry (YYYY-MM-DD HH:MM · <strand> · <type> · ...), from any strand's session (R17)"),
+           None if row is None or unowned or row.get("owner_strand") == args.strand else (
                "account.json", "live_objects.%s.owner_strand" % args.key, "the row was built by strand %s, not %s" % (
                    row.get("owner_strand"), args.strand), "a row this strand built: a strand edits only its own rows"))
     row["constraint"], row["constraint_source"] = args.constraint, source
@@ -1582,6 +1651,17 @@ def cmd_approval(root, args):
         rows = []
     reasons += [(frel, "## Element keys", problem, "one row per element: a unique key of its kind's shape, a kind, a "
                  "name") for problem in problems]
+    recipients = {}
+    if rows and not problems:  # R20 (a): the approved revision records who each element notifies
+        recipients, wrong = element_recipients(text)
+        if recipients is None:
+            reasons.append((frel, "## Element keys", "the table has no notifies column, so the approval could not "
+                            "record who each element notifies", "a notifies column after key | kind | name: empty "
+                            "for nobody, user for the user alone, or the recipients (a user id, team:<id>, "
+                            "email:<address>) separated by commas"))
+            recipients = {}
+        reasons += [(frel, "## Element keys", problem, "each recipient once, as user, a user id, team:<id> or "
+                     "email:<address>, separated by commas") for problem in wrong]
     table = {key: (kind, name) for key, kind, name in rows}
     irreversible = list(args.irreversible or [])
     for key in irreversible:
@@ -1630,6 +1710,7 @@ def cmd_approval(root, args):
              "irreversible_listed": [key for key in table if key in irreversible]}
     for kind, field in LISTS:
         entry[field] = [key for key, (k, _) in table.items() if k == kind]
+    entry["notifies_approved"] = {key: list(recipients.get(key) or []) for key, (k, _) in table.items() if k != "ui_step"}
     entry["rests_on"] = {"clearance": led.strand.get("clearance"), "purpose": purpose, "assumptions": counts["AS"],
                          "assumed_terms": counts["AT"], "forks_on_leaning": counts["FK"]}
     entry["live_objects_touched"] = touched
@@ -1890,7 +1971,8 @@ def live_rows(led):
             strictest = max(same, key=lambda k: STRICTNESS.get(live[k].get("constraint"), 2))
             constraint = live[strictest].get("constraint")
             source = "as %s: %s" % (strictest, live[strictest].get("constraint_source"))
-        live[qkey] = full_live(dict(fresh, name_at_build=row.get("name"), owner_strand=led.short, introduced_in=built,
+        owner = None if built in ("client", "native") else led.short  # R17: no strand owns a client or native row
+        live[qkey] = full_live(dict(fresh, name_at_build=row.get("name"), owner_strand=owner, introduced_in=built,
                                     constraint=constraint, constraint_source=source))
         created.append(qkey)
     for key, row in sorted(led.objects.items()):
@@ -1961,6 +2043,22 @@ def cmd_run_end(root, args):
 
 
 # intent (W07, W10, W41, W47, W48, W50).
+
+def counts_as_user(led, recipient):
+    """Who counts as the user, for the one yes and the recipient rules (W45, R20 (a)): the bound user alone, read
+    from account.json, or the blueprint's word `user` for that same person. This is the one place that decides it,
+    so that a later decision of the user's can widen it."""
+    return str(recipient) in ("user", led.bound_user)
+
+
+def approved_recipients(led, entry, key):
+    """The recipients the approval entry records for a key, `user` read as the bound user (R20 (a)); None when the
+    entry was written before the approval recorded recipients."""
+    recorded = entry.get("notifies_approved")
+    if not isinstance(recorded, dict):
+        return None
+    return sorted({led.bound_user if r == "user" else str(r) for r in recorded.get(key) or []})
+
 
 def approval_class(row, op, origin, ir, led):
     kind = row.get("type")
@@ -2081,6 +2179,7 @@ def cmd_intent(root, args):
     # approval and the frozen table (W07, W43, W47); the mode is the version being built's (R1, R13)
     ref = args.approval_ref or row.get("approval_ref")
     entry = led.approval(ref) if ref else None
+    in_table = False
     if not ref:
         reasons.append((rel, field + ".approval_ref", "the row has no approval_ref", "the vNrM of the approval that "
                         "planned it, given as --approval-ref or kept from the planned row"))
@@ -2112,6 +2211,7 @@ def cmd_intent(root, args):
             elif op == "create" and (args.name or row.get("name")) != table[key][1]:
                 reasons.append((frel, "## Element keys", "the name %r is not the approved %r" % (
                     args.name or row.get("name"), table[key][1]), "the planned name"))
+            in_table = rows is not None and key in table
     if current is None:
         reasons.append((led.build_rel, "approvals", "no approval of %s, the revision of the version being built" %
                         current_ref, "ledger.py approval of the revision version.md names"))
@@ -2316,7 +2416,20 @@ def cmd_intent(root, args):
                                                      "email:<address>") for n in notifies]
     if kind == "sequence" and not notifies:
         reasons.append((rel, field + ".notifies", "a sequence with no recipients", "every recipient, shown at approval"))
-    real = [n for n in notifies if n != led.bound_user]
+    # R20 (a): the recipients are the ones the approved revision records for the key, as a set
+    approved = approved_recipients(led, entry, key) if entry is not None and in_table else None
+    if entry is not None and in_table and approved is None:
+        reasons.append((led.build_rel, "approvals[].notifies_approved", "%s was approved before the approval recorded "
+                        "who each element notifies, so the recipients of %s cannot be held to it" % (ref, key),
+                        "a revision approved with the notifies column of the ## Element keys table"))
+    elif entry is not None and kind == "item_batch":
+        approved = []  # an item batch has no row in the table, so no recipient was approved for it
+    if approved is not None and sorted(set(notifies)) != approved:
+        reasons.append((rel, field + ".notifies", "%s given, while %s approves %s for %s" % (
+            ", ".join(sorted(set(notifies))) or "no recipient", ref, ", ".join(approved) or "no recipient", key),
+            "--notifies with exactly the recipients the approved revision records for %s, each once%s" % (
+                key, "" if approved else ", which is none")))
+    real = [n for n in notifies if not counts_as_user(led, n)]
     if kind == "item_batch" and not args.sample_data:
         reasons.append(("(flags)", "--sample-data", "a seed batch without the flag", "--sample-data: a seed batch is "
                         "sample data"))
@@ -2368,6 +2481,8 @@ def cmd_intent(root, args):
                         "ledger.py change-check --strand %s today, with no change affecting this build or the user's yes"
                         % led.short))
     # the class and its yes (W10, W45, W48); a yes is this run's, for this operation, and used once (R2, R15)
+    if real:  # R20 (a), W45, A28: a recipient other than the user takes the row out of the card, in either account
+        mode = "per-list"
     cls = approval_class(dict(row, parent_key=parent_key), op, origin, args.ir, led)
     need = yes_needed(cls, mode, str(key), real)
     run = led.run(args.run_id) or {}

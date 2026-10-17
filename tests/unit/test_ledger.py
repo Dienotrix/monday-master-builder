@@ -45,6 +45,7 @@ TABLE = (("W1", "workspace", "Larkmoor Joinery – Ops"), ("B1", "board", "Jobs"
          ("U1", "ui_step", "Kanban view on Jobs"))
 PROMPTS = {"AG1": "Read each new job and assign it to the workshop lead.\nSay why in one line.",
            "B1.AI1": "Summarise the job in one line.", "VB1": "A wall of the open jobs, by stage."}
+NOTIFIES = {"SQ1": "user"}  # R20 (a): the recipients a revision approves, by key; every other row notifies nobody
 IRREVERSIBLE = ("W1", "W2", "F1", "B1", "B2.SUB", "WF1.PUB", "AG1.ACT", "VB1.PUB", "SQ1.ACT", "WH1")
 AGENT = {"plan": PROMPTS["AG1"], "state": "INACTIVE", "version_id": "vid-000001",
          "triggers": [{"name": "When agent is mentioned"}, {"name": "When agent is assigned"}], "knowledge": []}
@@ -84,11 +85,18 @@ def load(path, name):
     return module
 
 
-def blueprint(rows=TABLE, prompts=None, heading="## Element keys"):
+def blueprint(rows=TABLE, prompts=None, heading="## Element keys", notifies=True):
+    """A frozen revision; a row of three cells takes its recipients from NOTIFIES, a fourth cell gives them (R20 (a)),
+    and `notifies=False` leaves the column out."""
     prompts = PROMPTS if prompts is None else prompts
+    if notifies:
+        head, sep = "| key | kind | name | notifies |", "|---|---|---|---|"
+        body = ["| %s | %s | %s | %s |" % (tuple(row) + (NOTIFIES.get(row[0], ""),))[:4] for row in rows]
+    else:
+        head, sep, body = "| key | kind | name |", "|---|---|---|", ["| %s | %s | %s |" % tuple(row[:3]) for row in rows]
     lines = ["---", 'schema: "blueprint/1"', 'strand: "001"', 'revision: "1"', 'sample_rows: "none"',
              'updated: "2026-11-04T10:00"', "---", "Internal: never client-facing", "", "# Blueprint: Job tracking, v0.2",
-             "", heading, "", "| key | kind | name |", "|---|---|---|"] + ["| %s | %s | %s |" % row for row in rows]
+             "", heading, "", head, sep] + body
     lines += ["", "## Prompts", ""]
     for key, text in prompts.items():
         lines += ["### Prompt %s" % key, "", "```text", text, "```", ""]
@@ -224,10 +232,10 @@ class Base(unittest.TestCase):
 
     # The variants and the build steps.
 
-    def make_v2(self, rows=TABLE, prompts=None, purpose="proof-of-concept", heading="## Element keys"):
+    def make_v2(self, rows=TABLE, prompts=None, purpose="proof-of-concept", heading="## Element keys", notifies=True):
         vdir = self.root / V2
         vdir.mkdir(parents=True, exist_ok=True)
-        (vdir / "blueprint-r1.md").write_bytes(blueprint(rows, prompts, heading).encode("utf-8"))
+        (vdir / "blueprint-r1.md").write_bytes(blueprint(rows, prompts, heading, notifies).encode("utf-8"))
         sha = mc.sha256_file(vdir / "blueprint-r1.md")
         (vdir / "version.md").write_bytes(version_md(sha, purpose).encode("utf-8"))
         self.edit_fm(S1 + "/STRAND.md", version="v0.2", version_state="approved")
@@ -951,7 +959,7 @@ class ApprovalTest(Base):
         self.assertEqual(list(entry), ["version", "qualified_version", "revision", "frozen_file", "sha256", "approved_at",
                                        "approved_words", "approved_in_session", "approval_mode", "element_count",
                                        "irreversible_listed", "automations_listed", "workflows_listed", "agents_listed",
-                                       "sequences_listed", "rests_on", "live_objects_touched"])
+                                       "sequences_listed", "notifies_approved", "rests_on", "live_objects_touched"])
         self.assertEqual(entry["rests_on"], {"clearance": "cleared to build", "purpose": "proof-of-concept",
                                              "assumptions": 1, "assumed_terms": 1, "forks_on_leaning": 1})
         self.assertIn("VB1.PUB", entry["irreversible_listed"])
@@ -1337,7 +1345,8 @@ class ModesTest(Base):
 
     def test_K73_K74_K75_K76_K77_K78_K79_K81_K213_one_revision_on_both_build_targets(self):
         """Windows run and macOS run: the same revision on an own-account and on a client-account record."""
-        self.approve()
+        rows = tuple(row + ("user",) if row[0] == "A1" else row for row in TABLE)  # R20 (a): A1 notifies the user
+        self.approve(rows=rows)
         self.start()
         self.assertIn("grouped", words(self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1",
                                                "--notifies", "90600000001")))
@@ -1359,12 +1368,13 @@ class ModesTest(Base):
         self.copy_home()
         os.environ["MMB_HOME"] = str(self.home)
         self.client()
-        self.approve()
+        self.approve(rows=rows)
         self.start()
-        self.assertIn("grouped", words(self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1")))
+        self.assertIn("grouped", words(self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1",
+                                               "--notifies", "20000001")))
         self.assertIn("per-item", words(self.no("intent", "--key", "W2", "--operation", "create", "--product", "crm")))
         self.yes("A1", "grouped")
-        self.assertEqual(self.intent("A1", "--parent-key", "B1")["yes"], "grouped")
+        self.assertEqual(self.intent("A1", "--parent-key", "B1", "--notifies", "20000001")["yes"], "grouped")
         for key in ("W2", "WH1"):  # the user said yes to the first and the third, not to F1
             self.yes(key)
         self.assertEqual([e["key"] for e in self.data()["irreversible_yes"] if e["mode"] == "per-item"], ["W2", "WH1"])
@@ -1554,10 +1564,9 @@ class RowsTest(Base):
 
     def test_K166_K167_K198_sequences_and_webhooks(self):
         self.assertIn("recipients", words(self.no("intent", "--key", "SQ1", "--operation", "create", "--scope", OWN_WS)))
-        self.assertIn("grouped", words(self.no("intent", "--key", "SQ1", "--operation", "create", "--scope", OWN_WS,
-                                               "--notifies", "email:orders@example.com")))
-        self.yes("SQ1", "grouped")
-        self.intent("SQ1", "--scope", OWN_WS, "--notifies", "email:orders@example.com")
+        self.assertIn("approves 20000001", words(self.no("intent", "--key", "SQ1", "--operation", "create", "--scope",
+                                                         OWN_WS, "--notifies", "email:orders@example.com")))  # R20 (a)
+        self.intent("SQ1", "--scope", OWN_WS, "--notifies", "20000001")
         self.assertIn("planned", words(self.no("intent", "--key", "WH9", "--operation", "create", "--scope", OWN_WS)))
         self.assertIn("per-item", words(self.no("intent", "--key", "WH1", "--operation", "create", "--scope", OWN_WS)))
         self.yes("WH1")
@@ -2193,6 +2202,126 @@ class ReviewFixTest(Base):
         with mock.patch.object(mc, "lease_status", lambda root: status):
             found = self.refused("reconcile", "--strand", "001", "--classify-only", "--inventory", self.inventory())
         self.assertIn("does not read", words(found))
+
+
+class SettledTest(Base):
+    """The two review findings the user settled on 2026-10-17 (DECISIONS.md, "Settled with the user"): R17, no strand
+    owns a client or native row of the live map (test_U17_*), and R20 (a), the approved revision records who each
+    element notifies (test_U20_*)."""
+
+    DECISION = "2026-11-05 14:40 · 001 · decision · v0.2 · supplier list"
+    QUOTE = '"Leave the supplier list as it is." calls/2026-10-20-discovery.md@00:12:10'
+
+    def client_board(self):
+        """Strand 001 references the client's board B9 and closes its run: run end writes 001:B9, built by client."""
+        self.approve()
+        self.start()
+        self.verify("B9", {"id": "50000099", "workspace_id": OWN_WS, "name": "Supplier list"})
+        self.end()
+        return self.data("account.json")["live_objects"]["001:B9"]
+
+    def with_notifies(self, **recipients):
+        """TABLE with the notifies cells given by key, every other row as NOTIFIES gives it."""
+        return tuple(row + (recipients[row[0]],) if row[0] in recipients else row for row in TABLE)
+
+    def test_U17_P14_a_strand_cannot_set_a_client_row_without_a_client_quote_or_a_user_decision(self):
+        row = self.client_board()
+        self.assertEqual((row["introduced_in"], row["owner_strand"], row["constraint"], row["constraint_source"]),
+                         ("client", None, "change-with-own-yes", "pending strand close"))
+        for source in ("decision 2026-11-05", "the client is relaxed about it", "calls/2026-10-20-discovery.md"):
+            found = self.refused("live-map", "set", "--strand", "001", "--key", "001:B9", "--constraint", "free",
+                                 "--source", source)
+            self.assertIn(("(flags)", "--source"), pairs(found), source)
+            self.assertIn("no strand owns", words(found))
+        self.assertEqual(self.check()[1], set())
+
+    def test_U17_a_client_row_takes_a_user_decision_or_a_client_quote_from_any_strand(self):
+        self.client_board()
+        data = self.ok("live-map", "set", "--strand", "002", "--key", "001:B9", "--constraint", "free",
+                       "--source", self.DECISION)
+        self.assertEqual((data["constraint"], data["source"]), ("free", self.DECISION))
+        for strand, source in (("002", "inputs/2026-10-02-supplier-sheet.md §2.1"), ("001", self.QUOTE)):
+            self.ok("live-map", "set", "--strand", strand, "--key", "001:B9", "--constraint", "do-not-change",
+                    "--source", source)
+        row = self.data("account.json")["live_objects"]["001:B9"]
+        self.assertEqual((row["constraint"], row["constraint_source"], row["owner_strand"]),
+                         ("do-not-change", self.QUOTE, None))
+        self.assertEqual(self.check()[1], set())
+
+    def test_U17_a_row_a_strand_built_keeps_the_owner_rule(self):
+        self.approve()
+        self.start()
+        self.sales()
+        self.end()
+        self.assertEqual(self.data("account.json")["live_objects"]["001:W2"]["owner_strand"], "001")
+        found = self.refused("live-map", "set", "--strand", "002", "--key", "001:W2", "--constraint", "free",
+                             "--source", self.DECISION)
+        self.assertIn(("account.json", "live_objects.001:W2.owner_strand"), pairs(found))
+        self.ok("live-map", "set", "--strand", "001", "--key", "001:W2", "--constraint", "free", "--source",
+                "decision 2026-11-05 14:40")
+        self.edit_json("account.json", lambda d: d["live_objects"]["001:W2"].update(owner_strand=None))
+        self.assertIn(("account.json", "live_objects.001:W2.owner_strand"), self.check()[1])
+
+    def test_U20_matching_recipients_pass_and_the_approval_records_them(self):
+        data = self.approve(rows=self.with_notifies(A1="user", B2="`team:30000001`"))
+        recorded = data["approval"]["notifies_approved"]
+        self.assertEqual((recorded["A1"], recorded["SQ1"], recorded["B2"], recorded["B1"]),
+                         (["user"], ["user"], ["team:30000001"], []))
+        self.assertNotIn("U1", recorded)
+        self.assertEqual(self.data()["approvals"][-1]["notifies_approved"], recorded)
+        self.start()
+        found = self.intent("A1", "--parent-key", "B1", "--notifies", "20000001")
+        self.assertEqual((found["yes"], found["approval_mode"]), ("card", "own-account-poc"))
+        self.assertEqual(self.row("A1")["notifies"], ["20000001"])
+        self.intent("SQ1", "--scope", OWN_WS, "--notifies", "20000001")
+        self.assertEqual(self.check()[1], set())
+
+    def test_U20_a_missing_notifies_is_refused_where_the_revision_approves_recipients(self):
+        self.approve(rows=self.with_notifies(A1="user"))
+        self.start()
+        found = self.no("intent", "--key", "A1", "--operation", "create", "--parent-key", "B1")
+        self.assertIn((B1J, "objects.A1.notifies"), pairs(found))
+        self.assertIn("no recipient given, while v0.2r1 approves 20000001", words(found))
+        self.assertIn((B1J, "objects.SQ1.notifies"), pairs(self.no("intent", "--key", "SQ1", "--operation", "create",
+                                                                   "--scope", OWN_WS)))
+
+    def test_U20_an_extra_recipient_is_refused(self):
+        self.approve(rows=self.with_notifies(A1="user"))
+        self.start()
+        for key, argv in (("A1", ["--parent-key", "B1", "--notifies", "20000001", "--notifies", "90600000001"]),
+                          ("SQ1", ["--scope", OWN_WS, "--notifies", "20000001", "--notifies", "email:orders@example.com"]),
+                          ("B2", ["--workspace", OWN_WS, "--notifies", "20000001"])):
+            found = self.no("intent", "--key", key, "--operation", "create", *argv)
+            self.assertIn((B1J, "objects.%s.notifies" % key), pairs(found), key)
+        self.intent("B2", "--workspace", OWN_WS)  # approved for nobody, given nobody
+
+    def test_U20_a_recipient_other_than_the_user_needs_the_lists_own_yes_on_a_proof_of_concept(self):
+        self.approve(rows=self.with_notifies(A1="user, 90600000001"))
+        self.start()
+        argv = ["--parent-key", "B1", "--notifies", "90600000001", "--notifies", "20000001"]
+        found = self.no("intent", "--key", "A1", "--operation", "create", *argv)
+        self.assertEqual(pairs(found), {(B1J, "irreversible_yes")})
+        self.assertIn("needs its own grouped yes", words(found))
+        self.assertIn("mode per-list, it notifies 90600000001", words(found))
+        self.yes("A1", "grouped")
+        data = self.intent("A1", *argv)
+        self.assertEqual((data["class"], data["yes"], data["approval_mode"]), ("list", "grouped", "per-list"))
+        self.assertEqual([e["mode"] for e in self.data()["irreversible_yes"] if e["key"] == "A1"], ["grouped"])
+
+    def test_U20_a_table_without_the_notifies_column_is_refused_and_an_older_approval_holds_nothing(self):
+        found = self.refused(*self.approval_argv(self.make_v2(notifies=False)))
+        self.assertIn((V2 + "/blueprint-r1.md", "## Element keys"), pairs(found))
+        self.assertIn("no notifies column", words(found))
+        for cell, expect in (("someone", "is not user"), ("user, user", "twice"), ("team:x", "is not user")):
+            found = self.refused(*self.approval_argv(self.make_v2(rows=self.with_notifies(A1=cell))))
+            self.assertIn(expect, words(found), cell)
+        found = self.refused(*self.approval_argv(self.make_v2(rows=self.with_notifies(U1="user"))))
+        self.assertIn("notifies nobody", words(found))
+        self.approve()
+        self.start()
+        self.edit_json(B1J, lambda d: d["approvals"][-1].pop("notifies_approved"))
+        found = self.no("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS)
+        self.assertIn((B1J, "approvals[].notifies_approved"), pairs(found))
 
 
 if __name__ == "__main__":
