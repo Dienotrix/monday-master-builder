@@ -1,0 +1,29 @@
+{
+  "schema": "settings/1",
+  "created": "2026-09-01",
+  "plugin_version": "0.1.0",
+  "firm": {
+    "name": "Thymbel Advisory",
+    "renderings": [
+      "Thymbel",
+      "Thymbel Advisory",
+      "thymbeladvisory.example"
+    ]
+  },
+  "default_build_account": {
+    "slug": "quarry-lane-build",
+    "id": "52806314"
+  },
+  "never_show_workspaces": [
+    {
+      "id": "60417283",
+      "name": "Pipeline Hub Internal"
+    },
+    {
+      "id": "60417291",
+      "name": "Rate Card Vault"
+    }
+  ],
+  "archive": "github",
+  "github_account": "quarry-lane-ops"
+}

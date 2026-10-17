@@ -367,6 +367,55 @@ The vocabulary of the two ledger files, account.json and a strand's build.json, 
 
 The approval class of a row is derived, never stored, from its type, operation and origin by one table embedded in ledger.py: a create of an automation, workflow, agent or sequence is a list class; a create of a workspace, folder or subitems companion, a connect on a project, a convert on a board, a column on a board the strand did not create and every row that modifies a pre-existing object is irreversible; a publication or activation row is the publication class; a create of a webhook is the webhook class; an archive is the removed class; every other create and every pre-existing-referenced row is the card class. The row's irreversible flag is true for every class but the card class. A delete is refused for every kind.
 
+## Pinned: leak
+
+The vocabulary and the record shapes that scripts/leak_lint.py reads and reports. Every backticked token in this section, and only these, is embedded between the pinned markers of scripts/leak_lint.py, and tools/lint_plugin.py asserts the two agree; until leak_lint.py exists the lint reports the pair as not yet present. The rules are described in ARCHITECTURE 9.6 and the WP4 decisions; this section pins the words and the shapes.
+
+| Field | Values |
+|---|---|
+| evidence markers, all nine blocked in drafts and in every payload | `[Q]`, `[Q?]`, `[Q/side]`, `[Q/recon]`, `[Q/doc]`, `[X]`, `[E]`, `[I]`, `[A]` |
+| payload kind | `workspace`, `folder`, `board`, `group`, `column`, `view`, `form`, `subitems`, `doc`, `dashboard`, `widget`, `automation`, `portfolio`, `project`, `workflow`, `agent`, `ai_column`, `vibe_app`, `sequence`, `webhook`, `item_batch`, `publication`, `activation`, `generic` |
+| field family | `name`, `description`, `label`, `seed`, `markdown`, `request_text`, `role`, `role_description`, `goal`, `plan`, `user_prompt`, `knowledge_name`, `prompt`, `app_name`, `step_text`, `recipient`, `url` |
+| block marks | `<!-- client-safe:start -->`, `<!-- client-safe:end -->`, `<!-- glossary:start -->`, `<!-- glossary:end -->` |
+| headings the lint reads | `## Conflicts`, `## Exclusions`, `## Allowlist` |
+| row keys | `kind`, `added`, `by`, `source`, `ok`, `date`, `class` |
+| exclusion row kind | `name`, `term`, `figure` |
+| index | `clients-index/1`, `schema`, `hash`, `normalisation`, `entries`, `updated`, `names`, `phonetic`, `terms`, `figures` |
+| index digest and normalisation | `sha256-128`, `wall/1` |
+| severity | `block`, `warn`, `caution` |
+| verdict | `clean`, `warnings`, `blocked`, `could-not-run` |
+| scan mode | `full`, `summary`, `client-safe-block`, `blueprint` |
+| rule | `term`, `phonetic`, `seller-account`, `figure`, `split-figure`, `copied-run`, `quote`, `exclusion`, `wall`, `credential`, `internal-note`, `paraphrase`, `tool-categories`, `number`, `record-number`, `allowlist` |
+| wall finding class | `name`, `term`, `figure`, `slug` |
+| class an allowlist row may clear | `method`, `internal-vocabulary`, `sales-framing`, `assessment`, `emotional`, `health-identity`, `departure`, `colleague-remark`, `personal-life` |
+| counted class prefix | `tool-category-` |
+| class of a local row above any class line | `local` |
+
+The field families each payload kind plants in the trap fixture. The lint checks every string, every object key and every number of a payload whatever its kind; this table says where the fixture puts one leak per family.
+
+| Kind | Field families |
+|---|---|
+| `agent` | `name`, `role`, `role_description`, `goal`, `plan`, `user_prompt`, `knowledge_name` |
+| `vibe_app` | `prompt`, `app_name` |
+| `ai_column` | `name`, `prompt` |
+| `workflow` | `name`, `description`, `step_text` |
+| `sequence` | `name`, `step_text`, `recipient` |
+| `webhook` | `url` |
+| `automation` | `name`, `request_text` |
+| `item_batch` | `name`, `seed` |
+| `doc` | `name`, `markdown` |
+| `workspace`, `folder`, `board`, `group`, `column`, `view`, `form`, `subitems`, `dashboard`, `widget`, `portfolio`, `project`, `publication`, `activation` | `name`, `description`, `label` |
+| `generic` | every family |
+
+The record shapes the lint reads:
+
+- The client-safe block of a call summary and of a document snapshot opens with a line that reads exactly `<!-- client-safe:start -->` and closes with a line that reads exactly `<!-- client-safe:end -->`, each alone on its line; a file may hold several blocks one after another. An opening mark with no closing mark, a second opening mark inside an open block, or a closing mark with no opening mark makes the whole file exempt nothing. The blueprint's client-safe glossary uses `<!-- glossary:start -->` and `<!-- glossary:end -->` the same way.
+- Conflict rows are the lines under a level-2 heading `## Conflicts` in a call summary or a document snapshot, up to the next level-1 or level-2 heading.
+- The rows of a strand's exclusions file are the lines under its level-2 heading `## Exclusions` that start with a hyphen and a space: the term, then optionally one bracketed list of pairs separated by semicolons, each pair written as the key, a colon, a space and the value. The keys are `kind` (one of `name`, `term` and `figure`; when it is absent, a term that reads as a number is a figure), `added` (a date), `by` and `source`. A row whose term is empty is an error. The rows of a strand's allowlist file have the same form under its level-2 heading `## Allowlist`, with the keys `ok` (the user's words, or yes), `date` and `class`; a row without a non-empty `ok` clears nothing.
+- The blueprint's client-facing text is the text under its level-2 headings numbered 1 to 15, each up to the next level-1 or level-2 heading, and every prompt block of the element-key section above, wherever it sits.
+- A payload is the tool input the session will send, written as one JSON file inside the record and handed over with its payload kind; a string that holds a JSON object or array is walked as JSON as well.
+- The index, clients-index.json under the home: `schema` is `clients-index/1`; `hash` is `sha256-128`, the first 32 hex characters of a sha256; `normalisation` is `wall/1`; `entries` maps each record's key, the digest of its slug, to an object of `updated` (a UTC time) and four sorted lists of digests, `names`, `phonetic`, `terms` and `figures`. Nothing in the file is plaintext, and leak_lint.py index is its only writer.
+
 ## `intake-report/1`
 
 Written by `transcript_measure.py prep`, or by its `document` subcommand for a client document, to `.work/intake/<stem>.report.json`; every subcommand of `transcript_prep.py`, `call-intake` and the summariser read it and never the raw file; a field outside this list fails validation. Blocks, in order:

@@ -16,7 +16,8 @@ NAMES_INDEX, MANIFEST = "personal-names-index.json", ".claude-plugin/plugin.json
 RECORD_MAP, GOTCHAS, SCOPE = "shared/record-map.md", "shared/monday-gotchas.md", "templates/record/scope.md"
 PINNED = (("call-type-vocabulary", "scripts/transcript_prep.py"),
           ("permitted-constants", "scripts/transcript_measure.py"),
-          ("ledger", "scripts/ledger.py"))
+          ("ledger", "scripts/ledger.py"),
+          ("leak", "scripts/leak_lint.py"))
 HANDOFF = ("Building this work happens outside this product. This record holds its scope, "
            "open questions, dependencies, access needs and next steps; it does not design or build it.")
 RESERVED = {"task-management", "project-status-report", "board-setup", "docs-collaborator",

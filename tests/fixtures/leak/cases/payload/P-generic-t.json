@@ -1,0 +1,19 @@
+{
+  "name": "Quote trial",
+  "description": "Prepared for the office",
+  "label": "Open",
+  "seed": "Sample homeowner",
+  "markdown": "Rework is tracked on the board.",
+  "request_text": "Ask the office first",
+  "role": "Office helper",
+  "role_description": "Tracks open quotes for the office",
+  "goal": "Read the open quotes first",
+  "plan": "Open the quote board first",
+  "user_prompt": "Ask the office before sending",
+  "knowledge_name": "Quote tracker",
+  "prompt": "Explain the next date",
+  "app_name": "Quote view",
+  "step_text": "Ask the office to check",
+  "recipient": "orders@wrenfoldjoinery.example",
+  "url": "https://files.example/export"
+}

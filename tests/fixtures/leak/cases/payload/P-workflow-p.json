@@ -1,0 +1,9 @@
+{
+  "name": "Corvel Systems handover",
+  "description": "Runs the cost of waiting check",
+  "steps": [
+    {
+      "text": "Post a note that the edge banding machine jams on long runs"
+    }
+  ]
+}

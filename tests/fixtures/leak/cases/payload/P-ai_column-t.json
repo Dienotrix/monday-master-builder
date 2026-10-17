@@ -1,0 +1,6 @@
+{
+  "name": "Quote status",
+  "settings": {
+    "prompt": "Summarise the latest update in one line"
+  }
+}

@@ -143,7 +143,7 @@ re: \b\d{3}:(W|F|B|D|DB|A|PF|PJ|U|SOP)\d*(\.(G|C|V|FM|W)\d+|\.SUB|\.doc)?\b
 re: \b\d{3}/v\d+\.\d+\b
 
 class: markers
-# The eight evidence markers of 7.5, the method's two names for them, the status markers,
+# The nine evidence markers of 7.5, the method's two names for them, the status markers,
 # transcript artefact markers, and citation locations.
 [Q]
 [Q?]
@@ -153,6 +153,7 @@ class: markers
 [X]
 [E]
 [I]
+[A]
 [found]
 [inferred]
 [pre-read]
@@ -193,3 +194,114 @@ re: \b(G|S0|U|V)-\d{1,2}\b
 re: \bP-\d{1,2}\b
 re: \[A\d{1,2}(-\d)?\]
 re: \[L1[4-8]\]
+
+# Tool categories (9.6, the second structural assertion). Every class below whose name starts
+# with tool-category- is counted and never blocked: leak_lint.py fails a sentence that names
+# three or more distinct categories in a paragraph with no proper noun, and a single hit is
+# never reported. The rows are generic category words, never product names, and an allowlist
+# has nothing to clear here.
+
+class: tool-category-accounting
+accounting system
+accounting software
+accounting package
+bookkeeping software
+general ledger
+invoicing software
+invoicing tool
+
+class: tool-category-crm
+crm
+customer relationship management
+contact database
+sales pipeline tool
+
+class: tool-category-erp
+erp
+enterprise resource planning
+
+class: tool-category-spreadsheet
+spreadsheet
+spreadsheets
+shared sheet
+workbook
+
+class: tool-category-scheduling
+scheduling tool
+scheduling software
+scheduling app
+booking system
+rota tool
+rostering software
+dispatch software
+calendar tool
+
+class: tool-category-hr
+payroll system
+payroll software
+hr system
+hris
+timesheet tool
+time tracking tool
+timekeeping system
+
+class: tool-category-ticketing
+ticketing system
+ticketing tool
+help desk
+helpdesk
+service desk tool
+
+class: tool-category-messaging
+chat tool
+team chat
+messaging app
+email client
+shared inbox
+
+class: tool-category-documents
+document management system
+file share
+shared drive
+cloud storage
+e-signature tool
+wiki
+
+class: tool-category-inventory
+inventory system
+warehouse management system
+stock control system
+barcode scanner
+point of sale
+
+class: tool-category-field
+telematics
+gps tracking
+fleet tracking
+route planning tool
+field service app
+
+class: tool-category-lab-quality
+lims
+laboratory information system
+quality management system
+
+class: tool-category-design
+cad software
+drawing software
+estimating software
+quoting tool
+takeoff software
+
+class: tool-category-marketing
+email marketing tool
+marketing automation
+survey tool
+panel software
+website builder
+
+class: tool-category-reporting
+bi tool
+reporting tool
+dashboard tool
+data warehouse

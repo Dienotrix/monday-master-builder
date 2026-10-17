@@ -1,0 +1,11 @@
+{
+  "name": "Thymbel Advisory follow-ups",
+  "steps": [
+    {
+      "text": "Remind the office about board 73029184"
+    }
+  ],
+  "recipients": [
+    "tamsin.rook@homes.example"
+  ]
+}

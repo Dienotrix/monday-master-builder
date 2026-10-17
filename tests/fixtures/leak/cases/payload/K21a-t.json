@@ -1,0 +1,9 @@
+{
+  "name": "Orders",
+  "items": [
+    {
+      "item_name": "Kitchen order",
+      "column_values": "{\"text_1\": \"The customer's number is kept on the ticket\"}"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+---
+schema: "strand/1"
+strand: "001"
+slug: "001-quote-tracker"
+title: "quote tracker"
+kind: "platform"
+output_class: "configured-structure"
+opened: "2026-09-08"
+opened_reason: "the first discovery call"
+state: "active"
+stage: "intake"
+version: "none"
+version_state: "none"
+clearance: "none"
+override: "none"
+round: "none"
+workspaces: "none"
+next_step: "the second call (owner: the user)"
+depends_on: "none"
+summary_current_to: "none"
+closed: "none"
+updated: "2026-09-20T10:15"
+---
+# quote tracker
+

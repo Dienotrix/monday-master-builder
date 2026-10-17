@@ -1,0 +1,16 @@
+{
+  "profile": {
+    "name": "Kestrin Boards order chaser",
+    "role": "Assistant from Thymbel Advisory",
+    "role_description": "Chases quotes the office prices at 263,480 a year"
+  },
+  "goal": "Clear every [A] item before the build",
+  "plan": "1. Read the notes in strands/001-quote-tracker/.\n2. Draft a reply for the office.",
+  "user_prompt": "Use password: tidewater42 to sign in",
+  "knowledge": [
+    {
+      "name": "Marlbeck Freight rates",
+      "access": "READ"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+# Test per-user additions for the leak fixture. Every entry is invented.
+# A row above the first class line belongs to class local: the user's own colleague.
+Ines Calloway
+
+class: firm
+phonetic: Thymbel
+whitelist: thimble

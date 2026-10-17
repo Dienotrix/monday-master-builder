@@ -1,0 +1,9 @@
+{
+  "name": "Quote handover",
+  "description": "Runs the weekly quote check",
+  "steps": [
+    {
+      "text": "Post a note when a quote is late"
+    }
+  ]
+}

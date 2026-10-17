@@ -1,0 +1,11 @@
+{
+  "name": "Quote follow-ups",
+  "steps": [
+    {
+      "text": "Remind the office about open quotes"
+    }
+  ],
+  "recipients": [
+    "orders@wrenfoldjoinery.example"
+  ]
+}
