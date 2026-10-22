@@ -790,7 +790,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 1",
           "match": "1,450"
         },
@@ -2031,9 +2031,9 @@
         ".work/strands/001-quote-tracker/K01-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -2044,37 +2044,37 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.lines[0]"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.lines[1]"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.lines[2]"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.lines[3]"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.lines[4]"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.lines[5]"
         }
       ],
@@ -2175,24 +2175,15 @@
         ".work/strands/001-quote-tracker/K02-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
-      "rules": [
-        "figure"
-      ],
+      "verdict": "clean",
+      "exit": 0,
+      "outcome": "limit",
+      "rules": [],
       "covers": [
         "key:K02"
       ],
-      "expect": [
-        {
-          "rule": "figure",
-          "class": null,
-          "severity": "block",
-          "where": "$.markdown",
-          "family": "markdown"
-        }
-      ],
+      "expect": [],
+      "limit": "A33 (R67): a number below 100 is no client figure, so the record's hourly rate of 38 passes beside a rate suffix too; a rate of 100 or more is still matched, and warns since A34 (R70)",
       "summary": "the record's loaded hourly rate with a rate suffix"
     },
     {
@@ -2221,19 +2212,11 @@
         ".work/strands/001-quote-tracker/K02-t.json"
       ],
       "mode": null,
-      "verdict": "warnings",
-      "exit": 2,
+      "verdict": "clean",
+      "exit": 0,
       "outcome": "passes",
-      "expect": [
-        {
-          "rule": "record-number",
-          "class": null,
-          "severity": "warn",
-          "where": "$.markdown",
-          "family": "markdown"
-        }
-      ],
-      "why_clean": "the same number with no cost word beside it: a record-number warning, kept"
+      "expect": [],
+      "why_clean": "the same number with no cost word beside it; below 100, so no warning since A33 (R67)"
     },
     {
       "id": "K03a-p",
@@ -2261,24 +2244,15 @@
         ".work/strands/001-quote-tracker/K03a-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
-      "rules": [
-        "figure"
-      ],
+      "verdict": "clean",
+      "exit": 0,
+      "outcome": "limit",
+      "rules": [],
       "covers": [
         "key:K03"
       ],
-      "expect": [
-        {
-          "rule": "figure",
-          "class": null,
-          "severity": "block",
-          "where": "$.markdown",
-          "family": "markdown"
-        }
-      ],
+      "expect": [],
+      "limit": "A33 (R67): the hours (14) and the rate (38) are both below 100, so neither is a client figure",
       "summary": "the hours behind a cost figure, paired with the rate"
     },
     {
@@ -2339,25 +2313,16 @@
         ".work/strands/001-quote-tracker/K03b-p.json"
       ],
       "mode": null,
-      "verdict": "warnings",
-      "exit": 2,
-      "outcome": "warns",
-      "rules": [
-        "record-number"
-      ],
+      "verdict": "clean",
+      "exit": 0,
+      "outcome": "limit",
+      "rules": [],
       "covers": [
         "key:K03",
         "rule:flag-do-not-remove"
       ],
-      "expect": [
-        {
-          "rule": "record-number",
-          "class": null,
-          "severity": "warn",
-          "where": "$.markdown",
-          "family": "markdown"
-        }
-      ],
+      "expect": [],
+      "limit": "A33 (R67): 14 hours is below 100, so it is neither matched with the record nor warned",
       "summary": "the same hours alone, with no cost word"
     },
     {
@@ -2422,6 +2387,7 @@
       "exit": 1,
       "outcome": "blocks",
       "rules": [
+        "copied-run",
         "figure"
       ],
       "covers": [
@@ -2430,6 +2396,13 @@
       "expect": [
         {
           "rule": "figure",
+          "class": null,
+          "severity": "warn",
+          "where": "$.markdown",
+          "family": "markdown"
+        },
+        {
+          "rule": "copied-run",
           "class": null,
           "severity": "block",
           "where": "$.markdown",
@@ -2504,9 +2477,9 @@
         ".work/strands/001-quote-tracker/K05-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -2517,7 +2490,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.markdown",
           "family": "markdown"
         }
@@ -2582,9 +2555,9 @@
         ".work/strands/001-quote-tracker/K06-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -2595,7 +2568,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.markdown",
           "family": "markdown"
         }
@@ -2668,9 +2641,9 @@
         ".work/strands/001-quote-tracker/K07-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -2681,7 +2654,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.markdown",
           "family": "markdown"
         }
@@ -2754,9 +2727,9 @@
         ".work/strands/001-quote-tracker/K09-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -2767,7 +2740,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.markdown",
           "family": "markdown"
         }
@@ -3958,6 +3931,7 @@
       "exit": 1,
       "outcome": "blocks",
       "rules": [
+        "copied-run",
         "figure"
       ],
       "covers": [
@@ -3966,6 +3940,13 @@
       "expect": [
         {
           "rule": "figure",
+          "class": null,
+          "severity": "warn",
+          "where": "$.markdown",
+          "family": "markdown"
+        },
+        {
+          "rule": "copied-run",
           "class": null,
           "severity": "block",
           "where": "$.markdown",
@@ -4100,9 +4081,9 @@
         ".work/strands/001-quote-tracker/K26a-p.json"
       ],
       "mode": null,
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -4113,7 +4094,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.markdown",
           "family": "markdown"
         }
@@ -4884,9 +4865,9 @@
         "strands/001-quote-tracker/drafts/R01-p.md"
       ],
       "mode": "full",
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -4898,35 +4879,35 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 1",
           "match": "73000"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 2",
           "match": "73,000"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 3",
           "match": "73k"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 4",
           "match": "$73k"
         },
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 5",
           "match": "seventy-three thousand"
         }
@@ -5017,9 +4998,9 @@
         "strands/001-quote-tracker/drafts/R02-p.md"
       ],
       "mode": "full",
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "split-figure"
       ],
@@ -5030,14 +5011,14 @@
         {
           "rule": "split-figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 1",
           "match": "73 000"
         },
         {
           "rule": "split-figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 2",
           "match": "seventy-"
         }
@@ -5932,24 +5913,15 @@
         "001"
       ],
       "mode": "blueprint",
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
-      "rules": [
-        "copied-run"
-      ],
+      "verdict": "clean",
+      "exit": 0,
+      "outcome": "limit",
+      "rules": [],
       "covers": [
         "rule:exempt-blocks-and-glossary"
       ],
-      "expect": [
-        {
-          "rule": "copied-run",
-          "class": null,
-          "severity": "block",
-          "where": "line 12",
-          "match": "The cutting list names each panel by cabinet"
-        }
-      ],
+      "expect": [],
+      "limit": "A33 (R68): blueprint drops the copied-run and quote rules for the blueprint's prose, which never goes to a client in v1; every payload keeps them",
       "summary": "a run from the brief in the blueprint's section 3, outside the glossary"
     },
     {
@@ -6248,25 +6220,16 @@
         "strands/001-quote-tracker/drafts/R14-p.md"
       ],
       "mode": "full",
-      "verdict": "warnings",
-      "exit": 2,
-      "outcome": "warns",
-      "rules": [
-        "record-number"
-      ],
+      "verdict": "clean",
+      "exit": 0,
+      "outcome": "limit",
+      "rules": [],
       "covers": [
         "rule:flag-do-not-remove",
         "key:K32"
       ],
-      "expect": [
-        {
-          "rule": "record-number",
-          "class": null,
-          "severity": "warn",
-          "where": "line 1",
-          "match": "46"
-        }
-      ],
+      "expect": [],
+      "limit": "A33 (R67): the headcount of 46 is below 100, so it is neither matched with the record nor warned; a record number of 100 or more is still reported and kept",
       "unchanged": true,
       "summary": "the record's headcount, a volume fact with no cost word: reported and kept, and the file is unchanged"
     },
@@ -6723,7 +6686,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "line 1",
           "match": "73,000"
         },
@@ -6777,7 +6740,7 @@
           "match": null
         }
       ],
-      "summary": "seven blocked items, each named by an allowlist row of strand 001 that may not clear it; every block stays and each such row adds an allowlist warning"
+      "summary": "seven items, each named by an allowlist row of strand 001 that may not clear it: six blocks, each staying and each row adding an allowlist warning, and the record's own figure, which warns since A34 (R70), so its row has nothing to clear"
     },
     {
       "id": "R18-t",
@@ -7149,7 +7112,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.rework"
         }
       ],
@@ -7420,7 +7383,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.name",
           "family": "name"
         },
@@ -8287,7 +8250,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.description",
           "family": "description"
         },
@@ -8582,7 +8545,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.profile.role_description",
           "family": "role_description"
         },
@@ -9429,7 +9392,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "$.markdown",
           "family": "markdown"
         },
@@ -9922,9 +9885,9 @@
         "strands/001-quote-tracker/drafts/D06-p.docx"
       ],
       "mode": "full",
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
+      "verdict": "warnings",
+      "exit": 2,
+      "outcome": "warns",
       "rules": [
         "figure"
       ],
@@ -9935,7 +9898,7 @@
         {
           "rule": "figure",
           "class": null,
-          "severity": "block",
+          "severity": "warn",
           "where": "word/footnotes.xml",
           "match": "263,480"
         }

@@ -160,12 +160,18 @@ def id_key(key):
     return key in ("id", "ids") or key.endswith("_id") or key.endswith("_ids")
 
 
+LABEL_KEYS = ("labels",)  # demo 2: a status or dropdown column's labels carry monday's own label numbers, 0 included
+
+
 def numeric_ids(data, path=""):
-    """Dotted paths of every JSON number held under a key named id, ids, *_id or *_ids (W35)."""
+    """Dotted paths of every JSON number held under a key named id, ids, *_id or *_ids (W35); a column's labels
+    are passed over, since their ids are label numbers, not monday ids."""
     found = []
     if isinstance(data, dict):
         for key, value in data.items():
             where = "%s.%s" % (path, key) if path else str(key)
+            if key in LABEL_KEYS:
+                continue
             if id_key(key) and (is_int(value) or isinstance(value, float)):
                 found.append(where)
             elif id_key(key) and isinstance(value, list):
@@ -180,11 +186,14 @@ def numeric_ids(data, path=""):
 
 
 def zero_ids(data, path=""):
-    """Dotted paths of every string of digits with a leading zero held under an id key (R4): one id, one spelling."""
+    """Dotted paths of every string of digits with a leading zero held under an id key (R4): one id, one spelling.
+    A column's labels are passed over, as in `numeric_ids`."""
     found = []
     if isinstance(data, dict):
         for key, value in data.items():
             where = "%s.%s" % (path, key) if path else str(key)
+            if key in LABEL_KEYS:
+                continue
             if id_key(key) and isinstance(value, str) and LEADING_ZERO.fullmatch(value):
                 found.append(where)
             elif id_key(key) and isinstance(value, list):

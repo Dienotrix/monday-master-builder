@@ -2369,5 +2369,18 @@ class SettledTest(Base):
         self.assertIn((B1J, "approvals[].notifies_approved"), pairs(found))
 
 
+class Demo2Test(Base):
+    def test_demo2_a_columns_label_ids_are_not_monday_ids(self):
+        # A status column's read, as the live ring returns it: label ids are numbers, and monday numbers them from 0.
+        read = {"id": "status", "type": "status", "board": {"id": BOARD}, "settings": {"labels": [
+            {"id": 0, "label": "Measured", "color": 0}, {"id": 1, "label": "Fitted", "is_done": True}]}}
+        self.assertEqual((self.led.numeric_ids(read), self.led.zero_ids(read)), ([], []))
+        spelt = {"settings": {"labels": [{"id": "0", "label": "Measured"}, {"id": "1", "label": "Fitted"}]}}
+        self.assertEqual((self.led.numeric_ids(spelt), self.led.zero_ids(spelt)), ([], []))
+        # Every other id still has its one spelling, beside the labels too.
+        wrong = {"board": {"id": int(BOARD)}, "workspace_id": "0" + OWN_WS, "settings": {"labels": [{"id": 0}]}}
+        self.assertEqual((self.led.numeric_ids(wrong), self.led.zero_ids(wrong)), (["board.id"], ["workspace_id"]))
+
+
 if __name__ == "__main__":
     unittest.main()

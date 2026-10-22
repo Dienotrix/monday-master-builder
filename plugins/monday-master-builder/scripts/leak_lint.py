@@ -437,8 +437,9 @@ EVERYDAY_METHOD_ROWS = frozenset(("never-say", "not-obtainable", "cost-of-waitin
 
 # pinned: cost-cues
 # A number of the record is a cost figure when its sentence holds one of these, a currency sign or a currency code
-# (X25). Rate suffixes let a payload figure of 10 to 999 block without a cost word. G21 (R56) adds the row labels
-# amount, total and fuel, with their plurals; spend was already here.
+# (X25). Rate suffixes let a payload figure of 100 to 999 (A33, R67) meet the figure rule without a cost word, a
+# warning since A34 (R70). G21 (R56) adds the row labels amount, total and fuel, with their plurals; spend was
+# already here.
 COST_CUES = ("cost", "costs", "costed", "costing", "price", "prices", "priced", "pricing", "rate", "rates", "loaded",
              "salary", "salaries", "wage", "wages", "pay", "pays", "paid", "paying", "fee", "fees", "budget",
              "budgets", "spend", "spends", "spending", "spent", "threshold", "thresholds", "signs", "signature",
@@ -602,6 +603,18 @@ SCHEMA_LINE = re.compile(r"^\s*schema\s*:\s*[\"'\u201c\u201d\u2018\u2019]?\s*(.*
                          r"[\"'\u201c\u201d\u2018\u2019]?\s*$", re.IGNORECASE)  # F03: quoted or not
 SNAPSHOT_SCHEMA = re.compile(r"document-summary/(\d+)")
 STRUCTURAL_VALUE = re.compile(r"[1-9][0-9]*")
+# A33 (R66): a key that names a monday id is structural whatever the tool calls it, beside the pinned list: `id` or
+# `ids` alone, any key ending `_id` or `_ids`, and a camel-case key ending `Id`, `ID`, `Ids` or `IDs` after a
+# lower-case letter or a digit (parentFolderId, accountProductId), each in any case. A word that merely ends in the
+# letters, such as `paid`, `valid` or `grid`, is not one.
+ID_KEY = re.compile(r"(?:.*_)?[iI][dD][sS]?|.*[a-z0-9]I[dD][sS]?")
+# A33 (R67): a number below this is a count, a label or a step, never a client figure, in digits or in words, on
+# both sides: the record's figures F (X25) and the checked text. Percentages keep their own rule.
+SMALL_FIGURE = 100
+# A34 (R70): a client's own cost figure (of SMALL_FIGURE or more) or cost percentage, met in its own build (scan,
+# payload, blueprint, sample rows too), warns instead of blocking, in every form the figure rules read, so the write
+# goes ahead and the user sees it. The client's exclusions, at any value, and other clients' figures (the wall) block.
+OWN_FIGURE_EXPECTED = "check the client's own figure is meant for their build; it is reported and kept"
 
 
 # The frame (a copy of ledger.py's, nod 2 and W91): the envelope, the refusal helper, the parser.
@@ -1569,6 +1582,14 @@ def words_number(words):
                 break
             total, group, big_last, state = total + group * scale, Fraction(0), scale, "big"
         elif word == "and":
+            # A33 (R67): "four and a half thousand" is 4,500, as "four point five thousand" is
+            if state in ("unit", "teen", "ten") and words[i + 1:i + 3] == ["a", "half"] and i + 3 < len(words) and \
+                    words[i + 3] in BIG and (big_last is None or BIG[words[i + 3]] < big_last):
+                scale = BIG[words[i + 3]]
+                total, group, big_last, state = total + (group + Fraction(1, 2)) * scale, Fraction(0), scale, "big"
+                i += 4
+                best = (total, i)
+                continue
             if state not in ("hundred", "big"):
                 break
             state, i = "and", i + 1
@@ -2117,7 +2138,10 @@ class Sets:
     def add_numbers(self, segment):
         folded = fold(segment.text)
         for number in parse_numbers(folded, segment.text):
-            if number.split or number.value < 10 and not number.percent:
+            # A33 (R67): a number below 100 is no client figure. A word number takes the unit of its last written
+            # digit as its precision, so "ten" beside a cost word was the figure 10 give or take 10, and it met
+            # "one", "Satellite 1" and "two-way" in demo 1.
+            if number.split or number.value < SMALL_FIGURE and not number.percent:
                 continue
             if number.percent and number.value < 10:
                 continue
@@ -2530,10 +2554,11 @@ class Unit:
     """One text the rules check: a text file, a .docx part, or one payload string or number (X22)."""
 
     def __init__(self, file, text, seq, field=None, part=None, strand=None, mode="full", kind="text",
-                 structural=False, raw=None, labels=None):
+                 structural=False, raw=None, labels=None, sample=False):
         self.file, self.text, self.seq, self.field, self.part = file, text, seq, field, part
         self.strand, self.mode, self.kind, self.structural = strand, mode, kind, structural
         self.raw, self.labels, self.raw_json = raw, labels, False
+        self.sample = sample  # A33 (R69): a value of an item batch, invented, so its numbers raise no warning
         self.joins = False  # G19 (R53): whether the string is part of its payload's joined text
         self.own = (file, ("block",) if mode == "client-safe-block" else ("body", "block"))
         if mode in ("blueprint", "glossary"):
@@ -2929,11 +2954,15 @@ class Check:
                 self.hit("split-figure", None, "block", start, end, "an excluded figure written in split form (%s)" %
                          where, "the text without the figure", where.split(" line ")[0])
                 return
+        if value < SMALL_FIGURE:  # A33 (R67): a count or a label, never a client figure
+            return
         for figure, fprec, file, _ in cost:
-            if probe.matches(figure, fprec):
-                self.hit("split-figure", None, "block", start, end, "the client figure %s written in split form" %
-                         show(figure), "the text without the client's figure", file)
+            if probe.matches(figure, fprec):  # A34 (R70): the client's own figure warns in its own build
+                self.hit("split-figure", None, "warn", start, end, "the client figure %s written in split form" %
+                         show(figure), OWN_FIGURE_EXPECTED, file)
                 return
+        if self.unit.sample:  # A33 (R69): a sample row's numbers are invented, so none is warned as a record number
+            return
         for figure, fprec, file, _ in record:
             if probe.matches(figure, fprec):
                 self.hit("split-figure", None, "warn", start, end, "a number of the client record written in split "
@@ -2946,27 +2975,31 @@ class Check:
                 self.hit("exclusion", "figure", "block", start, end, PROBLEMS["exclusion"][0] % ("figure", where),
                          PROBLEMS["exclusion"][1], where.split(" line ")[0])
                 break
-        quiet = in_link or (number.plain and number.value >= 10 ** 7)
+        # A33 (R69): a sample row's numbers are invented (A28), so they are warned neither as record numbers nor as
+        # numbers to check; its exclusions still block on them, and the client's cost figures and percentages warn
+        # on them as anywhere else in the build (A34, R70).
+        quiet = in_link or (number.plain and number.value >= 10 ** 7) or self.unit.sample
         if number.percent:
             for figure, fprec, file, _ in cost_percent:
                 if number.matches(figure, fprec):
-                    return self.hit("figure", None, "block", start, end, "matches the client's cost percentage %s%% "
-                                    "(%s)" % (show(figure), file), "the text without the client's figure", file)
+                    return self.hit("figure", None, "warn", start, end, "matches the client's cost percentage %s%% "
+                                    "(%s)" % (show(figure), file), OWN_FIGURE_EXPECTED, file)
             if number.value < 10 or quiet:
                 return None
             for figure, fprec, file, _ in record_percent:
                 if number.matches(figure, fprec):
                     return self.record_warning(start, end, file)
             return self.number_warning(start, end)
+        if number.value < SMALL_FIGURE:  # A33 (R67): a count or a label, never a client figure, and never warned
+            return None
         matched = [f for f in cost if number.matches(f[0], f[1])]
         large = [f for f in matched if f[0] >= 1000]
-        if large:
-            return self.hit("figure", None, "block", start, end, "matches the client's cost figure %s (%s)" %
-                            (show(large[0][0]), large[0][2]), "the text without the client's figure", large[0][2])
+        if large:  # A34 (R70): the client's own figure warns in its own build; the wall and the exclusions block
+            return self.hit("figure", None, "warn", start, end, "matches the client's cost figure %s (%s)" %
+                            (show(large[0][0]), large[0][2]), OWN_FIGURE_EXPECTED, large[0][2])
         if matched and (number.cue or number.currency or number.rate):
-            return self.hit("figure", None, "block", start, end, "matches the client's cost figure %s beside a cost "
-                            "word (%s)" % (show(matched[0][0]), matched[0][2]), "the text without the client's figure",
-                            matched[0][2])
+            return self.hit("figure", None, "warn", start, end, "matches the client's cost figure %s beside a cost "
+                            "word (%s)" % (show(matched[0][0]), matched[0][2]), OWN_FIGURE_EXPECTED, matched[0][2])
         if quiet or number.value < 10:
             return None
         if matched:
@@ -3120,7 +3153,10 @@ class Check:
             self.paraphrase()
             self.split_ids()
         self.numbers()
-        self.runs_and_quotes()
+        if mode not in ("blueprint", "glossary"):
+            # A33 (R68): the blueprint never goes to a client in v1 and restates the client's own facts by design,
+            # so its prose meets no copied-run or quote rule; every string written to monday still does (payload).
+            self.runs_and_quotes()
         if mode != "summary":
             self.hits += wall_hits(self.run, self)
         return self.hits
@@ -4144,7 +4180,7 @@ def html_hits(run, unit, text, hits, rules=None):
         return []
     decoded, where = copy
     sub = Unit(unit.file, decoded, unit.seq, field=unit.field, part=unit.part, strand=unit.strand, mode=unit.mode,
-               kind=unit.kind, structural=unit.structural)
+               kind=unit.kind, structural=unit.structural, sample=unit.sample)
     sub.own, sub.raw_json = unit.own, unit.raw_json
     plain_spans = [(h[0], h[1], h[3], h[4]) for h in hits]
     found = []
@@ -4337,9 +4373,11 @@ def file_units(run, rel, path, strand, seq):
     return mode, [Unit(rel, kept, (seq, 0), strand=strand, mode=mode, raw=raw)]
 
 
-def payload_units(file, data, strand, seq):
+def payload_units(file, data, strand, seq, sample=False):
     """X22, Y08: every string, every object key and every number at every depth, a string holding JSON walked as
-    JSON as well; a digit-only value under a structural id key is marked structural. The walk is iterative."""
+    JSON as well; a digit-only value under a structural id key is marked structural, and so (A33, R66) is an object
+    key made only of digits, as monday keys a widget's or a mirror's settings by board id. With `sample` (A33, R69:
+    an item batch, whose values are all invented), every unit is marked sample. The walk is iterative."""
     units, stack, count = [], [("$", data, 1, False)], 0
     while stack:
         path, value, depth, structural = stack.pop()
@@ -4353,18 +4391,18 @@ def payload_units(file, data, strand, seq):
                 key = str(key)
                 sub_path = key_path(path, key)
                 units.append(Unit(file, key, (seq, len(units)), field=sub_path + "<key>", strand=strand,
-                                  kind="payload"))
-                if key in STRUCTURAL_ID_KEYS and isinstance(sub, list):
+                                  kind="payload", structural=is_structural(key), sample=sample))
+                if structural_key(key) and isinstance(sub, list):
                     for index, item in enumerate(sub):
                         pushed.append(("%s[%d]" % (sub_path, index), item, depth + 1, is_structural(item)))
                     continue
-                pushed.append((sub_path, sub, depth + 1, key in STRUCTURAL_ID_KEYS and is_structural(sub)))
+                pushed.append((sub_path, sub, depth + 1, structural_key(key) and is_structural(sub)))
             stack.extend(reversed(pushed))
         elif isinstance(value, list):
             stack.extend(reversed([("%s[%d]" % (path, i), item, depth + 1, False) for i, item in enumerate(value)]))
         elif isinstance(value, str):
             unit = Unit(file, value, (seq, len(units)), field=path, strand=strand, kind="payload",
-                        structural=structural)
+                        structural=structural, sample=sample)
             unit.joins = not structural  # G19 (R53): a structural id is structure, as a key is
             units.append(unit)
             # G06: format characters dropped first, and a JSON string literal (a text column's value) parsed too.
@@ -4386,7 +4424,7 @@ def payload_units(file, data, strand, seq):
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
             text = str(value) if isinstance(value, int) else repr(value)
             units.append(Unit(file, text, (seq, len(units)), field=path, strand=strand, kind="number",
-                              structural=structural))
+                              structural=structural, sample=sample))
     return units
 
 
@@ -4449,6 +4487,12 @@ def is_structural(value):
     return isinstance(value, str) and bool(STRUCTURAL_VALUE.fullmatch(value))
 
 
+def structural_key(key):
+    """Y08, A33 (R66): whether a digit-only value under this key is a monday id: a key of the pinned list, or one
+    that ID_KEY reads as naming an id."""
+    return key in STRUCTURAL_ID_KEYS or bool(ID_KEY.fullmatch(key))
+
+
 # The commands (X08). Each returns its exit code; the run carries what the envelope prints.
 
 def prepare(run):
@@ -4496,7 +4540,7 @@ def cmd_payload(run):
     canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     run.args_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     prepare(run)
-    units = payload_units(rel, data, args.strand, 0)
+    units = payload_units(rel, data, args.strand, 0, sample=args.kind == "item_batch")  # A33 (R69)
     wall_hits(run, None)
     for unit in units:
         check_unit(run, unit)
@@ -4506,7 +4550,7 @@ def cmd_payload(run):
 
 def cmd_blueprint(run):
     """X08, X09, X36: the blueprint's client-facing text (sections 1 to 15, the prompt blocks, the glossary) under
-    every rule, the wall included, the glossary exempt from the copied-run rule only."""
+    every rule, the wall included, but the copied-run and quote rules, which A33 (R68) drops for the blueprint."""
     run.locate()
     folder = strand_folder(run, run.args.strand)
     run.strand, run.mode = run.args.strand, MODES[3]

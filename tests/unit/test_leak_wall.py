@@ -693,16 +693,36 @@ class BlueprintTest(Base):
         self.assertEqual(self.lint(self.a, "blueprint", "--strand", "009")[0], 3)
 
     def test_X09_malformed_glossary_marks_exempt_nothing_and_warn(self):
+        # A33 (R68): the blueprint meets no copied-run rule, so the run under the broken mark no longer blocks; the
+        # mark still warns, and every rule the blueprint keeps still runs on the text after it.
         code, data = self.blueprint("# B\n\n## 1. Terms\n<!-- glossary:start -->\n- cutting list: the cutting list "
                                     "names each panel by cabinet\n" + sections(2))
+        self.assertEqual(code, 2)
+        self.assertEqual(sorted((f["rule"], f["severity"]) for f in data["findings"]), [("copied-run", "warn")])
+        code, data = self.blueprint("# B\n\n## 1. Terms\n<!-- glossary:start -->\n- cutting list: the cutting list "
+                                    "names each panel [X]\n" + sections(2))
         self.assertEqual(code, 1)
-        self.assertEqual(sorted((f["rule"], f["severity"]) for f in data["findings"]),
-                         [("copied-run", "block"), ("copied-run", "warn")])
+        self.assertEqual([(f["rule"], f["class"]) for f in data["findings"] if f["severity"] == "block"],
+                         [("term", "markers")])
 
     def test_X11_the_blueprints_own_internal_text_still_counts(self):
+        # A33 (R68): the blueprint's own text meets no copied-run rule, but its internal sections still count as a
+        # source for every payload, which keeps the rule.
         code, data = self.blueprint("# B\n\n## 1. Purpose\nVeneer offcuts warp beside the kiln vents.\n" + sections(2) +
                                     "\n## Build notes\n- Veneer offcuts warp beside the kiln vents every winter.\n")
+        self.assertEqual((code, data["findings"]), (0, []))
+        code, data = self.payload({"description": "Veneer offcuts warp beside the kiln vents."})
         self.assertEqual(code, 1)
+        self.assertEqual([(f["rule"], f["source"]) for f in data["findings"] if f["severity"] == "block"],
+                         [("copied-run", SA + "/solution/blueprint.md")])
+
+    def test_A33_R68_the_blueprint_keeps_the_wall_and_a_payload_keeps_runs_and_quotes(self):
+        code, data = self.blueprint("# B\n\n## 1. Purpose\nThe cutting list names each panel by cabinet, for "
+                                    "Marlbeck Freight.\n" + sections(2))
+        self.assertEqual(code, 1)
+        self.assertEqual([(f["rule"], f["class"]) for f in data["findings"] if f["severity"] == "block"],
+                         [("wall", "name")])
+        code, data = self.payload({"description": "The cutting list names each panel by cabinet."})
         self.assertEqual([f["rule"] for f in data["findings"] if f["severity"] == "block"], ["copied-run"])
 
 
@@ -1750,8 +1770,12 @@ class ReviewPart2Test(Base):
         code, data = self.g18_blueprint("## 4. Boards", glossary % "the Tallowmere sync column")
         self.assertEqual(code, 1)
         self.assertWall(data, "name", "Tallowmere")
+        # A33 (R68): outside the glossary the blueprint meets no copied-run rule either now; a marker still blocks.
         code, data = self.g18_blueprint("## 4. Boards", "The cutting list names each panel by cabinet.")
-        self.assertEqual([f["rule"] for f in data["findings"] if f["severity"] == "block"], ["copied-run"])
+        self.assertEqual((code, data["findings"]), (0, []))
+        code, data = self.g18_blueprint("## 4. Boards", "The cutting list names each panel by cabinet [X].")
+        self.assertEqual([(f["rule"], f["class"]) for f in data["findings"] if f["severity"] == "block"],
+                         [("term", "markers")])
 
     def test_G18_R50_R47_the_sixteen_section_titles_publish_no_word_and_terms_over_shared_passes(self):
         # Record a's blueprint carries the sixteen titles in the template's own words and the pinned shape.
@@ -1924,21 +1948,25 @@ class ReviewPart2Test(Base):
             hits = self.assertWall(data, "name", "Tallowmere")
             self.assertEqual([(h["field"], h["column"]) for h in hits], [("line %d" % line, heading.index("T") + 1)],
                              heading)
-        # A run copied from record a's research brief, and record b's fuel figure, in a heading block too.
+        # The firm's name, and record b's fuel figure, in a heading block too. A33 (R68): a run copied from record
+        # a's research brief no longer blocks in the blueprint, in a heading or in its text.
         code, data, line = self.r52_blueprint("## 4. The cutting list names each panel by cabinet")
-        self.assertEqual([(f["rule"], f["field"]) for f in data["findings"] if f["severity"] == "block"],
-                         [("copied-run", "line %d" % line)])
+        self.assertEqual((code, data["findings"]), (0, []))
+        code, data, line = self.r52_blueprint("## 4. Thymbel cutting list")
+        self.assertEqual([(f["rule"], f["class"], f["field"]) for f in data["findings"] if f["severity"] == "block"],
+                         [("term", "firm", "line %d" % line)])
         code, data, line = self.r52_blueprint("## 4. Fuel budget 186,730")
         self.assertEqual(code, 1)
         self.assertEqual([h["field"] for h in self.assertWall(data, "figure")], ["line %d" % line])
-        # The glossary under a heading is still exempt from the copied-run rule only; its heading is not.
+        # The glossary under a heading is exempt from no rule but the runs and quotes, which A33 (R68) drops for the
+        # whole blueprint; its heading is checked as section text, never as glossary text.
         glossary = "<!-- glossary:start -->\n- cutting list: the cutting list names each panel by cabinet\n" \
                    "<!-- glossary:end -->"
         code, data, line = self.r52_blueprint("## 4. Structure mapping", glossary)
         self.assertEqual((code, data["findings"]), (0, []))
-        code, data, line = self.r52_blueprint("## 4. The cutting list names each panel by cabinet", glossary)
-        self.assertEqual([(f["rule"], f["field"]) for f in data["findings"] if f["severity"] == "block"],
-                         [("copied-run", "line %d" % line)])
+        code, data, line = self.r52_blueprint("## 4. Thymbel cutting list", glossary)
+        self.assertEqual([(f["rule"], f["class"], f["field"]) for f in data["findings"] if f["severity"] == "block"],
+                         [("term", "firm", "line %d" % line)])
 
     def test_R50_R52_a_blueprint_whose_headings_are_the_template_titles_passes_as_before(self):
         # The sixteen titles sit in the checked blueprint, its frozen copy, strand 002's blueprint and record b's,
@@ -2155,12 +2183,13 @@ class ReviewPart2Test(Base):
         self.table_in(self.a / "research" / "2026-09-01-brief.md", "| Line | Amount |", "|---|---|",
                       "| Varnish | 58,214 |", "| Varnish tin | 145 |")
         self.both()
+        # A34 (R70): the record's own cost figure meets the figure rule as before, and warns in its own build
         code, data = self.draft("We set aside 58,214 for the varnish.\n")
-        self.assertEqual(code, 1)
-        self.assertEqual([f["rule"] for f in data["findings"] if f["severity"] == "block"], ["figure"])
+        self.assertEqual(code, 2)
+        self.assertEqual([(f["rule"], f["severity"]) for f in data["findings"]], [("figure", "warn")])
         code, data = self.draft("| Item | Amount |\n|---|---|\n| Varnish tin | 145 |\n")
-        self.assertEqual(code, 1)
-        self.assertEqual([f["rule"] for f in data["findings"] if f["severity"] == "block"], ["figure"])
+        self.assertEqual(code, 2)
+        self.assertEqual([(f["rule"], f["severity"]) for f in data["findings"]], [("figure", "warn")])
         code, data = self.draft("| Item | Count |\n|---|---|\n| Varnish tin | 145 |\n")  # no cost word: it warns
         self.assertEqual(code, 2)
         self.assertEqual({f["rule"] for f in data["findings"]}, {"record-number"})
@@ -2419,6 +2448,43 @@ class ReviewPart2Test(Base):
                 code, data = self.payload({"name": "Depot board", "description": text})
                 self.assertEqual(code, 1, data["findings"])
                 self.assertIn(rule, [f["rule"] for f in data["findings"] if f["severity"] == "block"])
+
+
+class A34Test(Base):
+    """A34 (R70): a client's own figures warn in its own build, and another client's figures still block (the wall)."""
+
+    def setUp(self):
+        super().setUp()
+        self.both()
+
+    def blueprint(self, text):
+        write(self.a / SA / "solution" / "blueprint.md", "# B\n\n## 1. Purpose\n%s\n" % text + sections(2))
+        return self.lint(self.a, "blueprint", "--strand", "001")
+
+    def severities(self, data):
+        return sorted((f["rule"], f["class"], f["severity"]) for f in data["findings"]
+                      if f["rule"] in ("figure", "split-figure", "wall"))
+
+    def test_A34_R70_another_clients_figure_on_the_wall_still_blocks_beside_an_own_figure_that_warns(self):
+        # Record a's own budget of 73,000 warns; record b's 186,730 blocks on the wall in every form it did.
+        for other in ("186,730", "$187k", "186.7k", "one hundred and eighty-six thousand seven hundred and thirty"):
+            with self.subTest(other=other):
+                text = "The saw budget is 73,000 and the fuel came to %s." % other
+                # The blueprint comes last: its planned text is this record's own from then on (X11, L189).
+                for code, data in (self.payload({"markdown": text}, "doc"), self.draft(text),
+                                   self.payload({"items": [{"column_values": json.dumps({"text_1": text})}]},
+                                                "item_batch"), self.blueprint(text)):
+                    self.assertEqual(code, 1, data["findings"])
+                    self.assertEqual(sorted(set(self.severities(data))),
+                                     [("figure", None, "warn"), ("wall", "figure", "block")])
+                (self.a / SA / "solution" / "blueprint.md").unlink()
+        code, data = self.payload({"markdown": "The saw budget is 73,000."}, "doc")
+        self.assertEqual((code, self.severities(data)), (2, [("figure", None, "warn")]))
+        # The wall is symmetric: in record b's own build its fuel figure warns, and record a's rework figure blocks.
+        code, data = self.payload({"label": "Fuel came to 186,730."}, "board", record=self.b)
+        self.assertEqual((code, self.severities(data)), (2, [("figure", None, "warn")]))
+        code, data = self.payload({"label": "Remakes came to 263,480 a year."}, "board", record=self.b)
+        self.assertEqual((code, self.severities(data)), (1, [("wall", "figure", "block")]))
 
 
 if __name__ == "__main__":

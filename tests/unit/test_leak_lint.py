@@ -208,6 +208,14 @@ class Base(unittest.TestCase):
             self.assertIn(match, [h["match"] for h in hits])
         return data
 
+    def assertOwnFigure(self, text, rule="figure"):
+        """A34 (R70): the client's own figure in its own build warns under its own rule, exit 2, with no block."""
+        code, data = self.scan(text)
+        self.assertEqual(code, 2, data["findings"])
+        self.assertFalse(self.found(data, severity="block"), data["findings"])
+        self.assertTrue(self.found(data, rule, None, "warn"), data["findings"])
+        return data
+
     def assertClean(self, text, code_expected=0):
         code, data = self.scan(text)
         self.assertEqual(code, code_expected, data["findings"])
@@ -723,7 +731,7 @@ class FigureTest(Base):
         for text, source in (("Crates 62,800.", "inputs/2026-09-20-price-list.txt"),
                              ("Service 45,000.", "calls/2026-09-21-review.md"),
                              ("Dough 184,260.", "research/2026-09-02-brief.md")):
-            data = self.assertBlocks(text, "figure")
+            data = self.assertOwnFigure(text)  # A34 (R70): the client's own figure warns in its own build
             self.assertEqual(self.found(data, "figure")[0]["source"], source)
 
     def test_L79_to_L84_five_formats_against_five_record_formats(self):
@@ -732,13 +740,13 @@ class FigureTest(Base):
             write(self.root / "research" / "2026-09-02-brief.md", "- The oven service costs %s a year.\n" % record_form)
             for payload_form in forms:
                 code, data = self.payload({"markdown": "The service is %s." % payload_form})
-                self.assertEqual(code, 1, (record_form, payload_form, data["findings"]))
-                self.assertTrue(self.found(data, "figure"), (record_form, payload_form))
+                self.assertEqual(code, 2, (record_form, payload_form, data["findings"]))  # A34 (R70): it warns
+                self.assertTrue(self.found(data, "figure", severity="warn"), (record_form, payload_form))
 
     def test_X25_rounded_and_truncated_forms_within_precision(self):
         for text in ("Waste runs at 184k.", "Waste runs at $185k.", "Waste runs at 184.3k.",
                      "Waste runs at one hundred and eighty-four thousand."):
-            self.assertBlocks(text, "figure")
+            self.assertOwnFigure(text)  # A34 (R70): matched as before, and warned instead of blocked
         code, data = self.scan("Waste runs at 183k.")
         self.assertEqual(code, 2)
         self.assertTrue(self.found(data, "number"))
@@ -747,13 +755,19 @@ class FigureTest(Base):
         code, data = self.scan("The bakery bought 1,200 crates.")
         self.assertEqual((code, [f["rule"] for f in data["findings"]]), (2, ["number"]))
         self.assertEqual(self.scan("The bakery bought 9 crates.")[0], 0)
-        self.assertBlocks("A baker is paid 27 an hour.", "figure")
-        self.assertBlocks("Pay $27 for it.", "figure")
-        code, data = self.scan("A tray takes 27 minutes.")
+        # A33 (R67): the record's 27 an hour and 34 staff are below 100, so they are no client figures any more and
+        # a 27 or a 34 passes (A33Test); the floors are shown with figures of 100 to 999 instead.
+        write(self.root / "research" / "2026-09-04-vans.md", "- A delivery van costs 240 an hour to hire.\n"
+                                                             "- The bakery serves 340 regular customers.\n")
+        # A34 (R70): a cost figure beside a rate suffix, a currency sign or a cost word, and a cost percentage, warn.
+        self.assertOwnFigure("A van is 240 an hour.")
+        self.assertOwnFigure("Pay $240 for it.")
+        code, data = self.scan("A tray takes 240 minutes.")
         self.assertEqual((code, data["findings"][0]["rule"]), (2, "record-number"))
-        code, data = self.scan("The bakery has 34 staff.")
+        code, data = self.scan("The bakery has 340 cafes on its books.")
         self.assertEqual((code, data["findings"][0]["rule"]), (2, "record-number"))
-        self.assertBlocks("The margin is 31%.", "figure")
+        self.assertEqual(self.scan("A baker is paid 27 an hour.")[1]["findings"][0]["rule"], "copied-run")
+        self.assertOwnFigure("The margin is 31%.")
         code, data = self.scan("About 15% of loaves.")
         self.assertEqual((code, data["findings"][0]["rule"]), (2, "number"))
 
@@ -765,8 +779,8 @@ class FigureTest(Base):
 
     def test_X25_ambiguous_lower_case_m_is_read_both_ways(self):
         write(self.root / "research" / "2026-09-02-brief.md", "- The new line costs 2,000,000.\n")
-        self.assertBlocks("The shop is 2m long.", "figure")
-        self.assertBlocks("A $2M line.", "figure")
+        self.assertOwnFigure("The shop is 2m long.")  # A34 (R70): read both ways as before, and warned
+        self.assertOwnFigure("A $2M line.")
 
     def test_L87_X25_exclusion_figures_in_every_rendering(self):
         for text in ("Pay 47500.", "Pay 47,500.", "Pay 47.5k.", "Pay $47.5k.", "Pay forty-seven thousand five hundred.",
@@ -777,17 +791,18 @@ class FigureTest(Base):
 
     def test_L105_L106_split_renderings(self):
         write(self.root / "research" / "2026-09-02-brief.md", "- The new proofer has a budget of 52,000.\n")
-        self.assertBlocks("The proofer comes to 52 000 in all.", "split-figure")
-        self.assertBlocks("A note puts it at fifty-\ntwo thousand.", "split-figure")
-        self.assertBlocks("| 52 | 000 |", "split-figure")
-        self.assertBlocks("It is 52.000 now.", "split-figure")
+        # A34 (R70): the client's own figure in split form is found as before and warns
+        self.assertOwnFigure("The proofer comes to 52 000 in all.", "split-figure")
+        self.assertOwnFigure("A note puts it at fifty-\ntwo thousand.", "split-figure")
+        self.assertOwnFigure("| 52 | 000 |", "split-figure")
+        self.assertOwnFigure("It is 52.000 now.", "split-figure")
         code, data = self.scan("The proofer comes to 61 000 in all.")
         self.assertNotEqual(code, 1)
         code, data = self.scan("Crates 3 4 by the door.")
         self.assertNotEqual(code, 1)
 
     def test_X25_figures_in_links_block_and_warnings_skip_links(self):
-        self.assertBlocks("[Sheet](https://files.example/report?total=184260)", "figure")
+        self.assertOwnFigure("[Sheet](https://files.example/report?total=184260)")  # A34 (R70): found, and warned
         self.assertClean("[Sheet](https://files.example/report?page=4421)")
 
 
@@ -885,6 +900,9 @@ class AssertionTest(Base):
 
     def test_L104_R64_the_split_figure_assertion_runs_in_payloads_too(self):
         code, data = self.payload({"markdown": "The proofer comes to 52 000 in all."})
+        self.assertEqual(code, 2, data["findings"])  # A34 (R70): the client's own figure warns; an exclusion blocks
+        self.assertTrue(self.found(data, "split-figure", severity="warn"), data["findings"])
+        code, data = self.payload({"markdown": "The fee comes to 47 500 in all."})
         self.assertEqual(code, 1, data["findings"])
         self.assertTrue(self.found(data, "split-figure", severity="block"), data["findings"])
 
@@ -924,7 +942,9 @@ class AllowlistTest(Base):
         code, data = self.scan(text)
         self.assertEqual(code, 1)
         blocked = {f["rule"] for f in self.found(data, severity="block")}
-        self.assertTrue({"figure", "term", "exclusion", "credential", "copied-run", "quote"} <= blocked, blocked)
+        self.assertTrue({"term", "exclusion", "credential", "copied-run", "quote"} <= blocked, blocked)
+        # A34 (R70): the client's own figure is a warning now, which an allowlist row neither clears nor warns on
+        self.assertTrue(self.found(data, "figure", severity="warn"), data["findings"])
         self.assertGreaterEqual(len(self.found(data, "allowlist", severity="warn")), 7)
         code, data = self.scan("The office keeps the order book.")
         self.assertEqual(code, 0)
@@ -942,7 +962,9 @@ class AllowlistTest(Base):
         self.assertTrue(self.found(data, "paraphrase", "health-identity", "caution"))
 
     def test_L120_L262_flagged_numbers_are_reported_and_the_file_kept(self):
-        rel = self.draft("The bakery runs with 34 staff.")
+        # A33 (R67): a record number of 100 or more, since the record's 34 staff is no figure any more
+        write(self.root / "research" / "2026-09-04-vans.md", "- The bakery serves 340 regular customers.\n")
+        rel = self.draft("The bakery runs with 340 cafes.")
         before = mc.sha256_file(self.root.joinpath(*rel.split("/")))
         code, data = self.lint("scan", rel)
         self.assertEqual((code, data["findings"][0]["rule"]), (2, "record-number"))
@@ -970,7 +992,8 @@ class ReaderTest(Base):
         planted = (("word/document.xml", body(["Prepared by Quell", "moor Advisory"])),
                    ("docProps/core.xml", core("Orla Pennick")), ("docProps/app.xml", app("Quellmoor Advisory")),
                    ("word/header1.xml", body(["[I] draft"]).replace("w:document", "w:hdr")),
-                   ("word/footnotes.xml", body(["Waste of 184,260."]).replace("w:document", "w:footnotes")),
+                   # A34 (R70): an exclusion figure, since the client's own 184,260 now warns
+                   ("word/footnotes.xml", body(["Fee of 47,500."]).replace("w:document", "w:footnotes")),
                    ("docProps/custom.xml", '<?xml version="1.0"?><Properties xmlns:vt="http://schemas.openxmlformats.'
                     'org/officeDocument/2006/docPropsVTypes"><property name="Client"><vt:lpwstr>Brackwater Mills'
                     '</vt:lpwstr></property></Properties>'))
@@ -1248,12 +1271,12 @@ class ReviewBlockingTest(Base):
                      "A c.184k overrun in waste costs.", "Waste cost per year/184,260.",
                      "A 184-thousand-dollar waste cost."):
             with self.subTest(text=text):
-                self.assertBlocks(text + "\n", "figure")
+                self.assertOwnFigure(text + "\n")  # A34 (R70): read as a number as before, and warned
         self.assertBlocks("Fee band 40k-47k.\n", "exclusion", "figure")
         for data in ({"name": "Orders", "loss": -184260}, {"column_values": json.dumps({"numbers": "-184,260"})}):
             code, out = self.payload(data)
-            self.assertEqual(code, 1, out["findings"])
-            self.assertTrue(self.found(out, "figure", severity="block"), out["findings"])
+            self.assertEqual(code, 2, out["findings"])
+            self.assertTrue(self.found(out, "figure", severity="warn"), out["findings"])
         self.assertClean("The trial ran 2026-09-01 to 2026-09-30 on v1.2.3, pages 4-6.\n")
 
     def test_F02_Y08_a_monday_id_as_a_json_number_outside_a_structural_key_blocks(self):
@@ -1309,8 +1332,9 @@ class ReviewBlockingTest(Base):
         for body_text, rule in (("<p>Order from Brackwater&nbsp;Mills this week.</p>", "exclusion"),
                                 ("<p>Order from <b>Brackwater</b> Mills this week.</p>", "exclusion"),
                                 ("<p>Set up by Quell&#109;oor.</p>", "term"),
-                                ("<p>Waste cost 184,<br>260 a year.</p>", "split-figure"),
-                                ("<p>Waste cost $184&#44;260 a year.</p>", "figure"),
+                                # A34 (R70): the exclusion figure, since the client's own 184,260 now warns
+                                ("<p>Fee cost 47,<br>500 a year.</p>", "split-figure"),
+                                ("<p>Fee cost $47&#44;500 a year.</p>", "exclusion"),
                                 ("<p>The proofing <b>cabinet</b> overheats during the <i>long</i> summer "
                                  "afternoons.</p>", "copied-run"),
                                 ("The proofing cabinet<br>overheats during the long<br>summer afternoons.",
@@ -1321,6 +1345,12 @@ class ReviewBlockingTest(Base):
                 self.assertTrue(self.found(out, rule, severity="block"), out["findings"])
         code, out = self.payload({"body": "<p>The board lists every <b>order</b> &amp; its day.</p>"}, "doc")
         self.assertEqual((code, out["findings"]), (0, []))
+        for body_text, rule in (("<p>Waste cost 184,<br>260 a year.</p>", "split-figure"),
+                                ("<p>Waste cost $184&#44;260 a year.</p>", "figure")):
+            with self.subTest(body=body_text):  # A34 (R70): the client's own figure is found as before, and warns
+                code, out = self.payload({"body": body_text}, "doc")
+                self.assertEqual(code, 2, out["findings"])
+                self.assertTrue(self.found(out, rule, severity="warn"), out["findings"])
         self.assertBlocks("Order from Brackwater&nbsp;Mills.\n", "exclusion")
 
     def test_F06_X24_a_quote_line_with_a_quoted_word_inside_keeps_its_whole_quote(self):
@@ -1451,9 +1481,11 @@ class ReviewShouldFixTest(Base):
                            ("Built by master buılder.", "term"), ("Sent to Tarrօw Feeds.", "exclusion"),
                            ("We met Brackwatᴇr Mills today.", "exclusion"), ("password：Tilework42", "credential"),
                            ("pаssword: Tilework42", "credential"), ("Saved in calls＼2026-09-01.md", "term"),
-                           ("Waste cost 184 260 a year.", "split-figure")):
+                           ("Fee cost 47 500 a year.", "split-figure")):
             with self.subTest(text=text):
                 self.assertBlocks(text + "\n", rule)
+        # A34 (R70): the client's own figure split by a line separator is found as before, and warns
+        self.assertOwnFigure("Waste cost 184 260 a year.\n", "split-figure")
         self.assertClean("The ㅤboard lists orders.\n")
 
     def test_F13_X24_X32_a_hyphenated_row_matches_its_words_spaced(self):
@@ -1551,7 +1583,8 @@ class ReviewShouldFixTest(Base):
     def test_F22_X25_a_figure_split_at_its_thousands_comma(self):
         for text in ("The waste cost was 184,\n260 last year.", "The waste cost was 184, 260 last year."):
             with self.subTest(text=text):
-                self.assertBlocks(text + "\n", "split-figure")
+                self.assertOwnFigure(text + "\n", "split-figure")  # A34 (R70): found as before, and warned
+        self.assertBlocks("The fee was 47, 500 last year.\n", "split-figure")  # an exclusion figure still blocks
         code, data = self.scan("We need 4, 100 and 250 crates.\n")
         self.assertFalse(self.found(data, severity="block"), data["findings"])
 
@@ -1584,11 +1617,13 @@ class ReviewShouldFixTest(Base):
 
     def test_F25_R64_a_full_stop_after_an_abbreviation_ends_no_sentence(self):
         # R24 kept by R64 for every rule that reads sentences: the cost cue of a number and the paraphrase rule.
-        for text in ("The tray cost, e.g. 27 in all.", "The tray cost, i.e. 27 in all.", "The tray cost, approx. 27 "
-                     "in all.", "The tray cost vs. 27 in all.", "The tray cost, the oven etc. 27 in all."):
+        # A33 (R67): a cost figure of 100 to 999, since the record's 27 an hour is below 100 and no figure any more.
+        write(self.root / "research" / "2026-09-04-vans.md", "- A delivery van costs 240 an hour to hire.\n")
+        for text in ("The tray cost, e.g. 240 in all.", "The tray cost, i.e. 240 in all.", "The tray cost, approx. 240 "
+                     "in all.", "The tray cost vs. 240 in all.", "The tray cost, the oven etc. 240 in all."):
             with self.subTest(text=text):
-                self.assertBlocks(text + "\n", "figure")
-        code, data = self.scan("The tray cost. 27 in all.\n")
+                self.assertOwnFigure(text + "\n")  # A34 (R70): the cost cue still reaches it, and it warns
+        code, data = self.scan("The tray cost. 240 in all.\n")
         self.assertEqual((code, [f["rule"] for f in data["findings"]]), (2, ["record-number"]))
         self.assertBlocks("We heard that, e.g. Penwith is burnt out.\n", "paraphrase")
         self.assertClean("We heard that. Penwith is burnt out.\n")
@@ -1653,6 +1688,283 @@ class ReviewShouldFixTest(Base):
 
     def test_F41_X03_a_double_percent_encoding_is_decoded(self):
         self.assertBlocks("See https://files.example/x?f=calls%252F2026.md\n", "term", "id-patterns")
+
+
+# 2.18 A33: the lint loosened where demo 1 blocked for nothing (R66 to R69)
+
+def blueprint_text(bodies):
+    """The sixteen numbered sections in the pinned shape (R49, R52), each with its body from `bodies`."""
+    return "# Blueprint\n" + "".join("\n## %d. %s\n%s\n" % (n, lint.SECTION_TITLES[n - 1], bodies.get(n, ""))
+                                     for n in range(1, 17))
+
+
+class A33Test(Base):
+
+    def blueprint(self, bodies):
+        write(self.root / S1 / "solution" / "blueprint.md", blueprint_text(bodies))
+        return self.lint("blueprint", "--strand", "001")
+
+    # R66: ids that are arguments are not text
+
+    def test_A33_R66_a_key_that_names_an_id_is_structural_and_a_word_ending_in_the_letters_is_not(self):
+        for key in ("parentFolderId", "board_folder_id", "parent_container_id", "parentItemId", "accountProductId",
+                    "position_object_id", "BOARD_ID", "boardIDs", "item_IDS", "Id", "IDS", "column_7Id"):
+            self.assertTrue(lint.structural_key(key), key)
+        for key in ("paid", "valid", "grid", "android", "squid", "idea", "identity", "idx", "PAID", "BOARDID",
+                    "notes_ref", "id_note", "parent id"):
+            self.assertFalse(lint.structural_key(key), key)
+        self.assertTrue(all(lint.ID_KEY.fullmatch(key) for key in lint.STRUCTURAL_ID_KEYS))  # the rule holds the list
+
+    def test_A33_R66_ids_under_id_keys_and_board_ids_as_object_keys_pass(self):
+        code, data = self.payload({
+            "name": "Orders", "parentFolderId": "73100482", "board_folder_id": 73100483,
+            "parent_container_id": "73100484", "parentItemId": 73100485, "accountProductId": "73100486",
+            "position_object_id": "73100487", "BOARD_ID": "73100488", "boardIDs": ["73100489", 73100490],
+            "settings": json.dumps({"x_axis_columns": {"73100491": ["status"]},
+                                    "displayed_linked_columns": {"73100492": ["numbers", "date4"]}}),
+            "mirror": {"73100493": {"columns": ["status"]}}}, "widget")
+        self.assertEqual((code, data["findings"]), (0, []))
+
+    def test_A33_R66_an_id_written_as_text_still_blocks(self):
+        for change in ({"name": "Board 73100482"}, {"description": "Copy of 73100482"}, {"label": "73100482"},
+                       {"message": "Moved to folder 73100482"}, {"paid": "73100482"}, {"valid": 73100482},
+                       {"parentFolderId": "Folder 73100482"}, {"073100482": ["status"]},
+                       {"73100491": "Mirror of board 73100482"}, {"settings": {"73100491": {"note": "73100482"}}}):
+            with self.subTest(change=change):
+                code, data = self.payload(dict({"name": "Orders"}, **change), "widget")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, "term", "id-patterns", "block"), data["findings"])
+        for change in ({"parentFolderId": "91000023"}, {"91000023": ["status"]}):
+            with self.subTest(change=change):  # the user's own account ids block under any key (X06, Y08)
+                code, data = self.payload(dict({"name": "Orders"}, **change), "widget")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, "seller-account", severity="block"), data["findings"])
+
+    # R67: small numbers are not client figures
+
+    def demo_record(self):
+        """A readiness line puts "ten" beside a cost word, as demo 1's did: the cause of its three blocks."""
+        write(self.root / S1 / "readiness.md", "\n".join([
+            "# Readiness", "", "## Goals",
+            "- G1 Keep the cafe chain at the spring renewal: ten working days from order to delivery.", "",
+            "## Entities", "- rush order (three-day turnaround, charged double); parent: order", ""]))
+
+    def test_A33_R67_the_cause_a_word_number_beside_a_cost_word_was_a_figure_give_or_take_its_last_digit(self):
+        line = "Keep the cafe chain at the spring renewal: ten working days from order to delivery."
+        ten = [n for n in lint.parse_numbers(lint.fold(line), line) if n.value == 10]
+        self.assertTrue(ten and ten[0].cue, ten)  # "renewal" is a cost cue (X25)
+        self.assertEqual(ten[0].precision, 10)  # so the figure 10 met every number from 1 to 19
+        self.assertTrue(ten[0].matches(1, 1) and ten[0].matches(2, 1))
+        self.assertLess(ten[0].value, lint.SMALL_FIGURE)  # A33: it is no client figure now
+
+    def test_A33_R67_demo_1s_three_texts_pass_in_the_blueprint_and_in_a_payload(self):
+        self.demo_record()
+        texts = ("Sections and labs are values on the rows, not separate boards, so one board serves every lab.",
+                 "| Column | Type | Values |\n|---|---|---|\n| Lab | status | Main lab, Satellite 1, Satellite 2 |\n"
+                 "| Analyses | connect boards, two-way | links to the order's rows |")
+        code, data = self.blueprint({1: texts[0], 11: texts[1]})
+        self.assertEqual((code, data["findings"]), (0, []))
+        for text in texts:
+            with self.subTest(text=text):
+                code, data = self.payload({"description": text})
+                self.assertEqual((code, data["findings"]), (0, []))
+        code, data = self.payload({"markdown": "The day rate is a hundred."})  # 100 give or take 100 met 10 before
+        self.assertFalse(self.found(data, "figure"), data["findings"])
+        self.assertEqual((code, [f["rule"] for f in data["findings"]]), (2, ["number"]))
+
+    def test_A33_R67_numbers_below_100_in_digits_or_words_never_match_nor_warn(self):
+        self.demo_record()
+        for text in ("Each driver earns 27 an hour.", "Pay $27 for it.", "A tray takes 27 minutes.",
+                     "The bakery has 34 staff.", "Ten working days, charged double.", "It costs ninety-nine.",
+                     "The fee is 99.5 a crate.", "Rush orders cost three times as much."):
+            with self.subTest(text=text):
+                self.assertClean(text + "\n")
+        self.assertOwnFigure("The margin is 31%.\n")  # a percentage keeps its own rule; A34 (R70): it warns
+        code, data = self.scan("About 15% of loaves.\n")
+        self.assertEqual((code, [f["rule"] for f in data["findings"]]), (2, ["number"]))
+        code, data = self.scan("The bakery bought 1,200 crates.\n")
+        self.assertEqual((code, [f["rule"] for f in data["findings"]]), (2, ["number"]))
+
+    def test_A33_R67_a_client_figure_of_100_or_more_still_blocks_in_every_form(self):
+        # A34 (R70): the client's own figure of 100 or more is still matched in every form, and now warns
+        self.demo_record()
+        write(self.root / "research" / "2026-09-03-rush.md", "- The rush desk's overtime costs 4,500 a month.\n"
+                                                             "- Each rush order costs 150 extra.\n")
+        for form in ("4500", "4,500", "4.5k", "$4.5k", "four and a half thousand", "four thousand five hundred",
+                     "4 500"):
+            with self.subTest(form=form):
+                code, data = self.payload({"markdown": "Overtime runs at %s." % form})
+                self.assertEqual(code, 2, data["findings"])
+                self.assertTrue(self.found(data, "figure", severity="warn") or
+                                self.found(data, "split-figure", severity="warn"), data["findings"])
+                code, data = self.blueprint({1: "Overtime runs at %s a month." % form})
+                self.assertEqual(code, 2, data["findings"])
+        self.assertOwnFigure("The rush fee is 150.\n")
+        self.assertEqual(lint.words_number("four and a half thousand".split()), (4500, 5))
+        self.assertEqual(lint.words_number("two and a half million".split()), (2500000, 5))
+        self.assertEqual(lint.words_number("four and a half".split()), (4, 1))
+
+    # R68: the blueprint's prose meets no copied-run or quote rule; every payload still does
+
+    def test_A33_R68_a_restated_run_and_quote_pass_the_blueprint_and_block_a_payload(self):
+        write(self.root / S1 / "readiness.md", "# Readiness\n\n## Entities\n- Every tray is logged at the proofing "
+                                               "bench before the oven list is printed.\n")
+        run, own, quote = ("Every tray is logged at the proofing bench before the oven list is printed.",
+                           "Counts down each tray's second proof at the bench.",
+                           "Every tray of rolls sits waiting for the one working oven.")
+        bodies = {1: run, 3: quote, 11: "| Column | Type | What it holds |\n|---|---|---|\n| Proof timer | timeline | "
+                  "counts down each tray's second proof at the bench |",
+                  16: "| Key | Element | Note |\n|---|---|---|\n| B1.C4 | Proof timer | counts down each tray's "
+                      "second proof at the bench |"}
+        code, data = self.blueprint(bodies)
+        self.assertEqual((code, data["findings"]), (0, []))
+        for text, rule, source in ((run, "copied-run", "%s/readiness.md" % S1),
+                                   (own, "copied-run", "%s/solution/blueprint.md" % S1),
+                                   (quote, "quote", "calls/2026-09-10-discovery.md")):
+            with self.subTest(text=text):
+                code, data = self.payload({"description": text})
+                self.assertEqual(code, 1, data["findings"])
+                self.assertEqual([f["source"] for f in self.found(data, rule, severity="block")], [source])
+
+    def test_A33_R68_the_blueprint_keeps_the_firm_markers_credentials_ids_and_record_paths(self):
+        for text, rule, cls in (("Built for Quellmoor Advisory.", "term", "firm"),
+                                ("Check this [X].", "term", "markers"), ("password: Tilework42", "credential", None),
+                                ("Board 73100482 holds orders.", "term", "id-patterns"),
+                                ("See research/2026-09-02-brief.md first.", "term", "id-patterns"),
+                                ("Orders from Brackwater Mills.", "exclusion", None),
+                                # A34 (R70): the exclusion figure, since the client's own 184,260 now warns
+                                ("The fee is 47,500.", "exclusion", None)):
+            with self.subTest(text=text):
+                code, data = self.blueprint({2: text})
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, rule, cls, "block"), data["findings"])
+
+    # R69: sample rows raise no number warnings, and every other rule still runs on them
+
+    def test_A33_R69_an_item_batch_raises_no_number_warning(self):
+        write(self.root / "research" / "2026-09-03-volumes.md", "- The bakery delivers 1,350 loaves a week.\n")
+        rows = {"board_id": 73100482, "items": [
+            {"item_name": "Order 1042",
+             "column_values": json.dumps({"numbers": "1350", "text_1": "Batch 2210, 480 rolls", "numbers4": 1180.5})},
+            {"item_name": "Order 1043", "column_values": json.dumps({"numbers": 2875, "text_1": "About 15% rye"})}]}
+        code, data = self.payload(rows, "item_batch")
+        self.assertEqual((code, data["findings"]), (0, []))
+        code, data = self.payload(rows, "board")  # the same values anywhere else still warn
+        self.assertEqual(code, 2, data["findings"])
+        self.assertEqual({f["rule"] for f in data["findings"]}, {"number", "record-number"})
+
+    def test_A33_R69_every_other_rule_still_runs_on_an_item_batch(self):
+        # A34 (R70): the client's own cost figure, 184260, warns on a sample row now (A34Test), so it is not listed
+        for value, rule, cls in (("Quellmoor order", "term", "firm"), ("ref 73100485", "term", "id-patterns"),
+                                 ("Brackwater Mills", "exclusion", None), ("47500", "exclusion", None),
+                                 ("password: Tilework42", "credential", None),
+                                 ("Check [X]", "term", "markers"), ("47 500", "split-figure", None),
+                                 ("The proofing cabinet overheats during the long summer afternoons.", "copied-run",
+                                  None)):
+            with self.subTest(value=value):
+                code, data = self.payload({"board_id": 73100482, "items": [
+                    {"item_name": "Order", "column_values": json.dumps({"text_1": value})}]}, "item_batch")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, rule, cls, "block"), data["findings"])
+
+
+class A34Test(Base):
+    """A34 (R70): a client's own figure of 100 or more warns in its own build; the wall and the exclusions block."""
+
+    FORMS = ("4500", "4,500", "4.5k", "$4.5k", "four and a half thousand", "four thousand five hundred", "4 500",
+             "| Overtime | 4 | 500 |")
+
+    def setUp(self):
+        super().setUp()
+        write(self.root / "research" / "2026-09-03-rush.md", "- The rush desk's overtime costs 4,500 a month.\n"
+                                                             "- The loaded rate on the rush desk is 157 an hour.\n")
+
+    def blueprint(self, bodies):
+        write(self.root / S1 / "solution" / "blueprint.md", blueprint_text(bodies))
+        return self.lint("blueprint", "--strand", "001")
+
+    def assertWarns(self, code, data, rules=("figure", "split-figure")):
+        """Exit 2, no block, and the client's own figure shown as a warning under its own rule."""
+        self.assertEqual(code, 2, data["findings"])
+        self.assertEqual(data["verdict"], "warnings")
+        self.assertFalse(self.found(data, severity="block"), data["findings"])
+        own = [f for f in data["findings"] if f["rule"] in rules and f["severity"] == "warn"]
+        self.assertTrue(own, data["findings"])
+        self.assertTrue(all("client" in f["problem"] and f["expected"] for f in own), own)
+        return own
+
+    def test_A34_R70_a_client_figure_of_100_or_more_warns_in_every_form_in_a_payload_a_blueprint_and_a_scan(self):
+        for form in self.FORMS:
+            with self.subTest(form=form):
+                text = "Overtime runs at %s a month." % form if not form.startswith("|") else \
+                    "| Line | Amount | Month |\n|---|---|---|\n" + form
+                self.assertWarns(*self.payload({"markdown": text}, "doc"))
+                self.assertWarns(*self.blueprint({1: text}))
+                self.assertWarns(*self.scan(text + "\n"))
+        for text in ("The rush rate is 157 an hour.", "Pay $157 for each rush hour.", "The rush fee is 157."):
+            with self.subTest(text=text):
+                own = self.assertWarns(*self.payload({"description": text}, "board"), rules=("figure",))
+                self.assertEqual(own[0]["source"], "research/2026-09-03-rush.md")
+                self.assertWarns(*self.blueprint({2: text}), rules=("figure",))
+                self.assertWarns(*self.scan(text + "\n"), rules=("figure",))
+        own = self.assertWarns(*self.payload({"rate": 4500}, "column"), rules=("figure",))  # a JSON number too
+        self.assertEqual((own[0]["field"], own[0]["match"]), ("$.rate", "4500"))
+
+    def test_A34_R70_a_figure_split_in_a_payload_and_in_a_scanned_summary_warns(self):
+        for text in ("The overtime comes to 4 500 in all.", "A note puts it at four thousand\nfive hundred.",
+                     "| 4 | 500 |", "It is 4.500 now."):
+            with self.subTest(text=text):
+                own = self.assertWarns(*self.payload({"markdown": text}, "doc"))
+                self.assertIn("split-figure", {f["rule"] for f in own})
+        write(self.root / S1 / "SUMMARY.md", "# Summary\n\nOvertime on the desk comes to 4 500 a month.\n")
+        code, data = self.lint("scan", S1 + "/SUMMARY.md")  # summary mode reads split figures only (X37)
+        self.assertEqual(data["mode"], "summary")
+        self.assertWarns(code, data, rules=("split-figure",))
+
+    def test_A34_R70_a_cost_percentage_warns_in_a_payload_a_blueprint_and_a_scan(self):
+        for text in ("The margin is 31%.", "The margin is 31 per cent."):
+            with self.subTest(text=text):
+                for code, data in (self.payload({"description": text}, "board"), self.blueprint({1: text}),
+                                   self.scan(text + "\n")):
+                    own = self.assertWarns(code, data, rules=("figure",))
+                    self.assertIn("cost percentage 31%", own[0]["problem"])
+
+    def test_A34_R70_an_item_batch_warns_on_a_client_figure_and_on_no_other_number(self):
+        rows = {"board_id": 73100482, "items": [
+            {"item_name": "Order 1042", "column_values": json.dumps({"numbers": 4500, "text_1": "Overtime 4,500",
+                                                                     "text_2": "Rush hour at 157 an hour"})},
+            {"item_name": "Order 1043", "column_values": json.dumps({"numbers": 2875, "text_1": "About 15% rye",
+                                                                     "text_2": "Split 4 500", "text_3": "1,180.5"})}]}
+        code, data = self.payload(rows, "item_batch")
+        own = self.assertWarns(code, data)
+        # Each is found in the raw column_values string and in the value walked inside it (R34).
+        self.assertEqual({(f["rule"], f["match"]) for f in data["findings"]},
+                         {("figure", "157"), ("figure", "4,500"), ("figure", "4500"), ("split-figure", "4 500")})
+        self.assertEqual(len(own), len(data["findings"]))
+        self.assertFalse(self.found(data, "number") or self.found(data, "record-number"))  # R69 stays
+
+    def test_A34_R70_an_exclusion_figure_still_blocks_at_any_value(self):
+        exclusions = self.root / S1 / "solution" / "exclusions.md"
+        write(exclusions, RECORD[S1 + "/solution/exclusions.md"] + "- 64 [kind: figure; added: 2026-10-22; by: the "
+                                                                   "user; source: the rush call]\n")
+        for text in ("Pay 47,500.", "Pay $47.5k.", "Pay forty-seven thousand five hundred.", "Pay 47 500.",
+                     "Keep 64 for the rush desk."):
+            with self.subTest(text=text):
+                for code, data in (self.payload({"markdown": text}, "doc"), self.blueprint({1: text}),
+                                   self.scan(text + "\n"),
+                                   self.payload({"items": [{"column_values": json.dumps({"text_1": text})}]},
+                                                "item_batch")):
+                    self.assertEqual(code, 1, data["findings"])
+                    self.assertTrue(self.found(data, "exclusion", severity="block") or
+                                    self.found(data, "split-figure", severity="block"), data["findings"])
+
+    def test_A34_R70_a_payload_with_an_own_figure_and_a_real_block_still_exits_1(self):
+        code, data = self.payload({"name": "Overtime 4,500 a month", "description": "Built by Quellmoor Advisory."},
+                                  "board")
+        self.assertEqual((code, data["verdict"]), (1, "blocked"))
+        self.assertTrue(self.found(data, "figure", severity="warn"), data["findings"])
+        self.assertTrue(self.found(data, "term", "firm", "block"), data["findings"])
+        self.assertEqual(data["counts"]["block"], 1)
 
 
 # 2.19 Pins (DECISIONS 4.5, Y08)

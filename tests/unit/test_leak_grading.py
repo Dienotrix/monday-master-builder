@@ -219,10 +219,14 @@ class LeakGradingTests(unittest.TestCase):
         outcomes = {}
         for case in CASES:
             outcomes[case["outcome"]] = outcomes.get(case["outcome"], 0) + 1
-        self.assertEqual(outcomes["blocks"], 109)
-        self.assertEqual(outcomes["warns"], 3)
+        # A33: three blocks (K02-p, K03a-p, R10c-p) and two warnings (K03b-p, R14-p) became known limits; before it,
+        # 109 blocks, 3 warns and 11 limits.
+        # A34 (R70): nine blocks whose only block was the client's own figure (K01-p, K05-p, K06-p, K07-p, K09-p,
+        # K26a-p, R01-p, R02-p, D06-p) now warn; before it, 106 blocks and 1 warns.
+        self.assertEqual(outcomes["blocks"], 97)
+        self.assertEqual(outcomes["warns"], 10)
         self.assertEqual(outcomes["caution"], 1)
-        self.assertEqual(outcomes["limit"], 11)
+        self.assertEqual(outcomes["limit"], 16)
         self.assertEqual(outcomes["passes"], 124)
         self.assertEqual(sum(1 for c in CASES if c["command"] == "scan"), 166)
         self.assertEqual(sum(1 for c in CASES if c["command"] == "payload"), 80)
