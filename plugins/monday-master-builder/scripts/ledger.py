@@ -105,7 +105,7 @@ SKELETON = (("schema", "build/2"), ("client_slug", ""), ("strand", ""), ("accoun
 # The identity fields a digest covers, per kind (W73); a kind not listed digests its whole read object.
 IDENTITY = {"workspace": ("name", "kind"), "folder": ("name", "workspace_id"),
             "board": ("name", "type", "state", "workspace_id", "board_folder_id"),
-            "doc": ("name", "workspace_id"), "automation": ("active", "updated_at"),
+            "doc": ("name", "workspace_id"), "automation": ("id", "is_active", "updated_at"),
             "dashboard": ("name", "workspace_id", "kind"), "agent": ("state", "version_id"),
             "vibe_app": ("status", "is_published", "code_version"), "workflow": ("name", "state"),
             "group": ("title", "color", "position"), "column": ("id", "title", "type", "settings"),
@@ -113,6 +113,9 @@ IDENTITY = {"workspace": ("name", "kind"), "folder": ("name", "workspace_id"),
             "publication": ("state", "is_published"), "activation": ("state", "is_published")}
 for _kind in ("subitems", "portfolio", "project"):
     IDENTITY[_kind] = IDENTITY["board"]
+# Demos' fixes, 3: list_automations names the state is_active, and the older raw read and the snapshot say active;
+# the id is in the identity so that two automations alike in every other field never share a digest.
+ALIASES = {("automation", "is_active"): ("active",)}
 
 
 # The frame (a copy of record.py's, PLAN 8 item 3): the envelope, the refusal helper, the parser.
@@ -236,7 +239,18 @@ def digest(prefix, fields):
 
 def identity(kind, obj):
     fields = IDENTITY.get(kind)
-    return {name: obj.get(name) for name in fields} if fields else dict(obj)
+    if not fields:
+        return dict(obj)
+    found = {}
+    for name in fields:
+        names = (name,) + ALIASES.get((kind, name), ())
+        found[name] = next((obj[n] for n in names if n in obj), None)
+    return found
+
+
+def automation_active(entry):
+    """An automation's state as list_automations gives it (is_active), or as the older raw read does (active)."""
+    return entry.get("is_active") if "is_active" in entry else entry.get("active")
 
 
 def local_date(utc_text):
@@ -359,6 +373,39 @@ def element_recipients(text):
         if recipients and len(cells) > 1 and cells[1] == "ui_step":
             problems.append("%s is a UI step, which notifies nobody" % key)
         found[key] = recipients
+    return found, problems
+
+
+TEMPLATE_CELL = re.compile(r"([1-9][0-9]*) ([a-z_]+)")
+
+
+def element_templates(text):
+    """({key: {template_id, entity}}, problems) of the table's optional `template` column (A38); {} when it is absent.
+
+    A cell is empty, or on a board row that installs a native, monday's template id of that native and the entity the
+    catalogue names for it (native-objects.md 3.1 and 4.1), such as `5678953932 leads`."""
+    header, cells_rows, problems = table_cells(text)
+    if header is None or problems or "template" not in header[3:]:
+        return {}, []
+    column, found, problems = header.index("template", 3), {}, []
+    for cells in cells_rows:
+        key = unquote(cells[0]) if cells else ""
+        cell = unquote(cells[column].strip()) if column < len(cells) else ""
+        if not cell:
+            continue
+        kind, match = cells[1] if len(cells) > 1 else "", TEMPLATE_CELL.fullmatch(cell)
+        info = installable(match.group(1)) if match else None
+        if kind != "board":
+            problems.append("%s is a %s: only a board row installs a native" % (key, kind or "row of no kind"))
+        elif match is None:
+            problems.append("%s names the template %r, which is not <template id> <entity>" % (key, cell))
+        elif info is None:
+            problems.append("%s names the template %s, which is no native board of the catalogue" % (key, match.group(1)))
+        elif info[1] != match.group(2):
+            problems.append("%s names %s for the template %s, which installs %s" % (
+                key, match.group(2), match.group(1), info[1]))
+        else:
+            found[key] = {"template_id": match.group(1), "entity": info[1]}
     return found, problems
 
 
@@ -847,7 +894,7 @@ ACCOUNT_FIELDS = (("id", is_str), ("slug", is_str), ("name", is_str), ("kind", l
 GUARD_LISTS = ("account_products", "template_source_ids", "unreadable_intermediate_ids", "template_view_ids",
                "native_default_names_and_terminology", "client_workspace_ids")
 GUARD_DICTS = ("product_workspaces", "native_board_index", "native_board_ids_by_entity", "reserved_column_ids",
-               "portal_object_ids", "build_targets_by_strand", "lease", "record_provenance")
+               "portal_object_ids", "build_targets_by_strand", "lease", "record_provenance", "native_installs")
 BUILD_TOP = (("schema", is_str), ("client_slug", lambda v: isinstance(v, str)), ("strand", lambda v: isinstance(v, str)),
              ("account_ref", is_str), ("account_id_at_bind", is_str),
              ("lease_epoch_at_run", lambda v: v is None or is_int(v)), ("reads_live", str_list),
@@ -864,6 +911,9 @@ APPROVAL_FIELDS = (("version", lambda v: is_str(v) and bool(re.fullmatch(r"v\d+\
 APPROVAL_OPTIONAL = (("approval_mode", lambda v: v in APPROVAL_MODES), ("workflows_listed", str_list),
                      ("agents_listed", str_list), ("sequences_listed", str_list),
                      ("notifies_approved", lambda v: isinstance(v, dict) and all(str_list(r) for r in v.values())),
+                     ("native_installs", lambda v: isinstance(v, dict) and all(
+                         isinstance(t, dict) and installable(str(t.get("template_id"))) is not None and
+                         installable(str(t.get("template_id")))[1] == t.get("entity") for t in v.values())),
                      ("rests_on", lambda v: v is None or (isinstance(v, dict) and all(
                          k in v for k in ("clearance", "purpose", "assumptions", "assumed_terms", "forks_on_leaning")))))
 RUN_FIELDS = (("id", lambda v: is_str(v) and bool(re.fullmatch(r"run-\d{4}-\d{2}-\d{2}-\d+", v))), ("version", is_str),
@@ -891,7 +941,8 @@ ROW_OPTIONAL = (("url", opt_str), ("item_ids", str_list), ("product", lambda v: 
                 ("refs", lambda v: str_list(v) and all(re.fullmatch(r"(board|workspace|doc|view|column):\d+", r) for r in v)),
                 ("assumption_refs", lambda v: str_list(v) and all(ASSUMPTION_ID.fullmatch(r) for r in v)),
                 ("prompt_ref", opt_str), ("version_id_at_build", opt_str), ("live_key", opt_str),
-                ("read_values", lambda v: isinstance(v, dict)))
+                ("read_values", lambda v: isinstance(v, dict)),
+                ("template_id", lambda v: v is None or (is_str(v) and installable(v) is not None)))
 LIVE_CHECKS = (("monday_id", is_str), ("kind", lambda v: v in TYPES), ("name_at_build", lambda v: isinstance(v, str)),
                ("owner_strand", lambda v: v is None or (isinstance(v, str) and bool(re.fullmatch(r"\d{3}", v)))),
                ("introduced_in", lambda v: isinstance(v, str) and bool(re.fullmatch(r"\d{3}/v\d+\.\d+|client|native", v))),
@@ -980,6 +1031,9 @@ class Checker:
                 if not test(value):
                     self.block(name, "live_objects.%s.%s" % (key, field), "%s is not an allowed value" % json.dumps(value),
                                "the live_objects field as record-map.md gives it")
+            if isinstance(row, dict) and "departed" in row and not is_str(row["departed"]):
+                self.block(name, "live_objects.%s.departed" % key, "%s is not an allowed value" % json.dumps(
+                    row["departed"]), "the departure's qualified version and decision, or no field at all")
             if isinstance(row, dict) and row.get("owner_strand") is None and not client_built(row):
                 self.block(name, "live_objects.%s.owner_strand" % key, "a row built by %s with no owning strand" % (
                     row.get("introduced_in")), "the short id of the strand that built it; only a client or native row "
@@ -1134,6 +1188,9 @@ class Checker:
         kind = row.get("type")
         if ":" in key or not key_fits(key, kind):
             self.block(name, field, "the key is not a bare key of the type %s" % kind, "a bare key such as B1, of its type")
+        if row.get("template_id") and (kind != "board" or row.get("origin") != "created"):
+            self.block(name, field + ".template_id", "a template on a %s %s row" % (row.get("origin"), kind),
+                       "a template only on a created board row, the native this strand installs (A38)")
         if row.get("state") == "inactive" and kind not in INACTIVE_OK:
             self.block(name, field + ".state", "inactive on a %s row" % kind, "inactive only for " + ", ".join(INACTIVE_OK))
         if row.get("status") == "verified" and (row.get("verify") or {}).get("result") != "match":
@@ -1289,7 +1346,8 @@ def map_view(row):
     return {"monday id": text(row.get("monday_id")), "kind": text(row.get("kind")), "workspace": text(row.get("workspace")),
             "built by": text(row.get("introduced_in")), "state": text(row.get("state")),
             "constraint": text(row.get("constraint")), "source": text(row.get("constraint_source")),
-            "dependants": ", ".join(row.get("dependants") or []) or "none", "last verified": text(row.get("last_verified"))}
+            "dependants": ", ".join(row.get("dependants") or []) or "none",
+            "last verified": text(row.get("last_verified")) or ("departed, %s" % row["departed"] if row.get("departed") else "")}
 
 
 def map_text(slug, live, updated):
@@ -1620,6 +1678,14 @@ def new_row(kind, key, name, version, ref):
     return row
 
 
+def read_only(led, key, kind, referenced):
+    """True for a workspace or folder the revision references and the build never writes, which is off the must-list
+    (demos' fixes, 1); a row the strand already created stays created whatever the flags say, so it stays on it."""
+    row = ((led.build or {}).get("objects") or {}).get(key)
+    return kind in ("workspace", "folder") and key in (referenced or []) and (
+        row is None or row.get("status") == "planned" or row.get("origin") == "pre-existing-referenced")
+
+
 def cmd_approval(root, args):
     led = Ledger(root, args.strand)
     refuse(*led.newer())
@@ -1671,6 +1737,19 @@ def cmd_approval(root, args):
             recipients = {}
         reasons += [(frel, "## Element keys", problem, "each recipient once, as user, a user id, team:<id> or "
                      "email:<address>, separated by commas") for problem in wrong]
+    installs = {}
+    if rows and not problems:  # A38: a native install names monday's template for its board row
+        installs, wrong = element_templates(text)
+        built = (led.build or {}).get("objects") or {}
+        for key in sorted(installs, key=natural):
+            row = built.get(key)
+            if key in (args.referenced or []):
+                wrong.append("%s is referenced: a board the build reads is never installed" % key)
+            elif row is not None and row.get("id") and row.get("template_id") != installs[key]["template_id"]:
+                wrong.append("%s is built already as board %s: a native install is a new board" % (key, row["id"]))
+        reasons += [(frel, "## Element keys", problem, "a template cell on a new board row only: monday's template id "
+                     "of a native board and the entity the catalogue names for it (native-objects.md 3.1 and 4.1), "
+                     "such as 5678953932 leads") for problem in wrong]
     table = {key: (kind, name) for key, kind, name in rows}
     irreversible = list(args.irreversible or [])
     for key in irreversible:
@@ -1680,7 +1759,7 @@ def cmd_approval(root, args):
             reasons.append(("(flags)", "--irreversible", "%s is a %s, a list" % (key, table[key][0]),
                             "an irreversible step; automations, workflows, agents and sequences are lists"))
     for key, (kind, _) in table.items():
-        if kind in MUST_LIST and key not in irreversible:
+        if kind in MUST_LIST and key not in irreversible and not read_only(led, key, kind, args.referenced):
             reasons.append(("(flags)", "--irreversible", "the %s %s is not listed" % (kind, key),
                             "every workspace, folder, publication, activation and webhook listed as its own step"))
         if kind in PROMPT_TYPES and prompt_block(text, key) is None:
@@ -1720,6 +1799,7 @@ def cmd_approval(root, args):
     for kind, field in LISTS:
         entry[field] = [key for key, (k, _) in table.items() if k == kind]
     entry["notifies_approved"] = {key: list(recipients.get(key) or []) for key, (k, _) in table.items() if k != "ui_step"}
+    entry["native_installs"] = {key: dict(installs[key]) for key in sorted(installs, key=natural)}
     entry["rests_on"] = {"clearance": led.strand.get("clearance"), "purpose": purpose, "assumptions": counts["AS"],
                          "assumed_terms": counts["AT"], "forks_on_leaning": counts["FK"]}
     entry["live_objects_touched"] = touched
@@ -1942,14 +2022,19 @@ def cmd_run_heartbeat(root, args):
 
 
 def live_rows(led):
-    """W60, W61: the live_objects rows `run end` writes or refreshes from the strand's verified rows."""
+    """W60, W61: the live_objects rows `run end` writes or refreshes from the strand's verified rows, and from its
+    departed rows that hold an id, since what departed after it was made is still in monday (demos' fixes, 2)."""
     live = led.account.setdefault("live_objects", {})
     native = (led.index.get("native_board_index") or {})
     created, refreshed, archived = [], [], []
-    verified = {k: r for k, r in led.objects.items() if r.get("status") == "verified" and r.get("type") != "item_batch"}
-    for key, row in sorted(verified.items()):
+    carried = {k: r for k, r in led.objects.items() if r.get("type") != "item_batch" and (
+        r.get("status") == "verified" or (r.get("status") == "departed" and r.get("id")
+                                          and r.get("origin") != "other-strand-modified"))}
+    departures = {d.get("key"): d for d in led.build.get("departures") or []}  # the newest departure of each key
+    for key, row in sorted(carried.items()):
         verify = row.get("verify") or {}
         kind = row.get("type")
+        gone = departures.get(key, {}) if row.get("status") == "departed" else None
         if kind in ACCOUNT_LEVEL or (row.get("workspace_scope") and not row.get("workspace")):
             workspace = "account: %s" % "; ".join(row.get("workspace_scope") or [])
         elif kind == "workspace":
@@ -1957,8 +2042,11 @@ def live_rows(led):
         else:
             workspace = led.row_workspace(key)
         fresh = {"monday_id": row.get("id"), "kind": kind, "workspace": workspace, "state": row.get("state") or "active",
-                 "digest": verify.get("digest"), "last_verified": local_date(verify["at"]) if is_utc(verify.get("at")) else None,
-                 "dependants": sorted("%s:%s" % (led.short, k) for k, r in verified.items() if r.get("parent_key") == key)}
+                 "digest": verify.get("digest"), "last_verified": local_date(verify["at"]) if is_utc(verify.get("at"))
+                 and gone is None else None,
+                 "dependants": sorted("%s:%s" % (led.short, k) for k, r in carried.items() if r.get("parent_key") == key)}
+        mark = {} if gone is None else {"departed": "%s/%s: %s" % (led.short, gone.get("version") or led.version,
+                                                                    gone.get("decision") or "departed")}
         if row.get("origin") == "other-strand-modified":
             target = live.get(row.get("live_key"))
             if target is not None:
@@ -1968,12 +2056,16 @@ def live_rows(led):
             continue
         qkey = "%s:%s" % (led.short, key)
         if qkey in live:
-            live[qkey].update(fresh)
+            live[qkey].update(fresh, **mark)
+            if not mark:
+                live[qkey].pop("departed", None)  # verified again: no longer departed
             live[qkey] = full_live(live[qkey])
             refreshed.append(qkey)
             continue
         built = ("native" if str(row.get("id")) in native else "client") if row.get("origin") in (
             "pre-existing-referenced", "pre-existing-modified") else "%s/%s" % (led.short, row.get("introduced_in"))
+        if installed_native(row):  # A38: a native this strand installed is a native, which no strand owns (R17)
+            built = "native"
         constraint, source = "change-with-own-yes", "pending strand close"
         same = shared_rows(live, row.get("id"), qkey)  # R5: one object under two keys keeps one constraint
         if same:
@@ -1982,7 +2074,7 @@ def live_rows(led):
             source = "as %s: %s" % (strictest, live[strictest].get("constraint_source"))
         owner = None if built in ("client", "native") else led.short  # R17: no strand owns a client or native row
         live[qkey] = full_live(dict(fresh, name_at_build=row.get("name"), owner_strand=owner, introduced_in=built,
-                                    constraint=constraint, constraint_source=source))
+                                    constraint=constraint, constraint_source=source, **mark))
         created.append(qkey)
     for key, row in sorted(led.objects.items()):
         qkey = row.get("live_key") if row.get("origin") == "other-strand-modified" else "%s:%s" % (led.short, key)
@@ -2131,6 +2223,8 @@ def intent_move(led, key, row, op, retry):
     if op in ("create", "activate", "publish") and status == "planned":
         return None
     if op == "update" and status in ("verified", "written"):
+        return None
+    if op == "update" and status == "planned" and template_part(led, row):  # A38: what the template brought
         return None
     if op == "archive" and status == "verified" and (row.get("id") or row.get("item_ids")):
         return None
@@ -2387,6 +2481,32 @@ def cmd_intent(root, args):
                 reasons.append((rel, field + ".parent_key", "strand %s: the parent %s is in workspace %s, the row in %s"
                                 % (led.short, parent_key, placed or "none the record knows", workspace),
                                 A21 + ": a parent in the row's own workspace (R3)"))
+    # A38: a native install (R-D narrowed) takes the template its approval holds, into a CRM or Service build target
+    install = ((entry or {}).get("native_installs") or {}).get(key) if in_table else None
+    template_id = (install or {}).get("template_id")
+    if args.template_id and install is None:
+        reasons.append(("(flags)", "--template-id", "%s holds no native install for %s" % (ref, key),
+                        "a template id only on a board row whose approved table names that template"))
+    elif args.template_id and args.template_id != template_id:
+        reasons.append(("(flags)", "--template-id", "%s given, while %s approves %s for %s" % (
+            args.template_id, ref, template_id, key), "the template id the approval holds, or no flag"))
+    if template_id and op != "create":
+        reasons.append((rel, field, "a %s of the native %s installs: the board itself keeps guard R-B" % (op, key),
+                        "a create only; its planned columns and groups change under their own rows"))
+    elif template_id and workspace:
+        product, _, named = installable(template_id)
+        entity = "%s/%s" % (product, named)
+        kind_of = (led.index.get("product_workspaces") or {}).get(workspace)
+        if kind_of != product:
+            reasons.append(("account.json", "guard_index.product_workspaces.%s" % workspace, "strand %s: the target "
+                            "%s is %s, and template %s installs a %s board" % (led.short, workspace, "a %s workspace" % (
+                                kind_of) if kind_of else "a workspace of no product the record knows", template_id,
+                                product), "a %s workspace among this strand's build targets" % product))
+        for bid in (led.index.get("native_board_ids_by_entity") or {}).get(entity) or []:
+            if led.place(str(bid)) == workspace and str(bid) != str(row.get("id")):
+                reasons.append(("account.json", "guard_index.native_board_ids_by_entity.%s" % entity, "workspace %s "
+                                "already has the native %s, board %s" % (workspace, entity, bid),
+                                "the blueprint uses that board (A5): a native install only where its entity has none"))
     refs = list(args.ref or row.get("refs") or [])
     ref_ids = []
     for item in refs:
@@ -2421,8 +2541,14 @@ def cmd_intent(root, args):
                             "no change to it or under it, whatever key a strand mirrors it under"))
     # recipients, sample data, assumptions, prompt, --ir
     notifies = list(args.notifies or row.get("notifies") or [])
-    reasons += [None if RECIPIENT.fullmatch(n) else ("(flags)", "--notifies", "%r" % n, "a user id, team:<id> or "
-                                                     "email:<address>") for n in notifies]
+    if "user" in notifies:  # demos' fixes, 4: the word the approval table writes, read as the bound user's id
+        if ID.fullmatch(led.bound_user):
+            notifies = [led.bound_user if n == "user" else n for n in notifies]
+        else:
+            reasons.append(("account.json", "account.bound_user_id", "--notifies user, while the record has no bound "
+                            "user (%s)" % led.bound_user, "ledger.py bind first, which records the bound user"))
+    reasons += [None if n == "user" or RECIPIENT.fullmatch(n) else (
+        "(flags)", "--notifies", "%r" % n, "user, a user id, team:<id> or email:<address>") for n in notifies]
     if kind == "sequence" and not notifies:
         reasons.append((rel, field + ".notifies", "a sequence with no recipients", "every recipient, shown at approval"))
     # R20 (a): the recipients are the ones the approved revision records for the key, as a set
@@ -2524,6 +2650,8 @@ def cmd_intent(root, args):
     payload = {"key": key, "type": kind, "operation": op, "name": row.get("name"), "parent_id": parent_id,
                "workspace": workspace, "workspace_scope": sorted(scope), "refs": sorted(refs),
                "notifies": sorted(notifies), "payload_sha256": args.payload_sha}
+    if template_id:
+        payload["template_id"] = row["template_id"] = template_id
     row.update(origin=origin, parent_key=parent_key, parent_id=str(parent_id) if parent_id else None, status="attempting",
                attempt={"run_id": args.run_id, "started_at": now, "intent_digest": hash8(payload), "operation": op,
                         "retry": bool(args.retry) and status_before == "mismatch"},
@@ -2573,6 +2701,37 @@ def known_id(row):
         found = row["prior_state"].get("id")
         return str(found) if found not in (None, "") else None
     return None
+
+
+def installed_native(row):
+    """True for the board row of a native this strand installed (A38): created from an approved template and verified
+    as that template's native, which gave it its role."""
+    return bool(row) and row.get("type") == "board" and row.get("origin") == "created" and bool(
+        row.get("template_id")) and bool(row.get("role"))
+
+
+def template_part(led, row):
+    """True for a column or group row on a native this strand installed (A38, R-B narrowed): what the template brought
+    is recorded by its existing id and changed under this strand's approval, with no change-table row of its own."""
+    parent = row.get("parent_key")
+    return row.get("type") in ("column", "group") and bool(parent) and ":" not in str(parent) and installed_native(
+        led.objects.get(parent))
+
+
+def register_install(led, key, row):
+    """A38: the native a verified install made, entered in guard_index as native-map enters a native it reads
+    (native_board_index, native_board_ids_by_entity) and in native_installs as this strand's; its "product/entity"."""
+    product, _, entity = installable(row["template_id"])
+    value, bid = "%s/%s" % (product, entity), str(row["id"])
+    index = led.index
+    index.setdefault("native_board_index", {})[bid] = value
+    ids = index.setdefault("native_board_ids_by_entity", {}).setdefault(value, [])
+    if bid not in [str(i) for i in ids]:
+        ids.append(bid)
+        ids.sort(key=id_sort)
+    index.setdefault("native_installs", {})[bid] = "%s:%s" % (led.short, key)
+    row["role"] = value
+    return value
 
 
 def cmd_record(root, args):
@@ -2706,6 +2865,15 @@ def verify_reasons(led, key, row, result, obj, note, rel):
         halves = [tasks in [str(i) for i in obj.get(p) or []] for p in ("link_board_ids", "row_board_ids")]
         if not all(halves):
             found.append((rel, field, "one half of the link only: partial link", "needs-user with the note partial link"))
+    if kind == "board" and row.get("template_id") and result == "match":  # A38: a genuine install, its rows archived
+        lineage = obj.get("created_from_board_id")
+        if str(lineage) != str(row["template_id"]):
+            found.append((rel, field, "the read's created_from_board_id is %s, while the approved template is %s" % (
+                lineage, row["template_id"]), "the board's created_from_board_id equal to the approved template id"))
+        if obj.get("items_count") not in (0, "0"):
+            found.append((rel, field, "the read's items_count is %s: the template's rows are not all archived" % (
+                obj.get("items_count") if "items_count" in obj else "not read"), "items_count 0, read after the "
+                "template's rows are archived and before the build adds its own sample rows"))
     want = str(row["id"]) if row.get("origin") in ("other-strand-modified", "pre-existing-modified") and row.get(
         "id") else known_id(row)
     if want and obj.get("id") not in (None, "") and str(obj["id"]) != want:  # R9: the read is of the modified object
@@ -2752,13 +2920,16 @@ def cmd_verify(root, args):
             "partial link" not in (note or ""):
         note = "partial link: %s" % note
     now = mc.stamp("utc")
-    row["verify"] = {"read": data["read"], "at": now, "result": result, "digest": digest(str(key).lower(), identity(kind, obj)),
-                     "note": note}
+    named = obj if obj.get("id") not in (None, "") or not row.get("id") else dict(obj, id=row["id"])  # demos' fixes, 3
+    row["verify"] = {"read": data["read"], "at": now, "result": result, "digest": digest(str(key).lower(), identity(
+        kind, named)), "note": note}
     if referenced:
         row.update(id=str(obj["id"]), workspace=str(obj["workspace_id"]), status="verified" if result == "match" else "mismatch")
     elif status == "written":
         row["status"] = {"match": "verified", "mismatch": "mismatch"}.get(result, "written")
     state = str(obj.get("state") or "").lower()
+    if kind == "automation" and not state and isinstance(automation_active(obj), bool):
+        state = "active" if automation_active(obj) else "inactive"
     if status != "removed" and state in STATES and (state != "inactive" or kind in INACTIVE_OK):
         row["state"] = state
     elif status != "removed" and result == "match" and row.get("state") is None:
@@ -2774,8 +2945,16 @@ def cmd_verify(root, args):
         projects = {str(p.get("tasks_board_id")) for item in ((led.account.get("native_map") or {}).get("portfolio") or {}).values()
                     for p in (item or {}).get("projects") or []}
         row["role"] = index.get(str(row["id"])) or ("project_tasks_board" if str(row["id"]) in projects else None)
+    native = register_install(led, key, row) if kind == "board" and row.get("template_id") and result == "match" else None
     beat(led, args.run_id)
-    written = save_build(led, "verify", args.run_id)
+    if native is None:
+        written = save_build(led, "verify", args.run_id)
+    else:  # A38: the index first, so a failure between the two writes still protects the board as native
+        led.account["updated_at"] = led.build["updated_at"] = now
+        commit("verify", [("account.json", json_step(root, root / "account.json", led.account), None),
+                          (led.build_rel, json_step(root, led.build_path, led.build), None)], args.run_id,
+               "the same verify call again: it registers the native as it is and writes the ledger row", root)
+        written = {"account.json": mc.sha256_file(root / "account.json"), led.build_rel: mc.sha256_file(led.build_path)}
     extra = [t for t in obj.get("triggers") or [] if kind == "agent" and str(t if not isinstance(t, dict) else t.get(
         "name")) not in DEFAULT_TRIGGERS]
     live = led.account.get("live_objects") or {}
@@ -3099,6 +3278,22 @@ def _template(tid):
         family, raw = SERVICE_TEMPLATES[tid]
         return "service", family, None, ENTITY_ALIAS.get(("service", raw), raw), raw
     return None
+
+
+NOT_INSTALLED_ALONE = ("companion", "project", "project_companion", "start_here_doc", "portal_custom_object")
+
+
+def installable(tid):
+    """(product, entity as NO 3.1 or 4.1 names it, entity as native_board_index names it) of a template id a native
+    install may name (A38): a board of its own entity, never a companion, a subitems board, the Start here doc, the
+    Portal or family E, which NO 4.1 does not list; None for every other id."""
+    found = _template(str(tid))
+    if found is None:
+        return None
+    product, family, _, entity, raw = found
+    if family == "E" or raw in NOT_INSTALLED_ALONE or raw in SUBITEM_PARENT or raw.endswith("_subitems"):
+        return None
+    return product, raw, entity
 
 
 def _view(vid):
@@ -3583,6 +3778,15 @@ def classify(reads, account):
                         targets.setdefault(str(target), []).append(bid)
     ctx = {"parents": parents, "entity": entity, "targets": {k: sorted(set(v), key=id_sort) for k, v in targets.items()}}
     boards = {bid: classify_board(facts[bid], reads, ctx) for bid in sorted(facts, key=id_sort)}
+    index = (account.get("guard_index") or {}).get("native_board_index") or {}
+    for bid, qkey in sorted(((account.get("guard_index") or {}).get("native_installs") or {}).items()):
+        r = boards.get(str(bid))
+        if r is None or r["class"] == "pending":
+            continue
+        r["signals"].append("native_install:%s" % qkey)  # A38: a native a strand installed, never a build look-alike
+        if not r["class"].startswith("native_") and "/" in str(index.get(str(bid)) or ""):
+            product, entity = index[str(bid)].split("/", 1)  # read without its native signals: its role from the index
+            r.update({"class": native_class(product, entity), "confidence": "medium", "review": True})
     totals, limits, pending = {}, [], []
     for bid, r in boards.items():
         if r["class"] == "pending":
@@ -3855,7 +4059,7 @@ def cmd_snapshot(root, args):
                     "owners": sorted(map(str, e.get("owners") or [])), "subscribers": sorted(map(str, e.get("subscribers")
                                                                                               or []))}
                    for e in read["boards"] if keep(e, str(e.get("id")) in boards)]
-    automations = [{"id": str(e.get("id")), "board_id": str(e.get("board_id")), "active": e.get("active"),
+    automations = [{"id": str(e.get("id")), "board_id": str(e.get("board_id")), "active": automation_active(e),
                     "updated_at": e.get("updated_at")} for e in read["automations"]
                    if keep(e, str(e.get("id")) in ids or str(e.get("board_id")) in boards)]
     forms = [{"board_id": str(e.get("board_id")), "view_id": str(e.get("view_id")), "form_digest": digest(
@@ -4306,8 +4510,8 @@ class Reconciler:
         if kind in BOARD_KINDS and row.get("state") in STATES and entry.get("state") != row.get("state"):
             pairs.append(("state", row.get("state"), entry.get("state")))
         if kind == "automation" and row.get("state") in ("active", "inactive") and \
-                entry.get("active") is not (row.get("state") == "active"):
-            pairs.append(("active", row.get("state") == "active", entry.get("active")))
+                automation_active(entry) is not (row.get("state") == "active"):
+            pairs.append(("active", row.get("state") == "active", automation_active(entry)))
         values = dict(row.get("read_values") or {})
         if kind == "agent" and row.get("version_id_at_build") and "version_id" not in values:
             values["version_id"] = row["version_id_at_build"]
@@ -4752,7 +4956,7 @@ def build_parser():
     intent.add_argument("--operation", required=True)
     for flag in ("--type", "--name", "--origin", "--parent-key", "--parent-id", "--workspace", "--approval-ref",
                  "--prompt-ref", "--ir", "--prior-state", "--source-strand", "--live-key", "--evidence", "--payload-sha",
-                 "--product", "--direction-change"):
+                 "--product", "--direction-change", "--template-id"):
         intent.add_argument(flag)
     for flag in ("--scope", "--ref", "--notifies", "--assumption-ref"):
         intent.add_argument(flag, action="append")

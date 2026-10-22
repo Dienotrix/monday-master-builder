@@ -1004,7 +1004,8 @@ class ApprovalTest(Base):
         self.assertEqual(list(entry), ["version", "qualified_version", "revision", "frozen_file", "sha256", "approved_at",
                                        "approved_words", "approved_in_session", "approval_mode", "element_count",
                                        "irreversible_listed", "automations_listed", "workflows_listed", "agents_listed",
-                                       "sequences_listed", "notifies_approved", "rests_on", "live_objects_touched"])
+                                       "sequences_listed", "notifies_approved", "native_installs", "rests_on",
+                                       "live_objects_touched"])  # native_installs: A38
         self.assertEqual(entry["rests_on"], {"clearance": "cleared to build", "purpose": "proof-of-concept",
                                              "assumptions": 1, "assumed_terms": 1, "forks_on_leaning": 1})
         self.assertIn("VB1.PUB", entry["irreversible_listed"])
@@ -2380,6 +2381,255 @@ class Demo2Test(Base):
         # Every other id still has its one spelling, beside the labels too.
         wrong = {"board": {"id": int(BOARD)}, "workspace_id": "0" + OWN_WS, "settings": {"labels": [{"id": 0}]}}
         self.assertEqual((self.led.numeric_ids(wrong), self.led.zero_ids(wrong)), (["board.id"], ["workspace_id"]))
+
+
+class DemosTest(Base):
+    """The gaps the two demo builds found in ledger.py (WP3 DECISIONS.md, "Added by the demos' fixes"): one test per
+    fix, named test_demos_<n>_*."""
+
+    def test_demos_1_a_referenced_workspace_is_not_on_the_must_list_while_a_created_one_is(self):
+        rows = TABLE + (("W3", "workspace", "Demonstrations"), ("F2", "folder", "Shared files"))
+        sha = self.make_v2(rows=rows)
+        self.ok(*self.approval_argv(sha, referenced=("B9", "W3", "F2")))  # W3 and F2 are read, never written
+        self.assertEqual((self.row("W3")["origin"], self.row("F2")["origin"]),
+                         ("pre-existing-referenced", "pre-existing-referenced"))
+        self.assertNotIn("W3", self.data()["approvals"][-1]["irreversible_listed"])
+        self.copy_home()
+        sha = self.make_v2(rows=rows)
+        unlisted = tuple(k for k in IRREVERSIBLE if k not in ("W1", "W2", "WF1.PUB"))
+        found = self.refused(*self.approval_argv(sha, irreversible=unlisted, referenced=("B9", "W3", "W1", "WF1.PUB")))
+        problems = {f["problem"] for f in found if f["field"] == "--irreversible"}
+        # W2 is created by the build, W1 is a workspace the strand created at v0.1, WF1.PUB is an action, not an object
+        self.assertEqual(problems, {"the workspace W2 is not listed", "the workspace W1 is not listed",
+                                    "the publication WF1.PUB is not listed", "the folder F2 is not listed"})
+
+    def test_demos_2_a_departed_automation_still_live_reaches_the_live_map_marked_departed(self):
+        self.approve()
+        self.start()
+        self.intent("A1", "--parent-key", "B1")
+        self.record("A1", "--id", "91100000001")
+        self.verify("A1", {"id": "91100000001", "is_active": True, "updated_at": "2026-11-05T14:30:00Z"},
+                    result="mismatch")
+        self.go("depart", "--key", "A1", "--what", "the message field points at the wrong column", "--error-code",
+                "NONE", "--decision", "ui-step", "--attempt", "tool", "--ui-what", "point the message field at Crew",
+                "--ui-owner", "the user")
+        self.go("depart", "--key", "B1.G2", "--what", "never made", "--error-code", "NONE", "--decision", "later-retry")
+        data = self.end()
+        live = self.data("account.json")["live_objects"]
+        self.assertIn("001:A1", data["live_rows"]["created"])
+        self.assertNotIn("001:B1.G2", live)  # departed with no id: nothing in monday to carry
+        row = live["001:A1"]
+        self.assertEqual((row["monday_id"], row["kind"], row["state"], row["departed"], row["last_verified"],
+                          row["owner_strand"], row["constraint_source"]),
+                         ("91100000001", "automation", "active", "001/v0.2: ui-step U2", None, "001",
+                          "pending strand close"))
+        self.assertIn("| 001:A1 | 91100000001 | automation |", mc.read_text(self.root / "live" / "live-map.md"))
+        self.assertIn("| departed, 001/v0.2: ui-step U2 |", mc.read_text(self.root / "live" / "live-map.md"))
+        self.assertIn("001:A1", live["001:B1"]["dependants"])  # an archive of B1 still sees the automation on it
+        self.assertEqual(self.check()[1], set())
+
+    def test_demos_3_two_automations_from_list_automations_get_two_digests(self):
+        led = self.led
+        one = {"id": "91100000001", "is_active": True, "blocks": [{"kind": "trigger"}], "variables": []}
+        two = {"id": "91100000002", "is_active": True, "blocks": [{"kind": "trigger"}], "variables": []}
+        self.assertNotEqual(led.hash8(led.identity("automation", one)), led.hash8(led.identity("automation", two)))
+        off = dict(one, is_active=False)
+        self.assertNotEqual(led.hash8(led.identity("automation", one)), led.hash8(led.identity("automation", off)))
+        # The snapshot's read keeps the older field name: the same automation digests the same either way.
+        raw = {"id": "91100000001", "board_id": BOARD, "active": True, "updated_at": None}
+        self.assertEqual(led.hash8(led.identity("automation", one)), led.hash8(led.identity("automation", raw)))
+        self.approve()
+        self.start()
+        self.intent("A1", "--parent-key", "B1")
+        self.record("A1", "--id", "91100000001")
+        self.verify("A1", {"is_active": True, "updated_at": "2026-11-05T14:30:00Z"})  # the read names no id
+        snapshot = {"id": "91100000001", "board_id": BOARD, "active": True, "updated_at": "2026-11-05T14:30:00Z"}
+        self.assertEqual(self.row("A1")["verify"]["digest"], led.digest("a1", led.identity("automation", snapshot)))
+
+    def test_demos_4_notifies_user_is_the_bound_user(self):
+        self.approve(rows=SettledTest.with_notifies(self, A1="user"))
+        self.start()
+        self.intent("A1", "--parent-key", "B1", "--notifies", "user")
+        self.assertEqual(self.row("A1")["notifies"], ["20000001"])
+        self.assertEqual(self.check()[1], set())
+        self.edit_json("account.json", lambda d: d["account"].update(bound_user_id="unbound"))
+        found = self.no("intent", "--key", "SQ1", "--operation", "create", "--scope", OWN_WS, "--notifies", "user")
+        self.assertIn("no bound user", words(found))
+
+
+LEADS, CONTACTS, TICKETS = "5678953932", "5678953938", "7819831530"  # monday's own template ids (NO 3.1 and 4.1)
+NATIVE_ROWS = (("B3", "board", "Leads"), ("B4", "board", "Contacts"), ("B3.C1", "column", "Contact"),
+               ("B3.G1", "group", "New leads"), ("B9.C2", "column", "Supplier contact"))
+TEMPLATES = {"B3": LEADS + " leads", "B4": CONTACTS + " contacts"}
+
+
+class A38Test(Base):
+    """A38 (WP3 DECISIONS.md, "Added by A38"): the build installs monday's native CRM and Service boards itself, from
+    their template ids, and the ledger narrows R-B and R-D for the natives this strand installed. One test per point,
+    named test_A38_<n>_*."""
+
+    LEADS_ID, CONTACTS_ID = "50000301", "50000302"
+
+    def make_native(self, templates=None, rows=NATIVE_ROWS):
+        """v0.2 whose element-key table carries the optional template column (A38) on the rows `templates` names."""
+        templates = TEMPLATES if templates is None else templates
+        lines = []
+        for line in blueprint(TABLE + rows).split("\n"):
+            if line == "| key | kind | name | notifies |":
+                line += " template |"
+            elif line == "|---|---|---|---|":
+                line += "---|"
+            elif line.startswith("| "):
+                line += " %s |" % templates.get(line.split("|")[1].strip(), "")
+            lines.append(line)
+        vdir = self.root / V2
+        vdir.mkdir(parents=True, exist_ok=True)
+        (vdir / "blueprint-r1.md").write_bytes("\n".join(lines).encode("utf-8"))
+        sha = mc.sha256_file(vdir / "blueprint-r1.md")
+        (vdir / "version.md").write_bytes(version_md(sha).encode("utf-8"))
+        self.edit_fm(S1 + "/STRAND.md", version="v0.2", version_state="approved")
+        return sha
+
+    def ready(self, templates=None):
+        """The native revision approved, a run started, and W2 built as the client's crm workspace and a target."""
+        data = self.ok(*self.approval_argv(self.make_native(templates)))
+        self.start()
+        self.sales()
+        return data
+
+    def native_read(self, bid, template, name, items=0):
+        return {"id": bid, "name": name, "type": "board", "state": "active", "workspace_id": SALES_WS,
+                "board_folder_id": None, "created_from_board_id": template, "items_count": items}
+
+    def install(self, key="B3", bid=None, template=LEADS, name="Leads"):
+        bid = bid or self.LEADS_ID
+        self.intent(key, "--workspace", SALES_WS)
+        self.record(key, "--id", bid)
+        return self.verify(key, self.native_read(bid, template, name))
+
+    def test_A38_1_the_plan_names_the_template_and_the_approval_holds_it_per_key(self):
+        data = self.ok(*self.approval_argv(self.make_native()))
+        held = {"B3": {"template_id": LEADS, "entity": "leads"}, "B4": {"template_id": CONTACTS, "entity": "contacts"}}
+        self.assertEqual(data["approval"]["native_installs"], held)
+        self.assertEqual(self.data()["approvals"][-1]["native_installs"], held)
+        self.assertEqual(self.check()[1], set())
+        self.copy_home()
+        self.assertEqual(self.approve()["approval"]["native_installs"], {})  # a table without the column installs nothing
+        for key, cell, expect in (("B3", "5678953999 leads", "no native board of the catalogue"),
+                                  ("B3", LEADS + " contacts", "which installs leads"),
+                                  ("B3", "5678954845 subitems", "no native board of the catalogue"),  # a v2 subitems board
+                                  ("B3", "5678953861 companion", "no native board of the catalogue"),
+                                  ("B3", "7830923787 tickets", "no native board of the catalogue"),  # family E, unread
+                                  ("B3", "leads", "not <template id> <entity>"),
+                                  ("B3.C1", LEADS + " leads", "only a board row installs a native"),
+                                  ("B9", LEADS + " leads", "referenced")):
+            self.copy_home()
+            found = self.refused(*self.approval_argv(self.make_native({key: cell})))
+            self.assertIn((V2 + "/blueprint-r1.md", "## Element keys"), pairs(found), cell)
+            self.assertIn(expect, words(found), cell)
+
+    def test_A38_2_intent_takes_the_approved_template_into_a_crm_or_service_target_only(self):
+        self.ok(*self.approval_argv(self.make_native()))
+        self.start()
+        found = self.no("intent", "--key", "B3", "--operation", "create", "--workspace", OWN_WS)
+        self.assertIn(("account.json", "guard_index.product_workspaces.%s" % OWN_WS), pairs(found))
+        self.assertIn("a core workspace", words(found))
+        self.sales()
+        found = self.no("intent", "--key", "B3", "--operation", "create", "--workspace", SALES_WS, "--template-id", CONTACTS)
+        self.assertIn(("(flags)", "--template-id"), pairs(found))
+        found = self.no("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS, "--template-id", LEADS)
+        self.assertIn("holds no native install for B2", words(found))
+        self.edit_json("account.json", lambda d: d["guard_index"]["product_workspaces"].update({"90100000009": "crm"}))
+        found = self.no("intent", "--key", "B3", "--operation", "create", "--workspace", "90100000009")
+        self.assertIn("outside this strand's build targets", words(found))
+        data = self.intent("B3", "--workspace", SALES_WS)
+        self.assertEqual((self.row("B3")["template_id"], data["class"]), (LEADS, "card"))
+        self.intent("B4", "--workspace", SALES_WS, "--template-id", CONTACTS)  # the flag, when it agrees, is taken
+        self.assertEqual(self.row("B4")["template_id"], CONTACTS)
+        self.copy_home()
+        self.ready({"B3": TICKETS + " tickets"})  # a Service template into the crm workspace
+        found = self.no("intent", "--key", "B3", "--operation", "create", "--workspace", SALES_WS)
+        self.assertIn("a crm workspace", words(found))
+        self.assertIn("a service workspace", words(found))
+
+    def test_A38_3_verify_proves_the_lineage_and_the_archived_rows_and_registers_the_native(self):
+        self.ready({"B3": LEADS + " leads", "B4": LEADS + " leads"})
+        self.intent("B3", "--workspace", SALES_WS)
+        self.record("B3", "--id", self.LEADS_ID)
+        read = self.native_read(self.LEADS_ID, LEADS, "Leads")
+        for obj, expect in ((dict(read, created_from_board_id=CONTACTS), "created_from_board_id"),
+                            (dict(read, items_count=15), "items_count"),
+                            ({k: v for k, v in read.items() if k != "items_count"}, "items_count")):
+            found = self.no("verify", "--key", "B3", "--result", "match", "--read", self.read_file("B3", obj))
+            self.assertIn((B1J, "objects.B3.verify"), pairs(found))
+            self.assertIn(expect, words(found))
+        account = self.sha("account.json")
+        data = self.verify("B3", read)
+        self.assertNotEqual(self.sha("account.json"), account)
+        self.assertIn("account.json", data["written"])
+        index = self.data("account.json")["guard_index"]
+        self.assertEqual((index["native_board_index"], index["native_board_ids_by_entity"], index["native_installs"]),
+                         ({self.LEADS_ID: "crm/leads"}, {"crm/leads": [self.LEADS_ID]}, {self.LEADS_ID: "001:B3"}))
+        row = self.row("B3")
+        self.assertEqual((row["status"], row["role"], row["template_id"], row["origin"]),
+                         ("verified", "crm/leads", LEADS, "created"))
+        self.assertEqual(self.check()[1], set())
+        found = self.no("intent", "--key", "B4", "--operation", "create", "--workspace", SALES_WS)  # a second Leads
+        self.assertIn("already has the native crm/leads", words(found))
+
+    def test_A38_4_the_templates_own_columns_change_under_this_strands_approval(self):
+        self.ready()
+        found = self.no("intent", "--key", "B3.C1", "--operation", "update")
+        self.assertIn("row B3.C1 is planned", words(found))  # nothing is installed yet
+        self.install()
+        data = self.intent("B3.C1", op="update")
+        self.assertEqual((data["class"], data["yes"], data["irreversible"]), ("card", None, False))
+        self.record("B3.C1", "--id", "link_to_contacts")
+        self.verify("B3.C1", {"id": "link_to_contacts", "title": "Contact", "type": "board_relation",
+                              "settings": {"boardIds": [self.CONTACTS_ID]}})
+        self.assertEqual((self.row("B3.C1")["status"], self.row("B3.C1")["id"]), ("verified", "link_to_contacts"))
+        self.assertEqual(self.intent("B3.G1", op="update")["class"], "card")  # the template's own group, renamed
+        found = self.no("intent", "--key", "B3", "--operation", "update")  # the native board itself stays guarded
+        self.assertIn("R-B", words(found))
+        self.verify("B9", {"id": "50000099", "workspace_id": OWN_WS, "name": "Supplier list"})
+        found = self.no("intent", "--key", "B9.C2", "--operation", "update")  # a board the strand did not install
+        self.assertIn("row B9.C2 is planned", words(found))
+        self.assertEqual(self.intent("B9.C2")["class"], "irreversible")
+        self.assertEqual(self.check()[1], set())
+
+    def test_A38_5_run_end_and_classify_carry_an_installed_native_as_native(self):
+        self.ready()
+        self.install()
+        self.intent("B3.C1", op="update")
+        self.record("B3.C1", "--id", "link_to_contacts")
+        self.verify("B3.C1", {"id": "link_to_contacts", "title": "Contact", "type": "board_relation"})
+        self.end()
+        live = self.data("account.json")["live_objects"]
+        self.assertEqual((live["001:B3"]["introduced_in"], live["001:B3"]["owner_strand"], live["001:B3"]["kind"]),
+                         ("native", None, "board"))
+        self.assertEqual((live["001:B3.C1"]["introduced_in"], live["001:B3.C1"]["owner_strand"]), ("001/v0.2", "001"))
+        self.assertIn("| 001:B3 | %s | board | %s | native |" % (self.LEADS_ID, SALES_WS),
+                      mc.read_text(self.root / "live" / "live-map.md"))
+        self.assertEqual(self.check()[1], set())
+        board = {"id": self.LEADS_ID, "name": "Leads", "type": "board", "state": "active", "item_terminology": "Lead",
+                 "created_from_board_id": LEADS, "workspace_id": SALES_WS,
+                 "workspace": {"id": SALES_WS, "account_product": {"kind": "crm"}},
+                 "columns": [{"id": i, "type": "text"} for i in ("name", "lead_status", "lead_email", "lead_company")],
+                 "links": [], "views": [], "object_type_unique_key": None, "items_count": 0}
+
+        def classify(obj):
+            page = {"kind": "boards_ids", "requested_ids": [self.LEADS_ID], "returned_ids": [self.LEADS_ID],
+                    "missing_ids": [], "request": {"variables": {"ids": [self.LEADS_ID]}},
+                    "response": {"data": {"version": {"kind": "release_candidate", "value": "2026-10"}, "boards": [obj]}}}
+            return self.ok("classify", "--reads", self.put("reads.json", {"pages": [page]}))["boards"][self.LEADS_ID]
+
+        found = classify(board)
+        self.assertEqual((found["class"], found["rule"]), ("native_crm_leads", "N2"))
+        self.assertIn("native_install:001:B3", found["signals"])
+        bare = dict(board, created_from_board_id=None, columns=[], item_terminology="item")  # a read with no lineage
+        found = classify(bare)  # it would read as a look-alike by its name; the index carries it as native
+        self.assertEqual((found["class"], found["confidence"], found["review"]), ("native_crm_leads", "medium", True))
+        self.assertIn("native_install:001:B3", found["signals"])
 
 
 if __name__ == "__main__":

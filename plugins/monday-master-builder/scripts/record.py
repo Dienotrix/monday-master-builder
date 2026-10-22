@@ -1089,8 +1089,14 @@ def cmd_freeze(root, args):
             raise mc.CannotRun((frel, "sha256", "the copy hashes to %s, the blueprint to %s" % (copied, working),
                                 "two equal values"))
         write_fm(root, vpath, {"sha256": copied})
+        # Demos' fixes, 5: the freeze logs itself, as the other writing commands do; the frozen copy and version.md
+        # are written by then, so a failed log write says so and how to finish rather than reading as nothing done.
+        short = folder.name[:3]
+        entry = new_entry(short, "blueprint", version, "r%s" % revision, ["frozen: %s · sha256: %s" % (frel, copied)])
+        committed({"frozen_file": frel, "frozen_sha256": copied, "entries": [entry]}, "the freeze of revision %s" % (
+            revision), [lambda: insert_entries(root, [entry])], file="log.md")
     return 0, {"strand": args.strand, "version": version, "revision": revision, "working_sha256": working,
-               "frozen_sha256": copied, "frozen_file": frel}
+               "frozen_sha256": copied, "frozen_file": frel, "entry": entry.split("\n", 1)[0]}
 
 def cmd_add(root, args, transcript):
     """C55 to C62, G12 to G14: a raw input saved byte for byte at record level, never over a file, with its
@@ -1389,15 +1395,16 @@ def lease_free(root):
 FINISH = ("finish by hand: each entry under committed.entries that log.md lacks, through record.py log (its header "
           "gives the strand, type, version and key, its lines the --line values); then record.py check")
 
-def committed(done, what, steps, remedy=FINISH):
-    """Run the writes that follow a committed lease change; a failure is exit 3 carrying what was committed and how
-    to finish (finding 4), never a bare error that reads as if nothing had happened."""
+def committed(done, what, steps, remedy=FINISH, file=".work/lock.json"):
+    """Run the writes that follow a committed lease change (or, with `file`, another committed write); a failure is
+    exit 3 carrying what was committed and how to finish (finding 4), never a bare error that reads as if nothing had
+    happened."""
     try:
         for step in steps:
             step()
     except Exception as exc:
         why = exc.findings[0]["problem"] if isinstance(exc, mc.MMBError) else "%s: %s" % (type(exc).__name__, exc)
-        raise mc.CannotRun((".work/lock.json", "committed", "%s was committed, then a later write failed: %s" % (
+        raise mc.CannotRun((file, "committed", "%s was committed, then a later write failed: %s" % (
             what, why), remedy), committed=done)
 
 def cmd_lease_take(root, args):

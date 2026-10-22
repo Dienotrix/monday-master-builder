@@ -422,6 +422,20 @@ class WriteTest(Base):
         self.edit_fm(S2 + "/STRAND.md", kind="non-platform", version="v0.1")
         self.assertIn((S2 + "/STRAND.md", "kind"), self.refused("freeze", "--strand", "002"))
 
+    def test_demos_5_freeze_logs_the_freeze(self):
+        """Demos' fixes, 5: a freeze writes its own `blueprint` entry, keyed by the revision, with the frozen sha256."""
+        self.edit_fm(V1 + "/version.md", revision="2")
+        before = len(self.entries())
+        data = self.ok("freeze", "--strand", "001")
+        entries = self.entries()
+        self.assertEqual(len(entries), before + 1)
+        head, body = entries[0].rstrip("\n").split("\n", 1)
+        self.assertRegex(head, r"^## \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 001 · blueprint · v0\.1 · r2$")
+        self.assertEqual(body, "frozen: %s/blueprint-r2.md · sha256: %s" % (V1, data["frozen_sha256"]))
+        self.assertEqual(data["entry"], head)
+        _, blocking, warnings = self.check()  # the entry is in the history baseline too: nothing about log.md
+        self.assertEqual((blocking, {w for w in warnings if w[0] == "log.md" or w[0].startswith(".work")}), (set(), set()))
+
     def test_C10_C55_C60_C61_C62_add_transcript_saves_the_bytes_once(self):
         """Windows run: a CRLF transcript keeps its CRLF bytes and its recorded sha256."""
         crlf = self.stage("", "crlf call.txt", CALL.replace("\n", "\r\n").encode("utf-8"))

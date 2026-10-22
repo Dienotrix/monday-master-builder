@@ -2487,5 +2487,60 @@ class A34Test(Base):
         self.assertEqual((code, self.severities(data)), (1, [("wall", "figure", "block")]))
 
 
+class A36Test(Base):
+    """A36 (R71): a test workspace the user named for development builds, held by an own-account record as a
+    referenced row, is not one of that record's names. Record b plays the earlier demo that holds it."""
+
+    NAMES = ("Copperlane Test Workspace", "Saltry CRM Test Workspace")
+
+    def demo_in_b(self, name, origin="pre-existing-referenced", own=True):
+        """Record b as an own-account demo whose strand plans `name` as W1 and whose ledger holds it as `origin`."""
+        client = (self.b / "CLIENT.md").read_text(encoding="utf-8")
+        if own:
+            client = client.replace('account_kind: "client"', 'account_kind: "own"').replace(
+                'build_target: "client-account"', 'build_target: "own-account"')
+        write(self.b / "CLIENT.md", client)
+        write(self.b / SB / "solution" / "blueprint.md", "# B\n" + sections(1) + "\nW1 is %s, the test workspace the "
+              "user named; it is referenced and never written.\n\n## Element keys\n\n| key | kind | name | notifies |\n"
+              "|---|---|---|---|\n| W1 | workspace | %s | |\n| F1 | folder | Marlbeck – Ops | |\n" % (name, name))
+        write(self.b / SB / "solution" / "build.json", json.dumps({"schema": "build/2", "client_slug": B, "strand": "001",
+              "objects": {"W1": {"type": "workspace", "name": name, "origin": origin},
+                          "F1": {"type": "folder", "name": "Marlbeck – Ops", "origin": "created"}}}, indent=2))
+        self.both()
+
+    def test_A36_R71_a_named_test_workspace_and_its_words_leave_the_index(self):
+        for name in self.NAMES:  # no fixed name: whatever the ledger holds as the referenced workspace
+            with self.subTest(name=name):
+                data = self.demo_in_b(name) or self.index(self.b)
+                names = set(self.entry(B)["names"])
+                words = lint.words_of(name)
+                for form in [" ".join(words), "".join(words), " ".join(words[-2:]), " ".join(words[:-1])]:
+                    self.assertNotIn(lint.digest("n:", form), names, form)
+                self.assertNotIn(words[0], data["single_words"]["words"])
+                self.assertIn(lint.digest("n:", "marlbeck freight"), names)
+                text = "Built in the test workspace the user named, %s, in one folder." % name
+                code, data = self.payload({"name": "Quote board", "description": text})
+                self.assertEqual((code, self.walls(data)), (0, []), data["findings"])
+                write(self.a / SA / "solution" / "blueprint.md", "# B\n\n## 1. Purpose\n%s\n" % text + sections(2))
+                code, data = self.lint(self.a, "blueprint", "--strand", "001")
+                self.assertEqual((code, self.walls(data)), (0, []), data["findings"])
+                (self.a / SA / "solution" / "blueprint.md").unlink()
+
+    def test_A36_R71_the_other_clients_names_and_an_unreferenced_workspace_still_block(self):
+        write(self.b / "research" / "2026-08-13-vans.md", "- The depot hires its vans from Copperlane Haulage.\n")
+        self.demo_in_b(self.NAMES[0])
+        for text, match in (("Built for Marlbeck Freight.", "Marlbeck Freight"),
+                            ("Vans from Copperlane Haulage.", "Copperlane Haulage")):  # the same word, another name
+            with self.subTest(text=text):
+                code, data = self.payload({"description": text})
+                self.assertWall(data, "name", match)
+        for origin, own in (("created", True), ("pre-existing-referenced", False)):
+            with self.subTest(origin=origin, own=own):  # a workspace built for the client, or one in its own account
+                self.demo_in_b(self.NAMES[1], origin, own)
+                code, data = self.payload({"description": "Built in %s." % self.NAMES[1]})
+                self.assertWall(data, "name")
+                write(self.b / "CLIENT.md", (FIX / "records" / B / "CLIENT.md").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

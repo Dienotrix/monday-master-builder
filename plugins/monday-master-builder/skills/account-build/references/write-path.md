@@ -19,8 +19,8 @@ ledger.py record --strand 001 --key B1.C3 --id <id the call returned> [fence] [s
 ledger.py verify --strand 001 --key B1.C3 --result match --read .work/inputs/read-B1.C3.json [fence] [sha]
 ```
 
-- `intent` flags as needed: `--operation update` for a change to a row already built; `--parent-key` (the board for a column, group, view, form or item batch; the folder for a board or dashboard; the workspace for a folder); `--sample-data` on an item batch; `--notifies <the bound user's id>` on an automation that notifies the user (the approval table writes `user`, the intent wants the id), and none on one that notifies nobody; `--assumption-ref AT1` on a row that rests on an assumed term; `--ref board:<id>` for every board a write names outside its parent (a connect column's target, a dashboard's boards).
-- **The payload** is the call's arguments as JSON, kind the row's type. Exit 0 or 2 goes on, warnings shown to the user; exit 1 or 3 stops that write until the text changes. Never send a payload the lint has not seen.
+- `intent` flags as needed: `--operation update` for a change to a row already built; `--parent-key` (the board for a column, group, view, form or item batch; the folder for a board or dashboard; the workspace for a folder); `--sample-data` on an item batch; `--notifies user` on an automation that notifies the user (the ledger resolves it to the bound user), and none on one that notifies nobody; `--assumption-ref AT1` on a row that rests on an assumed term; `--ref board:<id>` for every board a write names outside its parent (a connect column's target, a dashboard's boards).
+- **The payload** is the call's arguments as JSON fields, kind the row's type: for a raw call too, the arguments, never the GraphQL text, whose ids the lint reads as text. It carries nothing that is not sent (no note of your own). Exit 0 or 2 goes on, warnings shown to the user; exit 1 or 3 stops that write until the text changes. Never send a payload the lint has not seen. A phone value is digits only, and the lint reads any run of eight or more digits as an id, so sample rows carry no phone numbers.
 - `record` takes `--id`; an item batch takes `--item-id` once per row, in the order the call returned them. A widget keeps the id from its create response.
 - **The read file** is `{"read": "<the query or tool and its fields>", "object": {…}}`. The object always carries `id` and `workspace_id`, plus the row's identity fields below, with the values the read returned.
 - `verify --result` is `match` when the read shows what the frozen revision planned, `mismatch` when it does not (see "When something goes wrong"), `not-checkable` when no read exists (widgets) with `--note` saying why, or `needs-user` when only the user can tell.
@@ -31,7 +31,7 @@ ledger.py verify --strand 001 --key B1.C3 --result match --read .work/inputs/rea
 |---|---|
 | workspace | `name`, `kind` |
 | folder | `name`, `workspace_id` |
-| board | `name`, `type`, `state`, `workspace_id`, `board_folder_id` |
+| board | `name`, `type`, `state`, `workspace_id`, `board_folder_id`; a native install also `created_from_board_id` and `items_count` |
 | group | `title`, `color`, `position` |
 | column | `id`, `title`, `type`, `settings` (label ids as the read returned them; the ledger's id checks pass over `labels`) |
 | view, form | `name`, `type`, `settings` |
@@ -90,11 +90,20 @@ Actions:
 
   `Change a status: <column>, <label>`, `Set a date to today: <date column>` and `Move the item to a group: <group>` all built first time. Two automations on the same trigger run in an order the read does not show.
 
+  A condition goes in its own block between the trigger and the actions, naming the column, the comparison and the label:
+
+```
+Conditions:
+  - Only if: status column <column> is <label>
+```
+
+  In demo 3 a condition written inline ("Only if the status column Stage is Quoted") was stored as "is not" (`shouldCheckIfStatusIsNot: true`, G-161). Read that flag on every status condition; a condition stored the wrong way is a `mismatch` and departs to a UI step.
+
 - **Dashboards and widgets:** `create_dashboard {name, workspace_id, board_ids, board_folder_id, kind}`; `create_widget` per widget, settings from `all_widgets_schema` (G-63), keyed by board id as the schema says.
 
 ## When something goes wrong
 
-- A call that may have written something (a timeout, a dropped connection) leaves the row `attempting`. Do not call again: read the board, and `record` what exists, or `depart` the row with the reason.
+- A call that may have written something (a timeout, a dropped connection) leaves the row `attempting`. Do not call again: read the board, and `record` what exists, or `depart` the row with the reason. A call the session refused (a permission, a lint stop after `intent`) leaves it `attempting` too, though nothing reached monday. To call again: read the workspace (folders, boards, docs) and the board's automations, write a `live-inventory/1` file as the record map gives it, with a `read_at` stamped after those reads, run `ledger.py reconcile --strand <id> --inventory <file>`, which classes the row `retry`, then `intent --retry` and the call. Objects the inventory lists that no row holds (another demo's) are left untouched.
 - A read that does not match the plan is a `mismatch`. When monday ignored or reshaped a value the plan states (a sort direction, a filter's spelling, a setting's case), resend it once in another documented form: `intent --operation update --retry` (a plain `update` is refused from `mismatch`), the payload check, the call, `record`, a read, `verify`. If it still differs, `depart` the row with what monday stored, log it, and go on. Any other mismatch stops the build: show the user both.
 - An automation that comes out wrong is not patched with a second one: `depart --decision ui-step` mints the next free U number and its version, and the user fixes the field in monday.
 - `depart --attempt` takes the call form that was tried (`flat`, `wrapped`, `tool` or `raw`), not a description. `ledger.py ui-step` takes no fence flags and needs `--target-version`.

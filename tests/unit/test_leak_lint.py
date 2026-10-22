@@ -1967,6 +1967,113 @@ class A34Test(Base):
         self.assertEqual(data["counts"]["block"], 1)
 
 
+class A36Test(Base):
+    """A36 (R72, R73): the firm's sound-alike rule spares everyday phrases, and a payload may carry what the frozen
+    revision plans for it. R71, the named test workspace, is in test_leak_wall.py, since it needs a second record."""
+
+    TOWNS = ("Ashby Fold", "Carrow Mead", "Delby", "Esk Hollow", "Frith Vale")
+    VIEW = "Rye and spelt loaves waiting on the oven"
+
+    # R72: the phonetic rule that backs the firm name
+
+    def test_A36_R72_a_near_sound_of_the_firm_made_of_ordinary_words_passes(self):
+        self.assertEqual(lint.phonetic_key("callmore"), lint.phonetic_key("quellmoor"))  # the cause: one key
+        for text in ("We will call more stores next week.", "Call more often.", "CALL MORE"):
+            with self.subTest(text=text):
+                self.assertClean(text + "\n")
+                code, data = self.payload({"description": text}, "board")
+                self.assertEqual((code, data["findings"]), (0, []))
+
+    def test_A36_R72_the_firm_in_every_form_and_a_near_sound_that_is_no_ordinary_word_still_block(self):
+        for text, rule in (("Built by Quellmoor Advisory.", "term"), ("Ask Quellmoor.", "term"),
+                           ("See quellmoor.example today.", "term"), ("QUELLMOOR wrote it.", "term"),
+                           ("Built by Quell Moor.", None), ("Built by Kwellmoor.", "phonetic"),
+                           ("Built by Quelmore.", "phonetic"), ("Then call Moore.", "phonetic")):
+            with self.subTest(text=text):
+                data = self.assertBlocks(text + "\n", rule, "firm")
+                code, data = self.payload({"description": text}, "board")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, rule, "firm", "block"), data["findings"])
+
+    # R73: a payload's run that matches the frozen revision's planned value is not a copied run
+
+    def frozen(self, revision=None, working=None, frozen=True):
+        """Strand 001 with a blueprint frozen as v0.1 revision 1: the towns planned in section 16's sample data plan,
+        a long view name in the element-key table, and an assumption in section 16."""
+        text = blueprint_text({11: "| Column | Type | What it holds |\n|---|---|---|\n| Town | dropdown | the town "
+                                    "that orders |",
+                               16: "### Assumptions\n\n- AS1 the night baker weighs every crate before the van "
+                                   "leaves.\n\n### Sample data plan\n\n- B1 Orders, 20 rows. Invented towns: %s.\n\n"
+                                   "## Element keys\n\n| key | kind | name | notifies |\n|---|---|---|---|\n"
+                                   "| B1 | board | Orders | |\n| B1.C3 | column | Town | |\n| B1.V1 | view | %s | |\n"
+                                   % (", ".join(self.TOWNS), self.VIEW)})
+        revision = text if revision is None else revision
+        write(self.root / S1 / "solution" / "blueprint.md", text if working is None else working)
+        write(self.root / S1 / "versions" / "v0.1" / "blueprint-r1.md", revision)
+        write(self.root / S1 / "versions" / "v0.1" / "version.md", '---\nschema: "version/1"\nstrand: "001"\n'
+              'version: "v0.1"\nrevision: "%s"\n---\nInternal: never client-facing\n' % ("1" if frozen else "none"))
+        write(self.root / S1 / "STRAND.md", '---\nschema: "strand/1"\nstrand: "001"\nversion: "v0.1"\n---\n'
+              '# wholesale orders\n')
+        return text
+
+    def labels(self, towns=None):
+        return {"board_id": 73100482, "title": "Town", "column_type": "dropdown", "defaults": json.dumps(
+            {"settings": {"labels": [{"id": i + 1, "label": t} for i, t in enumerate(towns or self.TOWNS)]}})}
+
+    def test_A36_R73_planned_labels_and_a_planned_view_name_pass_a_payload(self):
+        self.frozen()
+        for data, kind in ((self.labels(), "column"), ({"board_id": 73100482, "name": self.VIEW}, "view"),
+                           ({"labels": list(self.TOWNS)}, "column")):
+            with self.subTest(kind=kind, data=data):
+                code, found = self.payload(data, kind)
+                self.assertEqual((code, found["findings"]), (0, []))
+
+    def test_A36_R73_an_internal_run_another_source_and_an_unfrozen_plan_still_block(self):
+        text = self.frozen()
+        code, data = self.payload({"description": "Note: the night baker weighs every crate before the van leaves."})
+        self.assertEqual(code, 1, data["findings"])  # an assumption of section 16 still counts
+        sources = {f["source"] for f in self.found(data, "copied-run", severity="block")}
+        self.assertTrue(sources and sources <= {"%s/solution/blueprint.md" % S1,
+                                                "%s/versions/v0.1/blueprint-r1.md" % S1}, data["findings"])
+        write(self.root / S1 / "readiness.md", "# Readiness\n\n## Entities\n- Towns served: %s.\n"
+              % ", ".join(self.TOWNS))
+        code, data = self.payload(self.labels(), "column")  # the same run in another internal file still blocks
+        self.assertEqual(code, 1, data["findings"])
+        self.assertEqual({f["source"] for f in self.found(data, "copied-run", severity="block")},
+                         {"%s/readiness.md" % S1})
+        (self.root / S1 / "readiness.md").unlink()
+        for setup in ({"frozen": False}, {"revision": text.replace("Esk Hollow", "Esk Mere")}):
+            with self.subTest(setup=setup):  # no frozen revision, or one that planned other values
+                self.frozen(**setup)
+                code, data = self.payload(self.labels(), "column")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, "copied-run", severity="block"), data["findings"])
+
+    # R74: a row inside an HTML comment is an example, not a row
+
+    COMMENTED = ("<!-- - Pellow Grain [kind: name] -->", "<!--", "- Quarry Lane Dairy [kind: name]",
+                 "- 61,250 [kind: figure]", "-->", "<!-- one more example:", "- Sorrel Mash Co [kind: name] -->")
+
+    def test_A36_R74_a_commented_example_row_is_not_read_and_a_real_row_after_it_is(self):
+        for title, strict in (("## Exclusions", True), ("## Allowlist", False)):
+            with self.subTest(title=title):
+                text = "\n".join(["# File", "", title] + list(self.COMMENTED) + ["- Tamsk Oats [kind: name]", ""])
+                self.assertEqual([term for _, term, _ in lint.section_rows(text, title, "x.md", strict)],
+                                 ["Tamsk Oats"])
+        write(self.root / S1 / "solution" / "exclusions.md", RECORD[S1 + "/solution/exclusions.md"].replace(
+            "## Exclusions\n", "## Exclusions\n%s\n" % "\n".join(self.COMMENTED)) + "- Tamsk Oats [kind: name]\n")
+        for text in ("Oats from Quarry Lane Dairy.", "Mash from Sorrel Mash Co.", "Grain from Pellow Grain.",
+                     "Pay 61,250."):
+            with self.subTest(text=text):
+                code, data = self.payload({"description": text}, "board")
+                self.assertFalse(self.found(data, "exclusion"), data["findings"])
+        for text in ("Oats from Tamsk Oats.", "Orders from Brackwater Mills.", "Pay 47,500."):
+            with self.subTest(text=text):
+                code, data = self.payload({"description": text}, "board")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, "exclusion", severity="block"), data["findings"])
+
+
 # 2.19 Pins (DECISIONS 4.5, Y08)
 
 class PinTest(unittest.TestCase):
