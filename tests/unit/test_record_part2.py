@@ -7,7 +7,7 @@ reference time, and record.py run in process from a temporary plugin root made o
 a copy of scripts/. `home init` and `init` run here against the stand-in templates; stage 3 runs them again with
 WP7's real templates. Tests whose docstring says "Windows run" must be repeated on a real Windows machine (C04).
 """
-import ast, contextlib, io, json, os, re, shutil, subprocess, sys, threading, unittest  # noqa: E401
+import ast, contextlib, hashlib, io, json, os, re, shutil, subprocess, sys, threading, unittest  # noqa: E401
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -526,6 +526,34 @@ class HomeInitTest(Part2):
         self.assertEqual(data["set_mmb_home"]["env"], {"MMB_HOME": str(chosen)})
         self.assertIn(str(chosen), data["set_mmb_home"]["this_system"])
 
+    def test_R55_R28_home_init_stops_on_settings_that_write_a_key_twice(self):
+        """A settings file with a key written twice takes the could-not-run path a torn one takes (exit 3)."""
+        self.home_init(*ANSWERS)
+        path = self.tmp / "new home" / "local" / "settings.json"
+        sound = path.read_bytes()
+        for text, field in ((b"{ torn", mc.WHOLE_FILE),
+                            (sound.replace(b'"archive": "local"', b'"archive": "github", "archive": "local"'),
+                             "$.archive<key>")):
+            path.write_bytes(text)
+            before = sorted(str(p) for p in self.tmp.rglob("*"))
+            code, data = self.home_init("--update", "--firm-name", "Fernhollow Supply")
+            self.assertEqual((code, data["error"]["file"], data["error"]["field"]), (3, "local/settings.json", field))
+            self.assertEqual((sorted(str(p) for p in self.tmp.rglob("*")), path.read_bytes()), (before, text))
+        self.assertIn('the key "archive" is written twice', data["error"]["problem"])
+
+    def test_R55_R28_check_reads_settings_that_write_a_key_twice_as_a_torn_file(self):
+        """check's existing path for settings it cannot read is a warning (G34); a repeated key now takes it."""
+        path = self.home / "local" / "settings.json"
+        sound = path.read_bytes()
+        self.assertIn(b'"schema": "settings/1"', sound)
+        path.write_bytes(b"{ torn")
+        torn = self.check()
+        path.write_bytes(sound.replace(b'"schema": "settings/1"', b'"schema": "settings/9", "schema": "settings/1"'))
+        self.assertEqual(self.check(), (torn[0], torn[1], {("local/settings.json", "$.schema<key>")}))
+        self.assertEqual(torn[2], {("local/settings.json", mc.WHOLE_FILE)})
+        code, data = self.run_record("check")
+        self.assertIn('the key "schema" is written twice', data["warnings"][0]["problem"])
+
     def test_G31_a_missing_template_cannot_run_and_writes_nothing(self):
         with mock.patch.object(self.rec, "TEMPLATES", self.tmp / "no templates" / "record"):
             code, data = self.home_init(*ANSWERS)
@@ -581,7 +609,7 @@ class InitTest(Part2):
         data = json.loads(settings.read_text(encoding="utf-8"))
         data.update(archive="github", github_account="example-handle")
         settings.write_text(mc.json_text(data), encoding="utf-8")
-        new = self.tmp / "github-client"
+        new = self.home / "clients" / "github-client"  # R48: under the home, where init's index can run
         code, result = self.run_at(new, "init", "--slug", "github-client", *INIT)
         self.assertEqual((code, result["archive"]), (0, "github"))
         self.assertEqual((new / ".gitignore").read_bytes(),
@@ -611,6 +639,137 @@ class InitTest(Part2):
             root = self.home / "clients" / ("client-" + kind)
             self.assertEqual((root / "strands" / "001-orders" / "solution" / "build.json").exists(), built)
             self.assertEqual(self.run_at(root, "check")[0], 0)
+
+    def write_index(self, *slugs, text=None):
+        """<home>/clients-index.json holding an entry under each slug's key, or `text` as given."""
+        entry = {"updated": "2026-11-01T09:00:00Z", "names": [], "phonetic": [], "terms": [], "figures": []}
+        text = text if text is not None else mc.json_text({
+            "schema": "clients-index/1", "hash": "sha256-128", "normalisation": "wall/1",
+            "entries": {mc.slug_key(slug): entry for slug in slugs}})
+        (self.home / "clients-index.json").write_bytes(text.encode("utf-8"))
+
+    def init_refused(self, record, slug, field="slug"):
+        """The refusal of an init that writes nothing; its text names the slug typed and nothing of the other."""
+        before = sorted(str(p) for p in self.tmp.rglob("*"))
+        code, data = self.run_at(record, "init", "--slug", slug, "--name", "Brindle Tiles Co", *INIT[2:])
+        self.assertEqual((code, [(f["file"], f["field"]) for f in data["refusals"]]), (1, [("CLIENT.md", field)]))
+        self.assertEqual(sorted(str(p) for p in self.tmp.rglob("*")), before)
+        return data["refusals"][0]
+
+    def test_R39_C44_init_refuses_a_slug_an_archived_or_indexed_client_already_used(self):
+        self.assertEqual(mc.slug_key("brindle-tiles"), hashlib.sha256(b"s:brindle-tiles").hexdigest()[:32])
+        archived = self.home / "archive" / "brindle-tiles"
+        archived.mkdir(parents=True)
+        (archived / "CLIENT.md").write_text('---\nslug: "brindle-tiles"\nname: "Brindle Tiles Ltd"\n---\n')
+        self.write_index("brindle-tiles")
+        for record in (None, self.tmp / "elsewhere" / "brindle-tiles"):
+            refusal = self.init_refused(record, "brindle-tiles")
+            self.assertIn("brindle-tiles", refusal["problem"])
+            self.assertIn("choose another slug", refusal["expected"])
+            text = json.dumps(refusal)
+            for word in ("Brindle Tiles Ltd", "archive/brindle-tiles", "Tallowmere", mc.slug_key("brindle-tiles")):
+                self.assertNotIn(word, text)
+        shutil.rmtree(archived)  # the user removed the archived folder by hand; its index entry stays
+        self.init_refused(None, "brindle-tiles")
+        self.write_index("corbel-hire")
+        archived.mkdir()  # an archived folder with no index entry
+        self.init_refused(None, "brindle-tiles")
+        shutil.rmtree(archived)
+        # another record in clients/ already holds the slug, and this init would place a second one elsewhere
+        self.init_refused(self.tmp / "elsewhere" / "larkmoor-joinery", "larkmoor-joinery")
+        self.assertEqual(self.init_refused(None, "larkmoor-joinery", "folder")["field"], "folder")  # as before (C44)
+        code, data = self.run_at(None, "init", "--slug", "brindle-tiles", *INIT)  # the slug is free again
+        self.assertEqual(code, 0, data)
+        self.assertEqual(self.run_at(self.home / "clients" / "brindle-tiles", "check")[0], 0)
+
+    def test_R39_init_stops_on_an_index_it_cannot_read(self):
+        index = self.home / "clients-index.json"
+        for text in ('{"schema": "clients-index/1", "hash": "sha256-128", "entr', "[]",
+                     '{"schema": "clients-index/2", "entries": {}}', '{"schema": "clients-index/1", "entries": []}',
+                     '{"schema": "clients-index/1", "entries": {"%s": {}}}' % ("0" * 31)):
+            self.write_index(text=text)
+            before = sorted(str(p) for p in self.tmp.rglob("*"))
+            code, data = self.run_at(None, "init", "--slug", "corbel-hire", *INIT)
+            self.assertEqual((code, data["error"]["file"]), (3, "<home>/clients-index.json"), text)
+            self.assertEqual(sorted(str(p) for p in self.tmp.rglob("*")), before)
+        index.unlink()
+        index.mkdir()
+        code, data = self.run_at(None, "init", "--slug", "corbel-hire", *INIT)
+        self.assertEqual((code, data["error"]["file"]), (3, "<home>/clients-index.json"))
+        index.rmdir()
+        self.write_index("brindle-tiles")  # a sound index without this slug passes
+        self.assertEqual(self.run_at(None, "init", "--slug", "corbel-hire", *INIT)[0], 0)
+
+    def test_R55_R39_init_stops_on_an_index_that_writes_a_key_twice(self):
+        """A key written twice in the index, where a plain reader keeps one copy, stops init as a torn index does."""
+        key, other = mc.slug_key("corbel-hire"), mc.slug_key("brindle-tiles")
+        for text in ('{"schema": "clients-index/1", "entries": {"%s": {}, "%s": {}}}' % (other, other),
+                     '{"schema": "clients-index/1", "schema": "clients-index/1", "entries": {"%s": {}}}' % other,
+                     '{"schema": "clients-index/1", "entries": {"%s": {"names": [], "names": []}}}' % other):
+            self.write_index(text=text)
+            before = sorted(str(p) for p in self.tmp.rglob("*"))
+            code, data = self.run_at(None, "init", "--slug", "corbel-hire", *INIT)
+            self.assertEqual((code, data["error"]["file"], data["error"]["field"]),
+                             (3, "<home>/clients-index.json", mc.WHOLE_FILE), text)
+            self.assertIn("cannot be read as clients-index/1", data["error"]["problem"])
+            self.assertEqual(sorted(str(p) for p in self.tmp.rglob("*")), before)
+            self.assertNotIn(key, text)
+        self.write_index("brindle-tiles")  # the same index with each key once passes
+        self.assertEqual(self.run_at(None, "init", "--slug", "corbel-hire", *INIT)[0], 0)
+
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), "modes deny nothing here")
+    def test_R39_init_stops_when_the_archive_cannot_be_looked_into(self):
+        archive = self.home / "archive"
+        archive.mkdir(exist_ok=True)
+        archive.chmod(0o400)  # listed, never searched
+        try:
+            code, data = self.run_at(None, "init", "--slug", "corbel-hire", *INIT)
+        finally:
+            archive.chmod(0o700)
+        self.assertEqual((code, data["error"]["file"]), (3, "<home>/archive/"))
+        self.assertNotIn("corbel-hire", [p.name for p in (self.home / "clients").iterdir()])
+
+
+class RenameTest(Part2):
+    """WP4's R40: `client rename` and the optional `former_names` of client/2."""
+
+    def test_R40_rename_keeps_every_old_name_once_and_refuses_a_name_already_had(self):
+        self.assertNotIn("former_names", self.fm("CLIENT.md"))  # a record written before the field
+        self.assertEqual(self.check()[0], 0)
+        data = self.ok("client", "rename", "--name", "Larkmoor Joinery Co")
+        self.assertEqual((data["name"], data["former_names"]), ("Larkmoor Joinery Co", ["Larkmoor Joinery"]))
+        client = self.fm("CLIENT.md")
+        self.assertEqual((client["name"], client["former_names"], client["slug"], client["updated"]),
+                         ("Larkmoor Joinery Co", "Larkmoor Joinery", "larkmoor-joinery", mc.stamp("minute")))
+        self.assertEqual(self.entries()[0], "## %s · - · decision · - · rename\nname: Larkmoor Joinery to Larkmoor "
+                         "Joinery Co\nformer_names: Larkmoor Joinery\n\n" % mc.stamp("log"))
+        self.assertTrue(sorted((self.root / ".work" / "backup").glob("CLIENT.md.*")))
+        self.assertEqual(self.check(), (0, set(), set()))
+        self.ok("client", "rename", "--name", "Larkmoor Woodwork")
+        self.assertEqual(self.fm("CLIENT.md")["former_names"], "Larkmoor Joinery; Larkmoor Joinery Co")
+        for name, field in (("Larkmoor Woodwork", "name"), ("Larkmoor Joinery", "former_names"),
+                            ("Larkmoor Joinery Co", "former_names"), ("Larkmoor; Woodwork", "name"), ("  ", "name")):
+            self.assertEqual(self.refused("client", "rename", "--name", name), {("CLIENT.md", field)}, name)
+        self.assertEqual(self.run_record("client", "rename")[0], 3)  # no --name: argparse's usage error
+        # an old name already kept by hand is not added twice, and no entry is ever dropped
+        self.edit_fm("CLIENT.md", former_names="Larkmoor Joinery; Larkmoor Woodwork; Larkmoor Joinery Co")
+        self.ok("client", "rename", "--name", "Larkmoor Joinery & Stairs")
+        self.assertEqual(self.fm("CLIENT.md")["former_names"],
+                         "Larkmoor Joinery; Larkmoor Woodwork; Larkmoor Joinery Co")
+        self.assertEqual(self.run_record("status", "--json")[1]["record"]["former_names"],
+                         "Larkmoor Joinery; Larkmoor Woodwork; Larkmoor Joinery Co")
+        self.assertEqual(self.check()[0], 0)
+
+    def test_R40_former_names_is_optional_and_checked_when_present(self):
+        for value in ("", "Larkmoor Joinery", "Larkmoor Joinery;Larkmoor Joinery Co", "Larkmoor Joinery; Larkmoor & Co"):
+            self.edit_fm("CLIENT.md", former_names=value)
+            self.assertEqual(self.check(), (0, set(), set()), value)
+        for value in (";", "Larkmoor Joinery;", "; Larkmoor Joinery", "Larkmoor Joinery;  ; Larkmoor Joinery Co", " "):
+            self.edit_fm("CLIENT.md", former_names=value)
+            self.assertEqual(self.check()[:2], (1, {("CLIENT.md", "former_names")}), value)
+        self.assertEqual(mc.former_names(None), [])
+        self.assertEqual(mc.former_names(" Larkmoor Joinery ;Larkmoor Joinery Co; "),
+                         ["Larkmoor Joinery", "Larkmoor Joinery Co"])
 
 
 class LeaseFixTest(Part2):
@@ -716,7 +875,7 @@ class LeaseFixTest(Part2):
 class NewerSchemaTest(Part2):
 
     def test_C13_G57_every_writing_subcommand_refuses_a_newer_schema(self):
-        """All 23 writing subcommands (the catalogue less status, check, lease status, strand list, home init and init,
+        """All 24 writing subcommands (the catalogue less status, check, lease status, strand list, home init and init,
         which write no existing record), each refused with exit 1 and an unchanged tree. Part one runs the first
         eleven and the common tests run the lease primitives; this runs the whole set so none is left out."""
         self.edit_fm("CLIENT.md", schema="client/3")
@@ -740,9 +899,10 @@ class NewerSchemaTest(Part2):
                  ("version", "mark", "shown", "--strand", "001", "--audience", "the owner", "--words", "w"),
                  ("version", "condense-plan", "--strand", "001", "--from", plan),
                  ("version", "condense-apply", "--strand", "001", "--plan-sha", zero),
-                 ("version", "release", "--strand", "001", "--condense-plan-sha", zero, "--summary-plan-sha", zero))
-        named = {" ".join(argv[:2]) if argv[0] in ("strand", "lease", "version") else argv[0] for argv in calls}
-        self.assertEqual((len(calls), named), (23, set(self.rec.COMMANDS) - {
+                 ("version", "release", "--strand", "001", "--condense-plan-sha", zero, "--summary-plan-sha", zero),
+                 ("client", "rename", "--name", "Larkmoor Woodwork"))
+        named = {" ".join(argv[:2]) if argv[0] in ("strand", "lease", "version", "client") else argv[0] for argv in calls}
+        self.assertEqual((len(calls), named), (24, set(self.rec.COMMANDS) - {
             "status", "check", "lease status", "strand list", "home init", "init"}))
         for argv in calls:
             self.assertIn(("CLIENT.md", "schema"), self.refused(*argv), argv)
@@ -806,6 +966,116 @@ class ErrorTest(Part2):
             raise RuntimeError()  # str() of this is empty
         with mock.patch.dict(self.rec.COMMANDS, {"lease status": fails}):
             self.assertEqual(self.cannot_run(self.root, "lease", "status"), ("record.py", "RuntimeError"))
+
+
+class IndexAfterWriteTest(Part2):
+    """R48 (WP4): a command that wrote a file the index's harvest reads runs leak_lint.py index for its record, in
+    process and after the record's mutex is released, so the record's entry in <home>/clients-index.json is not left
+    older than its files (WP4's R44); a command that wrote no such file runs none; an index that stops leaves the
+    command's write as it is and adds a warning (exit 2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.index_file, self.lint = self.home / "clients-index.json", self.rec.lint_module()
+
+    def entry(self, slug="larkmoor-joinery"):
+        return json.loads(self.index_file.read_text(encoding="utf-8"))["entries"].get(mc.slug_key(slug))
+
+    def counted(self):
+        """The record.py runs of leak_lint.py, counted while they still run."""
+        return mock.patch.object(self.lint, "run_command", wraps=self.lint.run_command)
+
+    def current(self, root):
+        """Whether index from `root` finds the entry current: a rerun writes nothing (X46)."""
+        code, data = self.lint.run_command(["--record", str(root), "index"])
+        self.assertEqual(code, 0, data.get("error"))
+        return not data["written"]
+
+    def log(self, line, key="yard"):
+        return self.run_record("log", "--strand", "-", "--type", "decision", "--key", key, "--line", line)
+
+    def test_R48_R44_a_write_the_harvest_reads_runs_index_and_one_that_writes_none_runs_none(self):
+        self.assertFalse(self.index_file.exists())
+        with self.counted() as runs:
+            code, data = self.log("Quarrow Pine supplies the battens.")
+        self.assertEqual((code, "warnings" in data, runs.call_count), (0, False, 1), data)
+        self.assertIn(self.lint.name_key("Quarrow Pine"), self.entry()["names"])
+        self.assertTrue(self.current(self.root))
+        written = self.index_file.read_bytes(), self.index_file.stat().st_mtime_ns
+        with self.counted() as runs:  # the lock alone, then reads: nothing the harvest reads changes
+            self.ok("lease", "refresh", "--epoch", "2", "--label", LABEL)
+            self.ok("lease", "status")
+            self.ok("strand", "list")
+            self.assertEqual(self.check()[0], 0)
+            self.run_record("status", "--json")
+        self.assertEqual(runs.call_count, 0)
+        self.assertEqual((self.index_file.read_bytes(), self.index_file.stat().st_mtime_ns), written)
+        with self.counted() as runs:  # the live map feeds no entry (WP4's Y01), so a write to it runs none
+            self.append("live/live-map.md", "- a note on the live map\n")
+            self.assertFalse(self.rec.keep_index(self.root, self.lint, self.rec.harvested_marks(self.lint, self.root)))
+        self.assertEqual(runs.call_count, 0)
+        with self.counted() as runs:  # a rewrite of a harvested file runs it, also when no list changes
+            self.ok("strand", "pause", "--strand", "002", "--reason", "the timber supplier is away")
+        self.assertEqual(runs.call_count, 1)
+        self.assertTrue(self.current(self.root))
+
+    def test_R48_init_writes_the_records_first_entry(self):
+        root = self.home / "clients" / "fresh-client"
+        code, data = self.run_at(None, "init", "--slug", "fresh-client", *INIT)
+        self.assertEqual((code, "warnings" in data), (0, False), data)
+        entry = self.entry("fresh-client")
+        for name in ("Fresh Client", "fresh client"):
+            self.assertIn(self.lint.name_key(name), entry["names"])
+        self.assertTrue(self.current(root))
+        self.assertIsNone(self.entry())  # the fixture record has not written, so it has no entry yet
+
+    def test_R48_an_index_that_stops_leaves_the_write_and_shows_a_warning(self):
+        twin = self.home / "archive" / "larkmoor-joinery"
+        cases = (("torn", "<home>/clients-index.json", lambda: self.index_file.write_text("{", encoding="utf-8"),
+                  self.index_file.unlink),
+                 ("twin", "<home>/archive/", twin.mkdir, twin.rmdir))
+        for number, (case, file, make, undo) in enumerate(cases):
+            make()
+            index = self.index_file.read_bytes() if self.index_file.exists() else None
+            code, data = self.log("Line %d of the yard notes." % number, key=case)
+            self.assertEqual((code, data["ok"]), (2, True), data)
+            self.assertEqual(self.entries()[0].split("\n")[1], "Line %d of the yard notes." % number)
+            [warning] = data["warnings"]
+            self.assertEqual(warning["file"], file, case)
+            self.assertIn("this command's writes are done and kept", warning["problem"])
+            self.assertIn("leak_lint.py index stopped with exit 3", warning["problem"])
+            self.assertIn("run leak_lint.py index from this record", warning["expected"].replace("meant is", "run"))
+            self.assertEqual(self.index_file.read_bytes() if self.index_file.exists() else None, index)
+            self.assertNotIn("larkmoor", json.dumps(warning).lower())  # nothing of another record (X30)
+            undo()
+        self.assertEqual(self.check()[0], 0)
+        code, data = self.log("Line 9 of the yard notes.", key="after")  # the next write brings the entry up to date
+        self.assertEqual((code, "warnings" in data), (0, False), data)
+        self.assertTrue(self.current(self.root))
+
+    def test_R48_a_lint_that_cannot_be_loaded_leaves_the_write_and_shows_a_warning(self):
+        with mock.patch.object(self.rec, "LINT_FILE", self.tmp / "missing" / "leak_lint.py"), \
+                mock.patch.dict(self.rec.LOADED, clear=True):
+            code, data = self.log("Quarrow Pine supplies the battens.")
+        self.assertEqual((code, data["ok"], [w["file"] for w in data["warnings"]]),
+                         (2, True, ["<plugin>/scripts/leak_lint.py"]), data)
+        self.assertIn("could not be loaded", data["warnings"][0]["problem"])
+        self.assertEqual(self.entries()[0].split("\n")[1], "Quarrow Pine supplies the battens.")
+        self.assertFalse(self.index_file.exists())
+
+    def test_R48_C18_G49_from_a_plugin_copy_the_output_is_one_envelope_and_no_cache_is_left(self):
+        """Windows run: the same launch form, with no shell; the index runs in the record.py process."""
+        plugin = make_plugin(self.tmp / "plugin copy")
+        before = sorted(p.relative_to(plugin).as_posix() for p in plugin.rglob("*"))
+        env = {key: value for key, value in os.environ.items() if key != "PYTHONDONTWRITEBYTECODE"}
+        env["HOME"] = env["USERPROFILE"] = str(self.tmp / "interpreter home")  # the system Python's own cache
+        done = subprocess.run([sys.executable, str(plugin / "scripts" / "record.py"), "--record", str(self.root), "log",
+                               "--strand", "-", "--type", "decision", "--key", "cli", "--line", "Quarrow Pine."],
+                              env=env, capture_output=True)
+        data = json.loads(done.stdout.decode("utf-8"))  # one JSON object and nothing else
+        self.assertEqual((done.returncode, data["command"], "warnings" in data), (0, "log", False), data)
+        self.assertIn(self.lint.name_key("Quarrow Pine"), self.entry()["names"])
+        self.assertEqual(sorted(p.relative_to(plugin).as_posix() for p in plugin.rglob("*")), before)
 
 
 class Part2FrameTest(Part2):

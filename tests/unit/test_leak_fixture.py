@@ -37,8 +37,8 @@ KEY = ["K%02d" % n for n in range(1, 37)]
 # DECISIONS section 3.3 and PLAN section 4.1: the rule cases of BP:158.
 RULE = ["figures-five-formats", "figures-split-renderings", "copied-run-placements", "quote-eight-words",
         "markers-nine", "internal-ids", "record-paths", "html-comments", "monday-id-link",
-        "exempt-blocks-and-glossary", "common-word-run", "tool-categories-three-two",
-        "firm-renderings-phonetic-whitelist", "flag-do-not-remove", "caution", "credentials", "internal-notes",
+        "exempt-blocks-and-glossary", "common-word-run", "firm-renderings-phonetic-whitelist", "flag-do-not-remove",
+        "caution", "credentials", "internal-notes",
         "exclusion-per-family", "allowlist-limits", "payload-per-kind", "docx-parts", "summary-two-rules",
         "client-safe-block-at-intake", "wall-records", "structural-ids", "payload-keys-and-numbers"]
 COMMANDS = ("scan", "payload", "blueprint", "wall", "terms", "index")
@@ -116,8 +116,7 @@ def pinned_leak():
 
 
 def shipped_patterns():
-    """Every term row of shipped leak-terms.txt as (class, compiled pattern), following its syntax (LT:17 to 29).
-    The counted tool-category classes are skipped: they never block, and a twin with two categories is meant."""
+    """Every term row of shipped leak-terms.txt as (class, compiled pattern), following its syntax (LT:17 to 29)."""
     out, cls = [], None
     with open(os.path.join(SHARED, "leak-terms.txt"), encoding="utf-8") as handle:
         for line in handle:
@@ -126,8 +125,6 @@ def shipped_patterns():
                 continue
             if line.startswith("class:"):
                 cls = line[len("class:"):].strip()
-                continue
-            if cls and cls.startswith("tool-category-"):
                 continue
             if line.startswith("whitelist:"):
                 continue
@@ -398,7 +395,7 @@ class LeakFixtureTest(unittest.TestCase):
         wall_classes = set(self.fields["wall finding class"])
         families = set(self.fields["field family"])
         kinds = set(self.fields["payload kind"])
-        self.assertEqual(len(rules), 16)
+        self.assertEqual(len(rules), 15)
         for case in self.cases:
             cid = case["id"]
             self.assertIn(case["verdict"], verdicts, cid)

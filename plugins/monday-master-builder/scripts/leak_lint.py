@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""The leak lint (ARCHITECTURE 9.6; WP4 decisions X01 to X47 and Y01 to Y09).
+"""The leak lint (ARCHITECTURE 9.6; WP4 decisions X01 to X47, Y01 to Y09 and Z01 to Z19).
 
 leak_lint.py keeps internal details, and other clients' details, out of anything the plugin writes into monday.
 It reads a draft, a .docx or a payload, checks it against the shipped list, the user's local list and settings,
-and the client record's own figures, quotes, internal text and exclusions, and reports. It never edits a file,
-it writes nothing (the index apart, which `index` alone will write) and it never calls monday. Every command
-prints one JSON object, {"ok", "command", "verdict", ...}, and exits 0 (clean), 1 (blocked), 2 (warnings or
-cautions only) or 3 (could not run, which every caller treats as a stop). Standard library only, Python 3.9 and
-later, the same on Windows and macOS.
+the client record's own figures, quotes, internal text and exclusions, and the cross-client wall, and reports. It
+never edits a file, it writes nothing but the index (which `index` alone writes) and it never calls monday. Every
+command prints one JSON object, {"ok", "command", "verdict", ...}, and exits 0 (clean), 1 (blocked), 2 (warnings
+or cautions only) or 3 (could not run, which every caller treats as a stop). Standard library only, Python 3.9
+and later, the same on Windows and macOS.
 
-This build runs `scan` and `payload`. `blueprint`, `wall`, `terms` and `index` are in the parser and answer
-exit 3, "not built yet". The cross-client wall inside `scan` and `payload` is not built either: a run in a home
-that holds another client record, or an index, stops with exit 3, so nothing passes on a path that is not built.
+Six commands: `scan` (drafts, summaries, client-safe blocks), `payload` (one tool input), `blueprint` (the planned
+text of one strand), `wall` (the wall alone on one text), `terms` (a folder, for the release check) and `index`
+(this record's entry in <home>/clients-index.json).
 """
 import sys
 sys.dont_write_bytecode = True  # no cache beside the scripts (G49), set before mmb_common is imported
@@ -30,9 +30,9 @@ if python_too_old():
     sys.stdout.write(python_too_old())
     sys.exit(3)
 
-import argparse, bisect, hashlib, io, json, os, re, unicodedata, zipfile  # noqa: E401,E402
+import argparse, bisect, hashlib, html, io, json, os, re, stat, unicodedata, zipfile  # noqa: E401,E402
 import xml.etree.ElementTree as ET  # noqa: E402
-from datetime import date  # noqa: E402
+from datetime import date, datetime, timezone  # noqa: E402
 from fractions import Fraction  # noqa: E402
 from pathlib import Path, PurePosixPath  # noqa: E402
 import mmb_common as mc  # noqa: E402
@@ -68,11 +68,10 @@ SEVERITIES = ("block", "warn", "caution")
 VERDICTS = ("clean", "warnings", "blocked", "could-not-run")
 MODES = ("full", "summary", "client-safe-block", "blueprint")
 RULES = ("term", "phonetic", "seller-account", "figure", "split-figure", "copied-run", "quote", "exclusion", "wall",
-         "credential", "internal-note", "paraphrase", "tool-categories", "number", "record-number", "allowlist")
+         "credential", "internal-note", "paraphrase", "number", "record-number", "allowlist")
 WALL_CLASSES = ("name", "term", "figure", "slug")
 CLEARABLE = ("method", "internal-vocabulary", "sales-framing", "assessment", "emotional", "health-identity",
              "departure", "colleague-remark", "personal-life")
-COUNTED_PREFIX = "tool-category-"
 LOCAL_CLASS = "local"
 # end pinned
 
@@ -150,12 +149,218 @@ RUN_MIN_DISTINCT = 2
 
 # pinned: stop-words
 # The stop list of X26 beside the common words: monday's product words, titles, role acronyms and common acronyms.
-# The proper-noun test of the tool-category assertion never counts these, and the wall's name harvest (part 2) drops
-# them; the shipped plugin, assistant, method and marker rows join it at run time.
+# The wall's name harvest (part 2) drops them; the shipped plugin, assistant, method and marker rows join it at run
+# time.
 PRODUCT_WORDS = frozenset(("monday", "work", "management", "crm", "service", "dev", "vibe"))
 STOP_WORDS = frozenset(("mr", "mrs", "ms", "mx", "dr", "prof", "sir", "ceo", "cfo", "coo", "cto", "vp", "hr", "it",
                         "pm", "pms", "qa", "crm", "erp", "sop", "api", "eta", "pdf", "kpi", "roi", "sla", "faq", "uk",
                         "us", "usa", "eu", "id", "ok", "am", "tv", "bi"))
+# end pinned
+
+# pinned: shared-words
+# G01 (X26 step 6, Z12, X31): the words of the plugin's own shared/*.md and shared/*.txt files that are not common
+# words, as reviewed when this list was last written. The harvest's stop list takes them from here, never from the
+# live shared/ folder, so a client name that leaks into shared/ is not a stop word and `terms` still blocks it.
+# tests/unit/test_leak_wall.py compares this list with the shipped shared/ folder; regenerate it with
+# shared_vocabulary() only after `terms` over the changed shared/ has passed against the list below.
+SHARED_WORDS = frozenset("""
+03z 07z 1r1 1r4 20m 25k 30z 42z 45k 90k 9a a1 a11 a12 a13 a14 a16 a17 a18 a19 a2 a20 a22 a23 a24 a25 a25ddc a26 a27 a3
+a5 a6 a7 abandoned abc abm absence absent absolute absolutes accept acceptance accepted accepts access
+accountproduct accountproductid acting activate activated activation active activities activity additional
+additionalproperties additions additive address addressed adds adjacent adjustment adjustments adopt adopted adopting
+adoption adopts advance adversarial advisory affecting afresh ag1 agenda agent agents aggregate agreeing agreement
+agrees ai ai1 aimed alias aliased aliases alike alikes allitems allowance allowlist allowmultipleitems aloud
+alternative alternatives amended amendment amendments amz anchor anchors answers anthropic api apis app appeared
+appearing appears append appended appendix appends application applies approver approves approving apps arbitrary
+architecture archive archived archives archiving argument arithmetic array arrives artefact artifact ascii asks asr
+assembled assert asserted asserting assertions asserts assessment assessments asset assetid assets assigns
+assistant assume assumed assuming assumption assumptions async asynchronous atomic attachment attempt attempting
+attempts attendees attribute attributed attributes attribution audience audit audited auditor auth author authoring
+authorisation authorising authoritative authority auto automatic automationids automationspage awaits axes axis b b1
+backchannel backed backlog backs backslash backticked backticks backup bak balance ban band bands banner bare
+baseline batch batches battery bc bcalls bclients bcues bearing becoming begins behave behaviour belonged belongs
+berry bespoke bill billable bind binding binds binputs bits bl blank bleed blind block blocked blockers blockids
+blocking blocklist blocks blueprint bmmb bn bo boardautomation boardid boardids boardkind boardname boardrelationvalue
+boards2 boards5 bold bom booked borderline bound boundaries boundary bp br bracketed breach
+breaking breaks brief briefing broader broken bs bstrands budget budgeted budgets bug buildable builder building
+builtwithai bulk bundle bypass bypassed byte bytes c c1 c101 c11 c2 c3 c4 c46 c4c4c4 c5 c51 c92 calculated
+calendar calibration callback camelcase campaigns candidate candidates canonical cap capabilities capability capped
+caps capture captured cards careless carries carrying cascade casing catalog catalogue catalogues catches categories
+category caution cautious caveat caveats ceiling cell cells chain chains changing channel character characters chart
+chat cheaper checkable checkbox checklist checks checksum chooses chosen chunk chunks citation cite cites claim
+claimed claims clarifying clash classes classic classification classified classifies classify classifying claude
+clause clean cleanly cleanup clearance cleared clearing clears click clock clone closeout closes closing cloud co
+coarse code coerced coexist collaborators collapsed colleague colleagues collections collide colliding collision colon
+color2 colors columnvalueexception com combination comma command commas commercial commercials commit commitment
+commitments committed compaction companion companions compare compared compares compete completes completion
+complexity compose composite compound computed computer computes concept conclude concrete concurrency concurrent
+condense condensed conditions confidence confidentiality confidently config configuration configure configured confirm
+confirmation confirmed confirms conflict conflicts connect connected connecting connection connector connects
+consecutive consequence consistent consolidation constant constants constraint constraints consultancy consume
+consumes consumption contain container containers containment contains contamination contended content contention
+contents context continues contract contradictions contradicts control controlled convenience conversation conversion
+convert converted converting copied copies copy copying core corrected correcting correction corrections correctly
+corroborating corroboration corruption cost costs count counted counter counting counts coverage covers cowork cr
+crash crashed crc32 createquestioninput creates creating creation creationprompt creator creators credential
+credentials credit credits criteria criterion crlf cross crosstalk csat cue cues currency cursor custom cutoff cygwin
+d d1 d11 d2 d24 d3 d5 damaged damaging dataset date0 date2 date20 date4 date6 date8 dated db db1 dd ddthh de
+deactivate deactivated deactivation deals dec decides decisions decisive default defaults defect defence deferred
+defers define defined definition definitions definitive deixis delayed delete deleted deletes deletion deliberately
+deliverables delivered delivery delta demo demonstrated demonstration demotes density denylist depart departed departs
+departure departures dependants dependencies dependency depends deprecated depth derive derived derives descendant
+descendants descending described describes description deserves designed desired desk despite destination destroys
+destructive detect detected detection detectnativeboards detector detectors diagrams dialect died dies diff diffed
+differ difference differently differs diffs digest digested digests digit digits dimension dir directly directory
+disabled disagree disagreement disagrees discipline disciplined discovers discovery disk dismissed dispatch displaced
+display displayed displaytype disputed disqualifies distance distinct distinctive distribution disturb dive
+documentation documented docx domain dossier downgraded downstream draft drafter drafting drafts drawn drift
+driving dropdown drops dual dummy dumps dup duplicate duplicateboardtype duplicated duplicates duplication duration e
+earliest echo echoes edge edges edit editable edited editor edits element elements elevated eleven email1 email9
+email95 embedded embeds emitted emotional employee enabled endings enforce enforced enforces engagement enrolled
+ensure enter entered enters entirely entities entitlement entity entries entry enum enumerate enumerated
+enumerates environment environments epoch equality equalled equals erases error errors established estimate
+estimated estimates etiquette evaluate evaluated evidence ewh examples excavated exceed exceeds exclude
+excluded excludes excluding exclusion exclusions exclusive execute executed executing execution exempt exemptions
+exist existed existence existing exists exit expansion expectation expires expiry explicit explicitly export exporting
+exports expose exposed exposes exposure express expresses expression ext extend extended extends extensions external
+extract extracted extras f f1 facing facts fail failed failing fails failure fallback falling falls false families
+feature featureboardview feed feeds fees fence fenced fetch fetches fewer fewest fictional fields figures fills filter
+filterable filtered filtering filters finalize finance finding findings fingerprint fingerprints finishes fire fired
+fires firm fit fixes fixing fixture fixtures fk flag flagged flags flagship flat flatten flexibility flips
+floating floored floors flow fm fm1 focused folded folderid follower follows forbids forecast foreseeable forgeable
+fork forks format formed formtoken formula formula13 formula17 formula9 formulas formulavalue forty fourteen fraction
+fragment frame framing freeze freezes frequency fresh freshly frozen fully function fused g g01 g02 g03 g04 g05 g06
+g07 g08 g09 g1 g10 g100 g101 g102 g103 g104 g105 g106 g107 g108 g11 g12 g13 g14 g15 g16 g17 g18 g19 g2 g20 g21 g22 g23
+g24 g25 g26 g27 g28 g29 g30 g31 g32 g33 g34 g35 g36 g37 g38 g39 g40 g41 g42 g43 g44 g45 g46 g47 g48 g49 g50 g51 g52
+g53 g54 g55 g56 g57 g58 g59 g60 g61 g62 g63 g64 g65 g66 g67 g68 g69 g70 g71 g72 g73 g74 g75 g76 g77 g78 g79 g80 g81
+g82 g83 g84 g85 g86 g87 g88 g89 g90 g91 g92 g93 g94 g95 g96 g97 g98 g99 gains gantt gap gaps gate gated gates
+generalised generate generated generates generation generations generic genuine genuinely github gitignore global
+glossary goals gotcha gotchas governance governs gql grade graded graders grades grammar grant grants granularity
+graphql grew grid grouped grouping grows guard guarded guards guideline h h1 h2 halves handed handful handing handle
+handled handles handling handoff harm harvested hash hashed hashes headed header headers heading headings headline
+headquarters headroom heartbeat hedge hedged helper helpers heuristics hex hh hhmm hidden hide hides hiding
+hierarchy highest hit hits holder holding homophone homophones honest honestly honoured honours hook hooks hop hops
+host hosted html http human hurts hybrid hyphen hyphenated hyphens hypothesis hypothetical ib ib1 identical
+identification identified identifier identifiers identifies identify identity idle ids ignore ignored ignores image
+images imitating imitation immediate immediately impact implausible implement implemented implements import impossible
+improvise improvised inactive inaudible inbound incident incidents includedeprecated incoming incomplete
+inconclusive increments incumbents indent indentation indented independence independent independently index
+indistinguishable industry infer inference inferred info ingested inherit inherited inherits init initialnumber
+injected injects inner input inputs insensitively insert inserts insights install installed installs instance
+instances instruction instructions instrument int intake integer integration intended intent inter interim
+intermediate intermediates internal interrupted interruption intersect intro introduced introspection introspects
+intune invalid invalidcolumntypeexception invented inventories inventory invisible invitation invites invoices
+invoke ip ir irreversible itemsquerygroup itr itsm j jamf jan joined joinery joins json judge jul k k7q2
+kanban kb keeping keyed keys kinds knowledge l l1 l14 l142 l15 l17 l2 labelled lacked lacking lacks
+ladder lagging landed landing lands lapses largest larkmoor lasts latest laughs layer layers lead leading leads leaf
+leak leaning leanings lease leaving ledger leftover legacy legal legitimate legitimately length lessons letters levels
+lf lies lifecycle likewise limit limited limits lineage linked linking lint linted listed listing lists listview
+literal lives load loc locally location locations lock locked locks log logged logic login logo logs lone longer
+lookalike lookup loop loses lower lowercase lowest lst mac machine machines maintenance malformed manage mandatory
+manifest manual map mapped mapping maps margins mark markdown marked marker markers marketing marks massive master
+match matchable matched matcher matchers matches matching material math matrix matters max maximum maxitems mb mcp md
+meaning measure measurements measures mechanism median medium members membership memory mentioned merely merged merges
+messenger meta metadata metered mid migration min minimum minted minus mirror mirrored mirroring mirrors
+mirrorvalue misclassified misleading misleads mismatch misplaced misread misses missing missinglabel mix mixed mixes
+mixing mk mkmcsv7h mkmvd0p6 mkrmrgz6 mm mm3gb9sn mm3jtrd mm3jtrd0 mm73h0ss mmb mmd mode model moderate modified
+modifier modifiers modifies modify monotonic moving msys2 multi multiple multipliers multiply mutation mutations mutex
+n n0 n10 n11 n12 n1a n1b n2 n3 n4 n5 n6 n7 n8 n9 named namespace naming narrated narration narrow narrowed narrows
+native nativeness natives nearest nested nesting neutral newer newest newlines nickname nn nnn noise non nonexistent
+nonsense normalisation normalised notice notifications notified notifies notify noun nov null numbered numbering
+numeric o object objection objections objects objectstate objecttype observation observed obtainable occur offers
+offset older omit omits omitted omitting ones onward op opening operating operation operational operations
+opportunities opportunity opposite opps ops option optional optionally options oracle ordered ordinal ordinary org
+organisation origin original outcome outcomes output outright overflow overlay overridden override overrides oversized
+overview overviews overwrite overwrites overwriting owned ownership owning owns p p1 p10 p14 p50 p90 package padded
+paged paging paid pain pains pair pairs palette paragraph parameter params paraphrase parent parentfolderid
+parentitemid parents park parked parking parse parsed parses parsing partial partner partway passes passing password
+paste patched path paths pattern patterns pause paused payload payloads pays pdf pending people0
+peoplevalue percent percentile perform performed permanent permission permissioned permissions permitted persist
+personal persons personsandteams pf pf1 phonetic phrase picks pin pinned pins pipe pitch pj pj1 pkg placed
+placeholder placement plain plaintext planner planted plants platform plugin plural plus png poc pointed
+pointer pointers pointing poll polled pooled portal portals portfolio portfolios positions positive positives
+possessive possibly practical pre precision predates predicted prefix prefixes preflight prep prerequisites presence
+presented presenter presents preset pressure presumed pretooluse preview previous pricing primitive primitives printed
+prints prior private privileged probability probable probe probed probes probing proceeds produced produces products
+profile progress progressive projectboardid projectid promise promised promoted prompt proof properly properties
+property proposal propose proposed proposes proposing prose prospect protect protected protection protects prototype
+provably prove proved proven provenance proves proving provisional provisioned pub publication publish published
+punctuation purple purpose py python pyyaml q q1 q2 q4 qa qi qualified qualifier qualifies quantity
+quarantined quarter queries query querying queued quota quotas quoted r r0 r1 r10 r11 r12 r2 r3 r4 r5 r6 r7 r8
+r9 rag raise raised raises ramp ran random randomly range rank ranks rate ratelimit rates rating raw rc re reachable
+reaches reaching reactions readable reader readiness realised reasoned rebind rebuild rebuilds rebuilt recap recapture
+receives recency recheck rechecked recipe recipient recipients recognises recolour recommends recomputed recon
+reconcile reconciled reconciliation reconnect reconstruct reconstructable recorded recording recovery recreate
+recurred redact redacted redaction redactions redone ref reference referenced references reflect reflection refresh
+refreshed refreshes refs refusal refuse refused refuses refusing regardless regenerated regenerates regex regexes
+region register regular reject rejected rejection rejects rejoined relate relates relation relation21 relation6
+relations relationship relative relays release released releases reliable relied remain remaining remark remarks
+remembered removable removal removes rename renamed renaming rendered rendering renderings renders renumber reordered
+rep repair repaired repairs repeat repeated repeating repeats replace replaced replacement replaces replacing repointed
+repository represent reproduced requested requesting requestor require required requirements requires
+research researched resembles resend resending resent reservation reserve reserved reset reshaped residual resolvable
+resolve resolved resolves resolving resource resourcenotfoundexception response responses restate restated restates
+resting restore restoring restrict restrictions restricts rests resume resumed resumes retained retention retired
+retried retries retry retrying returned returning returns reusable reuse reused reveal revealed reverse reviewed
+revise revision revisited rewrite rewrites rewritten richest rights ring rings rise risk risky roadmap roles roll
+rolled rolls rollup rollups root roster rotates roughly route routes routinely routing row rows rp
+rubric ruled runtime runtimes s s0 safely safety sales sample sandbox sanitised sat satellite satellites
+scaffolding scale scaled scan scanned scenario scenarios schema schemas scope scoped scoping
+scratch screen script scripts search seat seconds secret section sections sector seed seeded seeding seeds sees
+segment segments select selected selecting selects seller semicolons sending sentence sentences sep separable separate
+separated separately separates separator separators sequence sequences serial serve served server serves services
+serving session sessions setting settings settled settles settling setup severity sha sha256 shaped shapes share
+shareable shared sharing shas shell ship shipped ships shortcut shortens showing sibling sides signal signals
+signature signatures signed silence silent silently singleselect singular site sits sizes skills skip skipped skips
+sku sky sla slice slot slug slugs smaller smallest snake snapshot snapshots softened software solution sop sorted
+sortedquestionslist sound source sources span spanning spans speaker speakers speaking spec specific specifically
+speech spell spelled spelling spellings spells split spoke spoken spoofable spoofing spot spots
+sq1 ss ssz stable stakeholder stakeholders stakes stale staleness stamp stamped standalone standing
+stands starting stated statement statements states staticimage statistic statistics status95 stays stem stems
+stops storage store stored stores str straight strand strands stray strengths strictest strictly string strings
+stripped strips strongest structural structure structured stuck style sub subagent subcommand submission subscriber
+subscribers substituted subtasks succeed succeeds success successful suffix suffixed suffixes suggests suite sum
+summaries summariser summary summed superseded supplied supported surface surfaced surfaces surprise survey survive
+survives suspect swallow swallowed sweep switch switched switches switching symbol symptom sync synced synchronously
+syntax systems t1 tab tables tabs tactics tagged tail takeover taker target targeted targets tax technical
+terminal terminologies terminology tested testing tests text text7 textf2ihoymv texts theme thinnest
+thirteen thread threshold thresholds throwaway ticket tickets tidied tie tied tier tiers ties
+timeout timestamp timestamps timing title titles tl token tokens tool tools topic torn touched touches
+tracking3 trailing trajectory transcript transcripts transfer transient trap travel travelling travels treat treated
+treats trigger triggers trimmed trimming trusted trusting ts ttp twenty twice twin txt tying typed types u u1 ui
+unaddressed unambiguous unanswered unarchive unassigned unattributable unauthorized unbound unbuilt uncertain
+unchanged unchecked unclaimed unclear unconditionally unconfirmed unconnected undecided undeclared underscore
+undetectable undo undone unfiltered unintended union unique units unknown unlock unmade unmet unordered unprepared
+unpriced unprobed unproved unqualified unread unreadable unrecognized unrecorded unrecoverable unrelated unrequested
+unresolved unsettled unsourced unsupported untargeted untested unverified unwired updated updatequestioninput
+updatequestionorder upload ups upside url urls usable usage usedatasettemplate usemlstemplate userprofile utc utf uuid
+v v0 v1 v2 v3 valid validate validates validation values vanish vanishes variable variables variant variants varied
+varies vary vb1 vendor verb verbally verbatim verdict verification verified verifies verify version versions versus
+viewer viewkind visibility visible visual vnrm vocabularies vocabulary void voids volume vx w w1 w2 waits wakes walked
+walking walkthrough warn warning warnings warns weakest wearing web webhook webhooks wedge wedges
+wf1 wh1 whichever whitelist whitespace widened wider widget widgets width widths windows wins withouttitle woken
+workaround workflowdraftid workflowobjectid workforms workspaceid worse worst worth wp1 wp2 wp4 wps wrapped
+wrapper writer writers ws wsl x xxxx y yyyy yyyymmdd yyyymmddthhmmssffffffz z z0 za zero zone
+""".split())
+# end pinned
+
+# pinned: shared-phrases
+# G04 (X26 steps 5 and 6, Z12): the capitalised runs of two to four words that the plugin's own shared/*.md and
+# shared/*.txt files write, each word made of letters and a stop word, as reviewed when this list was last written.
+# A run of two or more words is dropped from a digest only when it is one of these phrases, or when every word is in
+# X26's own small stop list; a shared/ word on its own no longer drops it. tests/unit/test_leak_wall.py compares this
+# list with the shipped shared/ folder; regenerate it with shared_phrases() as SHARED_WORDS is regenerated.
+SHARED_PHRASES = frozenset(p.strip() for p in """
+a tickets, a za, amz expires, api and ui, api version, b and c, b tickets, battery and gantt, c it,
+calendar and gantt, call lessons, chart and battery, crlf and cr, crm and service, csat survey,
+csat survey and service, dd hh, dd n, e and crm, families b, families b and c, gantt and snapshot, in progress,
+joinery ops, larkmoor joinery, larkmoor joinery ops, mm dd, mm dd hh, mm dd n, mm ddthh, native crm,
+native crm and service, probe p, products services, r a, r b, r c, r d, r e, r f, r g, r h, r i, r j, r k,
+sales activities, sales crm, sales rep, sales targets, serial number, service portal, service sla,
+submission viewer, survey and service, ticket id, vibe and ai, work management, workforms submission,
+workforms submission viewer, x amz, x amz expires, yyyy mm, yyyy mm dd, yyyy mm dd hh, yyyy mm dd n, yyyy mm ddthh,
+yyyymmdd hhmm,
+""".split(",") if p.strip())
 # end pinned
 
 # pinned: paraphrase-cues
@@ -176,9 +381,9 @@ PARAPHRASE_CUES = (
     ("health-identity", ("hospital", "hospitalised", "hospitalized", "surgery", "illness", "sick", "sick leave",
                          "sick note", "medical leave", "maternity leave", "paternity leave", "diagnosis", "diagnosed",
                          "cancer", "pregnant", "pregnancy", "injury", "injured", "therapy", "therapist", "disability",
-                         "disabled", "mental health", "rehab", "nationality", "citizenship", "visa", "immigrant",
-                         "immigration", "accent", "ethnicity", "religion", "religious", "american", "british",
-                         "english", "scottish", "welsh", "irish", "german", "spanish", "italian", "portuguese",
+                         "disabled", "mental health", "rehab", "nationality", "citizenship", "immigrant",
+                         "immigration", "accent", "ethnicity", "religion", "religious", "british", "scottish",
+                         "welsh", "irish", "german", "spanish", "italian", "portuguese",
                          "belgian", "swiss", "austrian", "czech", "russian", "ukrainian", "romanian", "bulgarian",
                          "greek", "turkish", "indian", "pakistani", "bangladeshi", "chinese", "japanese", "korean",
                          "vietnamese", "filipino", "thai", "indonesian", "malaysian", "australian", "canadian",
@@ -198,10 +403,14 @@ PARAPHRASE_CUES = (
     ("personal-life", ("vacation", "holiday", "holidays", "birthday", "golf", "hangover", "hungover", "kids",
                        "children", "girlfriend", "boyfriend", "divorce", "divorced", "wedding", "honeymoon",
                        "date night", "dating")))
-ROLE_WORDS = ("boss", "manager", "director", "owner", "founder", "partner", "ceo", "cfo", "coo", "cto", "vp",
+ROLE_WORDS = ("boss", "manager", "director", "founder", "partner", "ceo", "cfo", "coo", "cto", "vp",
               "president", "chairman", "chair", "controller", "colleague", "coworker", "co worker", "assistant",
-              "receptionist", "supervisor", "lead", "mother", "father", "mum", "mom", "dad", "wife", "husband", "son",
+              "receptionist", "supervisor", "mother", "father", "mum", "mom", "dad", "wife", "husband", "son",
               "daughter", "brother", "sister")
+# F24: cues that ordinary process text uses about roles (an approver, a blocker, holiday cover) count only beside a
+# name, never beside a role word; a role word counts only when a possessive or a name anchors it to one person.
+NAME_ONLY_CUES = frozenset(("signs off", "approver", "a risk", "blocker", "holiday", "holidays"))
+POSSESSIVES = frozenset(("my", "your", "his", "her", "its", "our", "their"))
 PRONOUNS = frozenset(("i", "me", "my", "mine", "he", "him", "his", "she", "her", "hers", "they", "them", "their",
                       "theirs", "we", "us", "our", "ours", "you", "your", "yours", "it", "its"))
 # end pinned
@@ -219,9 +428,17 @@ SALES_FRAMING = ("upsell", "up sell", "upselling", "upsell opportunity", "cross 
                  "land and expand", "expansion opportunity", "closing tactic", "closing tactics")
 # end pinned
 
+# pinned: everyday-method-rows
+# R61 (the user's answer to R13): the hyphenated method rows whose spaced form is an everyday phrase. Each blocks
+# only where its hyphen is written, so an agent prompt's "Never say a price" passes; every other hyphenated row
+# blocks spaced as R13 built it. A unit test keeps each entry a hyphenated method row of shared/leak-terms.txt.
+EVERYDAY_METHOD_ROWS = frozenset(("never-say", "not-obtainable", "cost-of-waiting", "exit-ramp"))
+# end pinned
+
 # pinned: cost-cues
 # A number of the record is a cost figure when its sentence holds one of these, a currency sign or a currency code
-# (X25). Rate suffixes let a payload figure of 10 to 999 block without a cost word.
+# (X25). Rate suffixes let a payload figure of 10 to 999 block without a cost word. G21 (R56) adds the row labels
+# amount, total and fuel, with their plurals; spend was already here.
 COST_CUES = ("cost", "costs", "costed", "costing", "price", "prices", "priced", "pricing", "rate", "rates", "loaded",
              "salary", "salaries", "wage", "wages", "pay", "pays", "paid", "paying", "fee", "fees", "budget",
              "budgets", "spend", "spends", "spending", "spent", "threshold", "thresholds", "signs", "signature",
@@ -231,7 +448,7 @@ COST_CUES = ("cost", "costs", "costed", "costing", "price", "prices", "priced", 
              "overruns", "saving", "savings", "worth", "value", "values", "contract", "contracts", "renewal",
              "renewals", "discount", "discounts", "payback", "bleed", "upside", "hourly", "per hour", "an hour",
              "day rate", "day rates", "charge", "charges", "charged", "dollar", "dollars", "buck", "bucks", "pound",
-             "pounds", "euro", "euros", "grand")
+             "pounds", "euro", "euros", "grand", "amount", "amounts", "total", "totals", "fuel", "fuels")
 CURRENCY_CODES = ("usd", "gbp", "eur", "cad", "aud", "nzd", "chf")
 RATE_SUFFIX = r"[ \t]?(?:/[ \t]?h(?:r|our)?\b|an[ \t]+hour\b|per[ \t]+hour\b|an[ \t]+hr\b)"
 # end pinned
@@ -248,33 +465,75 @@ CONFUSABLES = {"а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y",
                "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-",
                "−": "-", "⁄": "/"}
 NARROW_SPACES = frozenset((" ", " ", " "))  # kept as one narrow space: a thousands separator
+# F12: letters the first table missed (dotless i, Armenian, Cherokee capitals, Latin small capitals and a few more).
+CONFUSABLES.update({"\u0131": "i", "\u0237": "j", "\u0251": "a", "\u0261": "g", "\u03c2": "c", "\u03f2": "c",
+                    "\u03f3": "j", "\u04bb": "h", "\u04c0": "l", "\u04cf": "l", "\u0501": "d", "\u051b": "q",
+                    "\u051d": "w", "\u0585": "o", "\u057d": "u", "\u0578": "n", "\u0570": "h", "\u0566": "q",
+                    "\u0581": "g", "\u0555": "O", "\u054d": "U", "\u054f": "S"})
+CONFUSABLES.update(zip("\u13a0\u13a1\u13a2\u13a5\u13a9\u13aa\u13ab\u13ac\u13b3\u13b7\u13bb\u13c0\u13c2"
+                       "\u13c3\u13cf\u13d2"
+                       "\u13d4\u13d5\u13d9\u13da\u13de\u13df\u13e2\u13e6\u13f4", "DRTiYAJEWMHGhZbRWSVSLCPKB"))
+CONFUSABLES.update(zip("\u1d00\u0299\u1d04\u1d05\u1d07\ua730\u0262\u029c\u026a\u1d0a\u1d0b\u029f\u1d0d"
+                       "\u0274\u1d0f\u1d18"
+                       "\u0280\ua731\u1d1b\u1d1c\u1d20\u1d21\u028f\u1d22", "abcdefghijklmnoprstuvwyz"))
+# F12: invisible characters that are not of category Cf (Default_Ignorable_Code_Point), dropped like Cf.
+IGNORABLE = frozenset(["\u034f", "\u115f", "\u1160", "\u17b4", "\u17b5", "\u3164", "\uffa0"] +
+                      [chr(c) for c in range(0x180b, 0x1810)] + [chr(c) for c in range(0xfe00, 0xfe10)] +
+                      [chr(c) for c in range(0xe0100, 0xe01f0)])
+LINE_BREAKS = frozenset(("\u2028", "\u2029", "\x85"))  # F12: read as a line break
+# G12 (X28 step 5): the shapes keyboards and word processors give an apostrophe (left quotation mark, modifier
+# letter, acute accent, backtick, full-width), read as ' when a letter or digit sits on both sides.
+APOSTROPHES = frozenset(("\u2018", "\u02bc", "\u00b4", "`", "\uff07"))
+# G02 (X28 step 4): Latin letters with no decomposition, read as their plain spelling after case folding.
+UNDECOMPOSED = {"ø": "o", "æ": "ae", "œ": "oe", "ł": "l", "đ": "d", "ð": "d", "þ": "th", "ħ": "h", "ŧ": "t",
+                "ı": "i", "ŀ": "l"}
+# G02: the second plain reading of three of them, which the wall also tries on both sides of the hash.
+ALT_READINGS = dict(UNDECOMPOSED, **{"ø": "oe", "æ": "a", "œ": "o"})
+ALT_LETTERS = frozenset("øæœØÆŒ")
 # end pinned
 
 # pinned: credential-shapes
-# The six shapes of X15 (with Y04's spaces around the separator). Shapes 3 and 4 run on percent-decoded text too;
-# shape 6 runs outside links only. A credential finding is never cleared.
+# The six shapes of X15 (with Y04's spaces around the separator), widened by the review (F10, F12). Shapes 3 and 4
+# run on percent-decoded text too; shape 6 runs outside links only; every shape runs on the folded line as well. A
+# credential finding is never cleared. LOOSE_SECRET and SECRET_AT_END take a value only when it looks like a secret
+# (a digit, a capital inside the word, or a mark such as . @ _ /), so "the password is reset monthly" passes.
+QUOTES = "\"'“”‘’"
+SECRET_KEYS = (r"(?:[a-z0-9]+[_-])*(?:password|passwd|pwd|pw|pass|passphrase|passcode|secret|token|api_key|api-key|"
+               r"apikey|access_key|access-key|client_secret|auth)|(?:[a-z0-9]+[_-])+key")
 CREDENTIAL_SHAPES = (
     ("authorisation header", r"\b(?:bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{16,}", re.IGNORECASE),
-    ("secret pair", r"\b(?:password|passwd|pwd|pass|secret|token|api_key|api-key|apikey|access_key|access-key|"
-                    r"client_secret|auth)[*_\"'“”‘’ \t]*[:=][ \t]*[\"'“”‘’]?[^\s\"'“”‘’]{4,}", re.IGNORECASE),
+    ("authorisation header", r"\bauthori[sz]ation\s*[:=]\s*(?:basic|bearer|token|digest)\s+[A-Za-z0-9._~+/=-]{8,}",
+     re.IGNORECASE),
+    ("authorisation header", r"\b(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=]|[a-z][A-Za-z0-9+/=]*[A-Z])[A-Za-z0-9+/=]{8,}",
+     0),
+    ("secret pair", r"\b(?:" + SECRET_KEYS + r")[*_ \t" + QUOTES + r"]*[:=][ \t]*[" + QUOTES + r"]?[^\s" + QUOTES +
+     r"]{4,}", re.IGNORECASE),
     ("url with user info", r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@", re.IGNORECASE),
-    ("url token parameter", r"[?&](?:token|key|api_key|apikey|access_token|auth|secret|signature|sig|password|pwd|"
+    ("url token parameter", r"(?:\?|&)(?:[a-z0-9_.-]*(?:token|key|secret|password|passwd|pwd)|auth|signature|sig|"
                             r"code)=[^&\s#]{6,}", re.IGNORECASE),
     ("json web token", r"\beyJ[A-Za-z0-9_-]{7,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}", 0),
     ("access key id", r"\bAKIA[A-Z0-9]{16}\b", 0),
     ("prefixed key", r"\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}", 0),
     ("repository token", r"\bgh[pousr]_[A-Za-z0-9]{36,}", 0),
     ("chat platform token", r"\bxox[abprs]-[A-Za-z0-9-]+", 0),
-    ("private key", r"-----BEGIN[A-Z ]*PRIVATE KEY-----", 0))
+    ("private key", r"-----BEGIN[A-Z ]*PRIVATE KEY-----", 0),
+    ("hex key", r"\b(?:[a-z0-9]+[_ -])*(?:key|token|secret|password|passwd|pwd|auth|signature)\b[^\n]{0,24}?"
+                r"(?<![0-9a-f])[0-9a-f]{32,}(?![0-9a-f])", re.IGNORECASE))
+LOOSE_KEYS = SECRET_KEYS + r"|api[ \t]key|access[ \t]key|client[ \t]secret|log[ -]?in|credentials?|key"
+LOOSE_SECRET = (r"\b(?:" + LOOSE_KEYS + r")[*_ \t" + QUOTES + r"]*(?:[:=|]|[ \t]+(?:is|was)\b)[ \t]*[" + QUOTES +
+                r"]?(?P<value>[^\s|" + QUOTES + r"]{4,})")
+SECRET_AT_END = r"\b(?:" + LOOSE_KEYS + r")[*_ \t" + QUOTES + r"]*[:=][ \t]*$"
 LONG_SECRET = r"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{32,}(?![A-Za-z0-9+/=_-])"
 # end pinned
 
 # pinned: internal-notes
-# The marks of the record's own internal files (X40, Y07); an internal-note finding is never cleared.
+# The marks of the record's own internal files (X40, Y07). An internal-note finding is never cleared, except one of
+# CLEARABLE_NOTES, which an ok row of the strand's own allowlist clears to a caution (R62, the user's answer to R17).
 INTERNAL_NOTE_PHRASES = ("internal: never client-facing", "never client-facing", "internal only", "not for the client",
-                         "note to self")
+                         "note to self", "not client-facing", "internal use only", "not for clients")  # last three: F18
+CLEARABLE_NOTES = frozenset(("internal only", "internal use only", "not for clients"))  # normal forms (X28)
 FRONT_MATTER_LINE = r"^[a-z][a-z0-9_-]*:[ \t]*[\"“”][^\"“”\n]*[\"“”]"
-SPEAKER_LABEL = r"\bspeaker[ \t]*\d+\b"
+SPEAKER_LABEL = r"\bspeaker[ \t_]*(?:\d+\b|[a-z](?=[ \t]*[:)\]]))"  # F18: SPEAKER_00 and Speaker A: as well
 # end pinned
 
 # pinned: structural-id-keys
@@ -307,22 +566,41 @@ ID_WIDE = re.compile(r"(?<![^\W_])\d{8,}(?![^\W_])")  # the same row beside any 
 CLASS_NAME = re.compile(r"[A-Za-z0-9-]+")
 NESTED = re.compile(r"\((?:[^()\\]|\\.)*(?:[*+]|\{\d*,\d*\})(?:[^()\\]|\\.)*\)(?:[*+]|\{\d*,?\d*\})")
 GAP = r"[\s,.\-_/|·]+"
+HYPHEN_GAP = r"[\s,.]*[\-_/|·][\s,.\-_/|·]*"  # R61: a gap that holds a hyphen or another joining mark
 LEGAL_SUFFIXES = frozenset(("inc", "incorporated", "llc", "ltd", "limited", "plc", "gmbh", "corp", "corporation", "co",
                             "company", "lp", "llp", "sa", "ag", "bv", "nv", "pty", "pte", "srl", "oy", "ab"))  # X28 step 6
 WORDCHAR = r"[^\W_]"
 TOKEN = re.compile(r"[^\W_]+(?:['’][^\W_]+)*")
 POSSESSIVE = re.compile(r"['’]s$")
-SENTENCE_END = re.compile(r"(?:\.|!|\?)(?=\s|$)|\n")
+# F25: a full stop after e.g., i.e., etc., vs. or approx. does not end a sentence, for every rule that reads
+# sentences (the cost cue of a number, the paraphrase rule); R64 keeps it after dropping the tool-category check.
+SENTENCE_END = re.compile(r"(?:(?<!\be\.g)(?<!\bi\.e)(?<!\betc)(?<!\bvs)(?<!\bapprox)\.|!|\?)(?=\s|$)|\n",
+                          re.IGNORECASE)
 QUOTE_SPANS = re.compile(r"(?:\"|“|”)([^\"“”\n]+)(?:\"|“|”)")
 LOCATION = re.compile(r"@\d{2}:\d{2}:\d{2}\b|\bcues? \d+(?:-\d+)?\b|\bL\d{2,4}(?:-\d{1,4})?\b", re.IGNORECASE)
 LINKS = (re.compile(r"!?\[[^\]\n]*\]\(\s*<?([^)\s>]+)"),
          re.compile(r"\b(?:href|src)\s*=\s*(?:\"|')([^\"']*)(?:\"|')", re.IGNORECASE),
          re.compile(r"<((?:https?://|mailto:)[^>\s]+)>", re.IGNORECASE),
-         re.compile(r"(?<![\w/])((?:https?://|mailto:)[^\s)\]>]+)", re.IGNORECASE))
+         re.compile(r"(?<![\w/])((?:https?://|mailto:)[^\s)\]>,|]+)", re.IGNORECASE))  # F32: no comma or pipe
+SCHEMED = re.compile(r"(?:https?://|mailto:)", re.IGNORECASE)
+# R63 (R27 widened): a web address with no scheme whose host ends in .com and a slash is a link for the id row's mask.
+# Its labels are letters, digits and hyphens; it stops where a bare URL stops.
+COM_ADDRESS = re.compile(r"(?<![\w.@/:%-])(?:[A-Za-z0-9-]+\.)+com/[^\s)\]>,|]*", re.IGNORECASE)
 PERCENT = re.compile(r"(?:%[0-9A-Fa-f]{2})+")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
-SNAPSHOT = re.compile(r'^schema:[ \t]*"document-summary/1"[ \t]*$')
-SIMPLE_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+SECTION_NUMBER = re.compile(r"(\d{1,2})(?:[.):\s]|$)")  # G18: `## 4)` and `## 4:` are section 4 too
+CLIENT_SECTIONS = tuple(range(1, 16))  # X09: the blueprint's client-facing sections; 16, Internal, is last (D19)
+# R52: the blueprint template's own section titles, as the guide numbers the sixteen. They are plugin vocabulary,
+# so a heading whose title is its section's own (letter case and marks aside) is never checked as client text.
+SECTION_TITLES = ("Version scope and deferred items", "Product fit", "Requirement trace", "Structure mapping", "Forks",
+                  "Live objects this strand touches", "Workspace and product binding", "Native-entity map",
+                  "Portfolio and project plan", "Board inventory", "Columns, relations and mirrors",
+                  "Groups, views, forms, docs, dashboards", "The lists",
+                  "Permissions, ownership, plan tier and data policy",
+                  "Irreversible operations, UI steps and client decisions", "Internal")
+SCHEMA_LINE = re.compile(r"^\s*schema\s*:\s*[\"'\u201c\u201d\u2018\u2019]?\s*(.*?)\s*"
+                         r"[\"'\u201c\u201d\u2018\u2019]?\s*$", re.IGNORECASE)  # F03: quoted or not
+SNAPSHOT_SCHEMA = re.compile(r"document-summary/(\d+)")
 STRUCTURAL_VALUE = re.compile(r"[1-9][0-9]*")
 
 
@@ -383,11 +661,17 @@ def plain(text, base=0):
     return Variant(text, list(range(base, base + len(text))))
 
 
-def fold(text, offsets=None):
-    """X28 steps 1 to 4: format characters removed, NFKC, look-alikes folded, case folded, diacritics dropped."""
-    out, where = [], []
+def fold(text, offsets=None, alt=False):
+    """X28 steps 1 to 4: format characters removed, NFKC, look-alikes folded, case folded, diacritics dropped, and
+    the letters with no decomposition spelt plain (G02; with alt, the second reading of ø, æ and œ)."""
+    plainly = ALT_READINGS if alt else UNDECOMPOSED
+    out, where, last = [], [], len(text) - 1
     for index, char in enumerate(text):
         origin = offsets[index] if offsets is not None else index
+        if char in APOSTROPHES and 0 < index < last and text[index - 1].isalnum() and text[index + 1].isalnum():
+            out.append("'")  # G12: an apostrophe shape inside a word, before NFKC turns the accent into a space
+            where.append(origin)
+            continue
         if char < "\x80":
             out.append(char.lower())
             where.append(origin)
@@ -396,15 +680,27 @@ def fold(text, offsets=None):
             out.append(" ")
             where.append(origin)
             continue
-        if unicodedata.category(char) == "Cf":
+        if unicodedata.category(char) == "Cf" or char in IGNORABLE:
+            continue
+        if char in LINE_BREAKS:
+            out.append("\n")
+            where.append(origin)
             continue
         for part in unicodedata.normalize("NFKC", char):
+            if part in IGNORABLE:
+                continue
             part = CONFUSABLES.get(part, part)
             for piece in unicodedata.normalize("NFD", part.casefold()):
                 if unicodedata.category(piece) != "Mn":
-                    out.append(piece)
-                    where.append(origin)
+                    for letter in plainly.get(piece, piece):
+                        out.append(letter)
+                        where.append(origin)
     return Variant("".join(out), where)
+
+
+def has_alt(text):
+    """G02: the text holds a letter with a second plain reading, so the wall also reads it that way."""
+    return not text.isascii() and any(c in ALT_LETTERS for c in text)
 
 
 def fold_variant(variant):
@@ -432,14 +728,34 @@ def percent_decode(variant):
     return Variant("".join(out), where)
 
 
+def percent_decode_all(variant, rounds=3):
+    """F41: percent-decoding repeated while it changes the text (a double encoding such as %252F), a few rounds."""
+    for _ in range(rounds):
+        decoded = percent_decode(variant)
+        if decoded.text == variant.text:
+            break
+        variant = decoded
+    return variant
+
+
+def front_matter_schema(lines, index, reach=40):
+    """F18 (X40, Y07): the `---` line at `index` opens a block that holds a `schema:` line before its closing `---`."""
+    for _, line in lines[index + 1:index + 1 + reach]:
+        if line.strip() == "---":
+            return False
+        if line.strip().lower().startswith("schema:"):
+            return True
+    return False
+
+
 def slashed(variant):
     return Variant(variant.text.replace("\\", "/"), variant.offsets)
 
 
-def words_of(text):
+def words_of(text, alt=False):
     """The normalised words of a text (X24): folded, possessive dropped, apostrophes removed."""
     found = []
-    for match in TOKEN.finditer(fold_text(text)):
+    for match in TOKEN.finditer(fold(text, alt=alt).text):
         word = POSSESSIVE.sub("", match.group()) if len(match.group()) > 2 else match.group()
         word = word.replace("'", "").replace("’", "")
         if word:
@@ -461,7 +777,8 @@ class Token:
 
 
 def sentence_spans(text):
-    """A sentence ends at . ! or ? before whitespace or the end, and at every line break (X12)."""
+    """A sentence ends at . ! or ? before whitespace or the end, and at every line break (X12's reading, which the
+    cost cue and the paraphrase rule keep, R64)."""
     spans, start = [], 0
     for match in SENTENCE_END.finditer(text):
         spans.append((start, match.end()))
@@ -472,7 +789,8 @@ def sentence_spans(text):
 
 
 def paragraph_spans(text):
-    """Blocks of lines between blank lines; a heading is a paragraph of its own (X12)."""
+    """Blocks of lines between blank lines; a heading is a paragraph of its own (X12's reading, which the
+    phonetic windows keep, R64)."""
     spans, start, end, position = [], None, None, 0
     for line in text.split("\n"):
         line_start, line_end = position, position + len(line)
@@ -525,6 +843,14 @@ def link_spans(text):
     return sorted(spans)
 
 
+def real_links(text):
+    """F31 (X34, Z03): the link targets that start with a scheme the bare-URL form names; a relative Markdown target
+    such as boards/<id> only looks like a link, so its id blocks. R63: a web address with no scheme whose host ends
+    in .com and a slash (example.com/page/<id>) counts too, from its host to where a bare URL stops."""
+    spans = [(s, e) for s, e in link_spans(text) if SCHEMED.match(text, s)]
+    return sorted(spans + [match.span() for match in COM_ADDRESS.finditer(text)])
+
+
 def inside(spans, start, end):
     return any(s <= start and end <= e for s, e in spans)
 
@@ -539,12 +865,32 @@ def mask(text, spans):
     return "".join(chars)
 
 
-def literal_regex(term, tokenised=False, fused=False):
-    """A literal row as a pattern on folded text: boundaries of LT:18, the gaps of X32, and the fused form."""
+def token_matches(tokens, forms):
+    """F11 (X24, X28): (start, end) in the original text of every run of consecutive tokens that spells one of the
+    word forms, whatever marks sit between the words (emphasis, brackets, a colon, a possessive)."""
+    found = []
+    if not forms or not tokens:
+        return found
+    for form in forms:
+        size = len(form)
+        for i in range(len(tokens) - size + 1):
+            if tokens[i].word == form[0] and all(tokens[i + k].word == form[k] for k in range(1, size)):
+                found.append((tokens[i].start, tokens[i + size - 1].end))
+    return found
+
+
+def literal_regex(term, tokenised=False, fused=False, spaced=True):
+    """A literal row as a pattern on folded text: boundaries of LT:18, the gaps of X32, and the fused form. With
+    spaced false, a hyphenated row needs a joining mark wherever the row has its hyphen (R61)."""
     folded = fold_text(term)
-    words = words_of(term) if tokenised else folded.split()
+    hyphenated = re.fullmatch(r"[^\W_]+(?:[\s.-]+[^\W_]+)*", folded.strip()) and re.search(r"[^\W_]-[^\W_]", folded)
+    words = words_of(term) if tokenised or hyphenated else folded.split()  # F13: a hyphen is a gap (X24, X32)
     if not words:
         return None
+    gaps = [GAP] * (len(words) - 1)
+    joints = re.findall(r"[\s.-]+", folded.strip()) if hyphenated and not spaced else []
+    if len(joints) == len(gaps):
+        gaps = [HYPHEN_GAP if "-" in joint else GAP for joint in joints]
     apostrophe = "'" in folded or "’" in folded
 
     def piece(word):
@@ -561,10 +907,14 @@ def literal_regex(term, tokenised=False, fused=False):
             forms.append(bare)
     alternatives = []
     for form in forms:
-        alternatives.append(GAP.join(piece(word) for word in form))
+        joined = piece(form[0]) + "".join(gap + piece(word) for gap, word in zip(gaps, form[1:]))
+        alternatives.append(joined)
         if fused and len(form) > 1:
             alternatives.append(re.escape("".join(form)))
-    return re.compile(r"(?<!%s)(?:%s)(?!%s)" % (WORDCHAR, "|".join(alternatives), WORDCHAR))
+    # F07: a boundary only on a side where the term has a word character, so "overloaded[I]" holds the marker [I].
+    head = "(?<!%s)" % WORDCHAR if re.match(WORDCHAR, words[0][:1]) else ""
+    tail = "(?!%s)" % WORDCHAR if re.match(WORDCHAR, words[-1][-1:]) else ""
+    return re.compile(r"%s(?:%s)%s" % (head, "|".join(alternatives), tail))
 
 
 def cut(text):
@@ -668,6 +1018,10 @@ class PhoneticSource:
         keys = [phonetic_key(w) for w in self.words]
         self.letters = "".join(letters(w) for w in self.words)
         self.keys = {" ".join(keys), "".join(keys), phonetic_key(self.letters)} - {""}
+        heard = [w.replace("th", "t").replace("ph", "p") for w in (letters(w) for w in self.words)]
+        if heard != [letters(w) for w in self.words]:  # F17: a th heard as t (and ph as p) is a second key
+            second = [phonetic_key(w) for w in heard]
+            self.keys |= {" ".join(second), "".join(second), phonetic_key("".join(heard))} - {""}
         size = len(self.letters)
         self.limit = 0 if size < 5 else (1 if size <= 7 else 2)
 
@@ -683,7 +1037,9 @@ class Run:
         self.inputs, self.findings, self.error = {}, [], None
         self.mode, self.strand, self.args_digest = None, None, None
         self.lists = self.sets = None
-        self.allowlists, self.wall_checked = {}, False
+        self.allowlists, self.exclusions = {}, None
+        self.texts = self.wall = self.stop = None
+        self.record, self.extra = True, {}
         self.spans = bool(getattr(args, "spans", False))
         self.order = 0
 
@@ -742,10 +1098,15 @@ def decode(data, name):
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise cannot(name, WHOLE, "the file is not UTF-8: %s" % exc, "a UTF-8 text file")
-    if "\r" not in text:
+    if "\r" not in text and not any(c in text for c in LINE_BREAKS):
         return text, None
     out, raw, i = [], [], 0
     while i < len(text):
+        if text[i] in LINE_BREAKS:  # F12: a line or paragraph separator reads as a line break
+            out.append("\n")
+            raw.append(i)
+            i += 1
+            continue
         if text[i] == "\r":
             out.append("\n")
             raw.append(i)
@@ -757,9 +1118,27 @@ def decode(data, name):
     return "".join(out), raw
 
 
-def json_value(text, name):
+# G20 (R54): the one strict JSON reader, in mmb_common (R55): a key written twice in one object raises RepeatedKey
+# (path, key), X22's path to the key; json_value below and the payload walk use it.
+RepeatedKey, key_path, strict_json = mc.RepeatedKey, mc.key_path, mc.strict_json
+
+
+def repeated(name, exc, expected):
+    path, key = exc.args
+    return cannot(name, path, "the key %s is written twice in one object, so what the file says depends on the "
+                  "program that reads it" % json.dumps(key, ensure_ascii=False), expected)
+
+
+ONCE_SETTINGS = "each key written once in its object, as record.py home init writes it"
+ONCE_PAYLOAD = "each key written once in its object, as the tool will receive it"
+
+
+def json_value(text, name, once=ONCE_SETTINGS):
+    """One JSON value, read strictly (F39, G20): a key written twice in one object is exit 3 on its path."""
     try:
-        return json.loads(text)
+        return strict_json(text)
+    except RepeatedKey as exc:
+        raise repeated(name, exc, once)
     except ValueError as exc:
         raise cannot(name, WHOLE, "not valid JSON: %s" % exc, "a JSON value")
 
@@ -800,13 +1179,13 @@ def parse_list(text, name, local):
             pattern = line[3:].strip()
             if not pattern:
                 raise cannot(name, field, "a re: row with no pattern", "re: <a Python regular expression>")
-            if local and NESTED.search(pattern):
-                raise cannot(name, field, "a pattern that can run for a very long time (a quantified group that "
-                             "holds a quantifier)", "a pattern without a repeated group that itself repeats")
             try:
                 regex = re.compile(pattern, re.IGNORECASE)
             except re.error as exc:
                 raise cannot(name, field, "the pattern does not compile: %s" % exc, "a Python regular expression")
+            if local and (NESTED.search(pattern) or risky_pattern(pattern)):
+                raise cannot(name, field, "a pattern that can run for a very long time (a repeated group that holds "
+                             "a repeat or an alternation)", "a pattern without a repeated group that itself repeats")
             rows.append(Row("re", row_cls, pattern, number, name, regex=regex))
             phonetic = None
         elif line.startswith("phonetic:"):
@@ -829,12 +1208,70 @@ def parse_list(text, name, local):
     return rows
 
 
-class Pattern:
-    """One compiled literal: its rule, class, the row it came from, and whether it is counted rather than blocked."""
-    __slots__ = ("rule", "cls", "regex", "origin", "term", "counted")
+def risky_pattern(pattern):
+    """F21 (X33, X42): True when a repeat of the parsed pattern holds, at any depth, a repeat of variable length or
+    an alternation, as (a|aa)+ and (?:(?:a+))+ do. The standard parser is re._parser from 3.11, sre_parse before."""
+    try:
+        from re import _parser as parser
+    except ImportError:  # Python 3.9 and 3.10
+        import sre_parse as parser
 
-    def __init__(self, rule, cls, regex, origin, term, counted=False):
-        self.rule, self.cls, self.regex, self.origin, self.term, self.counted = rule, cls, regex, origin, term, counted
+    def subs(op, av):
+        name = str(op)
+        if name in ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"):
+            return [av[2]]
+        if name == "SUBPATTERN":
+            return [av[-1]]
+        if name == "ATOMIC_GROUP":
+            return [av]
+        if name in ("ASSERT", "ASSERT_NOT"):
+            return [av[1]]
+        if name == "BRANCH":
+            return list(av[1])
+        if name == "GROUPREF_EXISTS":
+            return [p for p in av[1:] if p is not None]
+        return []
+
+    def variable(tree):
+        for op, av in tree:
+            name = str(op)
+            if name == "BRANCH" or (name.endswith("REPEAT") and av[0] != av[1]):
+                return True
+            if any(variable(sub) for sub in subs(op, av)):
+                return True
+        return False
+
+    def risky(tree):
+        for op, av in tree:
+            if str(op).endswith("REPEAT") and av[1] > 1 and variable(av[2]):
+                return True
+            if any(risky(sub) for sub in subs(op, av)):
+                return True
+        return False
+
+    return risky(parser.parse(pattern, re.IGNORECASE))
+
+
+class Pattern:
+    """One compiled literal: its rule, class and the row it came from.
+    A tokenised row (the firm, the plugin, the seller's names, the exclusions) also keeps its word forms of two
+    words or more, matched on the token stream so that no mark between the words breaks the match (F11)."""
+    __slots__ = ("rule", "cls", "regex", "origin", "term", "forms")
+
+    def __init__(self, rule, cls, regex, origin, term, tokenised=False):
+        self.rule, self.cls, self.regex, self.origin, self.term = rule, cls, regex, origin, term
+        self.forms = token_forms(term) if tokenised else []
+
+
+def token_forms(term):
+    """The word forms of a term of two words or more, with and without its trailing legal suffixes (X28, Z11)."""
+    words, forms = words_of(term), []
+    while len(words) >= 2:
+        forms.append(tuple(words))
+        if words[-1] not in LEGAL_SUFFIXES:
+            break
+        words = words[:-1]
+    return forms
 
 
 FUSED_CLASSES = ("firm", "plugin")
@@ -847,16 +1284,13 @@ class Lists:
     def __init__(self, rows, settings):
         self.rows, self.literals, self.regexes, self.phonetic, self.id_row = rows, [], [], [], None
         self.firm_whitelist = [row.term for row in rows if row.kind == "whitelist" and row.cls == "firm"]
-        self.category_words = set()
         for row in rows:
             fused = row.cls in FUSED_CLASSES
             if row.kind in ("literal", "phonetic"):
-                counted = row.cls.startswith(COUNTED_PREFIX)
-                regex = literal_regex(row.term, tokenised=fused, fused=fused)
+                everyday = row.cls == "method" and row.term.strip().lower() in EVERYDAY_METHOD_ROWS  # R61
+                regex = literal_regex(row.term, tokenised=fused, fused=fused, spaced=not everyday)
                 if regex is not None:
-                    self.literals.append(Pattern("term", row.cls, regex, row.where(), row.term, counted))
-                if counted:
-                    self.category_words.update(words_of(row.term))
+                    self.literals.append(Pattern("term", row.cls, regex, row.where(), row.term, tokenised=fused))
             if row.kind == "re":
                 if row.cls == "id-patterns" and row.term == ID_ROW:
                     self.id_row = row
@@ -868,21 +1302,27 @@ class Lists:
         firm = settings["firm"]
         for term in [firm["name"]] + list(firm["renderings"]):
             where = "%s firm" % SETTINGS_NAME
-            self.literals.append(Pattern("term", "firm", literal_regex(term, True, True), where, term))
+            self.literals.append(Pattern("term", "firm", literal_regex(term, True, True), where, term, tokenised=True))
             self.phonetic.append(PhoneticSource("firm", term, where, self.firm_whitelist))
         for term, what in settings["seller_names"]:
             self.literals.append(Pattern("seller-account", "seller-account", literal_regex(term, True, True),
-                                         "%s %s" % (SETTINGS_NAME, what), term))
+                                         "%s %s" % (SETTINGS_NAME, what), term, tokenised=True))
         self.seller_ids = settings["seller_ids"]
         for cls, group in (("internal-vocabulary", INTERNAL_VOCABULARY), ("sales-framing", SALES_FRAMING)):
             for term in group:
                 self.literals.append(Pattern("term", cls, literal_regex(term), "the %s group" % cls, term))
         for term in INTERNAL_NOTE_PHRASES:
             self.literals.append(Pattern("internal-note", None, literal_regex(term), "the internal-notes group", term))
-        self.plugin_words = set()
-        for row in rows:
-            if row.kind == "literal" and row.cls in ("plugin", "assistant", "method", "markers"):
-                self.plugin_words.update(words_of(row.term))
+        self.plugin_words = plugin_words(rows)
+
+
+def plugin_words(rows):
+    """The words of the shipped plugin, assistant, method and markers rows: X26's plugin vocabulary."""
+    found = set()
+    for row in rows:
+        if row.kind == "literal" and row.cls in ("plugin", "assistant", "method", "markers"):
+            found.update(words_of(row.term))
+    return found
 
 
 def load_shipped(run):
@@ -935,7 +1375,10 @@ def load_settings(run):
             return None
         if isinstance(value, bool) or not isinstance(value, (str, int)):
             raise cannot(SETTINGS_NAME, field, "not a string", "a string")
-        return str(value).strip() or None
+        if not words_of(str(value)):  # F39: a blank or punctuation-only value would drop a rule without a word
+            raise cannot(SETTINGS_NAME, field, "the value holds no letter or digit", "the value, or the field left "
+                         "out")
+        return str(value).strip()
 
     account = data.get("default_build_account")
     if account is not None:
@@ -993,10 +1436,12 @@ NUMBER_WORDS = frozenset(set(UNITS) | set(TEENS) | set(TENS) | set(BIG) | {"hund
                                                                            "quarter", "of"})
 NUMBER_START = frozenset(set(UNITS) | set(TEENS) | set(TENS) | {"a", "half"})
 WORD_GAP = re.compile(r"[ \t]+|[ \t]*-[ \t]*|[ \t]*-?[ \t]*\n[ \t]*")
-_CURRENCY = r"[$£€¥]|(?:" + "|".join(CURRENCY_CODES) + r")\b"
-NUMBER = re.compile(r"(?<![\w.,' /-])(?P<pre>(?:" + _CURRENCY + r")[ \t]?)?"
-                    r"(?P<int>\d{1,3}(?:[,' ]\d{3})+(?!\d)|\d+)(?P<dec>\.\d+)?"
-                    r"(?P<mag>[ \t]?(?:thousand|million|billion|grand|bn|mm|k|m)(?![^\W\d_]))?"
+_CURRENCY = r"[$£€¥]|(?:" + "|".join(CURRENCY_CODES) + r")(?![^\W\d_])"  # a code may sit on the digits (F01)
+# A number may follow a sign, a dash, a slash, a quote or an abbreviation's full stop (F01); it never starts inside a
+# digit run (after a digit and a separator) or after a full stop that does not follow a letter (a decimal tail).
+NUMBER = re.compile(r"(?<!\w)(?<!\d[.,'\u202f])(?:(?<!\.)|(?<=[^\W\d_]\.))(?P<pre>(?:" + _CURRENCY + r")[ \t]?)?"
+                    r"(?P<int>\d{1,3}(?:[,' ]\d{3})+(?!\d)|\d+)(?P<dec>\.\d+)?(?P<exp>e[+-]?\d{1,2}(?!\d))?"
+                    r"(?P<mag>(?:[ \t-]?(?:thousand|million|billion|grand)|[ \t]?(?:bn|mm|k|m))(?![^\W\d_]))?"
                     r"(?P<pct>[ \t]?(?:%|percent\b|per[ \t]+cent\b))?"
                     r"(?P<post>[ \t]?(?:" + _CURRENCY + r"))?(?![^\W_])")
 MAGNITUDE = {"k": 1000, "thousand": 1000, "grand": 1000, "m": 10 ** 6, "mm": 10 ** 6, "million": 10 ** 6,
@@ -1024,7 +1469,10 @@ ORDINAL = re.compile(r"(?m)^[ \t]*(?:#{1,6}[ \t]+|[-*+>][ \t]+)?(\d{1,3})[.)](?=
 DIGIT_RUN = re.compile(r"\d+")
 CHAIN_JOIN = re.compile(r"[ \t]|[ \t]*\n[ \t]*|[ \t]*\|[ \t]*|[ \t]?[*_~`]+[ \t]?")
 CHAIN_THREE = re.compile(r"[.\-/_]")
+CHAIN_COMMA = re.compile(r"[,'\u2019][ \t]*\n[ \t]*|[,'\u2019][ \t]+")  # F22: a thousands mark, then a break or a space
 ID_JOIN = re.compile(r"[ .\-]")
+TABLE_RULE = re.compile(r"[ \t]*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)+\|?[ \t]*|[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*")
+ID_SHAPE = re.compile(r"\d{8,}")  # a bare run of eight digits or more: the id row's shape, never lent a table's cue
 COST_RE = re.compile(r"[$£€¥]|(?<!%s)(?:%s)(?!%s)" % (WORDCHAR, "|".join(
     "[\\s-]+".join(re.escape(w) for w in cue.split()) for cue in sorted(COST_CUES + CURRENCY_CODES, key=len,
                                                                          reverse=True)), WORDCHAR))
@@ -1171,19 +1619,25 @@ def parse_numbers(folded, original, masks=None):
         decimals = (match.group("dec") or "")[1:]
         value = Fraction(int(integer + decimals), 10 ** len(decimals))
         precision = Fraction(1, 10 ** len(decimals))
+        if match.group("exp"):  # G23 (R58): an exponent (4.1287e5) scales the value and its last written digit
+            scale = Fraction(10) ** int(match.group("exp")[1:])
+            value, precision = value * scale, precision * scale
         currency = bool(match.group("pre") or match.group("post"))
         percent = bool(match.group("pct"))
         rate = bool(RATE_AFTER.match(text, match.end()))
-        magnitude = (match.group("mag") or "").strip()
+        written = match.group("mag") or ""
+        magnitude = written.strip(" \t-")
         readings = [1]
         if magnitude:
             scale = MAGNITUDE[magnitude]
-            start, _ = folded.span(match.start("mag"), match.end("mag"))
+            word = match.start("mag") + len(written) - len(magnitude)
+            start, _ = folded.span(word, match.end("mag"))
             lower = magnitude in ("m", "mm") and original[start:start + 1].islower() and not currency
             readings = [scale, 1] if lower else [scale]
         for scale in readings:
             found.append(Number(value * scale, precision * scale, match.start(), match.end(), percent, currency,
-                                rate, digits=True, plain=not magnitude and not decimals and not currency))
+                                rate, digits=True, plain=not magnitude and not decimals and not currency and
+                                not match.group("exp")))
     words = [(m.group(), m.start(), m.end()) for m in re.finditer(r"[a-z]+", text)]
     i = 0
     while i < len(words):
@@ -1210,10 +1664,45 @@ def parse_numbers(folded, original, masks=None):
     sentences = sentence_spans(text)
     starts = [s for s, _ in sentences]
     cues = [bool(COST_RE.search(text, s, e)) for s, e in sentences]
+    rows = table_cues(text) if "|" in text else []
+    row_starts = [s for s, _, _ in rows]
     for number in found:
         index = max(0, bisect.bisect_right(starts, number.start) - 1)
-        number.cue = cues[index] if cues else False
+        number.cue = (cues[index] if cues else False) or number.currency  # a code on the digits is a cue too
+        if not number.cue and rows:  # G21 (R56): a table row's sentence also reads its header and first cell
+            row = rows[max(0, bisect.bisect_right(row_starts, number.start) - 1)]
+            number.cue = row[0] <= number.start < row[1] and row[2] and not (
+                number.plain and ID_SHAPE.fullmatch(text, number.start, number.end))
     return found
+
+
+def table_cues(text):
+    """G21 (R56): (start, end, cue) of each body row of a Markdown table, where cue says whether the table's header
+    row or the row's first cell holds a cost cue (X25). A table is a line holding a pipe followed by a rule row
+    (`|---|---|`, outer pipes optional), and the lines holding a pipe after it; a run of lines that each start
+    with a pipe and have no rule row is read as a table whose first line is the header, the fail-safe side."""
+    lines, position = [], 0
+    for line in text.split("\n"):
+        lines.append((position, position + len(line), line))
+        position += len(line) + 1
+    rows, i = [], 0
+    while i < len(lines):
+        line = lines[i][2]
+        ruled = "|" in line and i + 1 < len(lines) and TABLE_RULE.fullmatch(lines[i + 1][2])
+        if not ruled and not line.lstrip().startswith("|"):
+            i += 1
+            continue
+        header = bool(COST_RE.search(line))
+        j = i + 2 if ruled else i + 1
+        while j < len(lines) and "|" in lines[j][2] and (ruled or lines[j][2].lstrip().startswith("|")):
+            start, end, body = lines[j]
+            cells = body.strip()
+            cells = cells[1:] if cells.startswith("|") else cells
+            first = cells.split("|", 1)[0]
+            rows.append((start, end, header or bool(COST_RE.search(first))))
+            j += 1
+        i = max(j, i + 1)
+    return rows
 
 
 def digit_chains(text, masks):
@@ -1233,7 +1722,8 @@ def digit_chains(text, masks):
             continue
         if current:
             separator = text[current[-1][1]:s]
-            if CHAIN_JOIN.fullmatch(separator) or (CHAIN_THREE.fullmatch(separator) and e - s == 3):
+            if CHAIN_JOIN.fullmatch(separator) or (e - s == 3 and (CHAIN_THREE.fullmatch(separator) or
+                                                                   CHAIN_COMMA.fullmatch(separator))):
                 current.append((s, e))
                 continue
             close()
@@ -1307,8 +1797,11 @@ def block_lines(lines, start_mark, end_mark):
     """(set of line indexes inside well-formed blocks, problem or None): X09's marks, several blocks allowed; a
     mark out of order exempts nothing and gives the 1-based line and the problem."""
     inside_lines, open_at = set(), None
+    kind = start_mark.split()[1].split(":")[0]
     for index, line in enumerate(lines):
         mark = line.strip()
+        if mark not in (start_mark, end_mark) and "<!" in mark and near_mark(mark) == kind:
+            return set(), (index + 1, "a mark not written in the pinned form")  # F20
         if mark == start_mark:
             if open_at is not None:
                 return set(), (index + 1, "a second opening mark inside an open block")
@@ -1321,6 +1814,18 @@ def block_lines(lines, start_mark, end_mark):
     if open_at is not None:
         return set(), (open_at + 1, "an opening mark with no closing mark")
     return inside_lines, None
+
+
+NEAR_MARK = re.compile(r"^<!-*\s*(client.?safe|glossary)\s*\W?\s*(?:start|end)\s*-*>$")
+
+
+def near_mark(line):
+    """F20 (X09): "client-safe" or "glossary" when a line reads like one of the four marks, letter case, spacing and a
+    dash look-alike aside, else None."""
+    match = NEAR_MARK.match(fold_text(line.strip()))
+    if not match:
+        return None
+    return "glossary" if match.group(1) == "glossary" else "client-safe"
 
 
 def section_lines(lines, title):
@@ -1342,8 +1847,7 @@ def blueprint_client_lines(lines):
     for index, line in enumerate(lines):
         heading = HEADING.match(line)
         if heading and len(heading.group(1)) <= 2:
-            number = re.match(r"(\d{1,2})(?:[.\s]|$)", heading.group(2))
-            active = len(heading.group(1)) == 2 and bool(number) and 1 <= int(number.group(1)) <= 15
+            active = section_number(line) in CLIENT_SECTIONS
             continue
         if active:
             found.add(index)
@@ -1363,24 +1867,46 @@ def blueprint_client_lines(lines):
     return found | glossary
 
 
-def is_snapshot(text):
-    """A document-summary/1 snapshot: flat front matter whose schema line names it."""
+def front_matter_lines(text):
+    """The lines of a front matter block that opens the text (an unclosed one runs to the end), or None."""
     lines = text.split("\n")
     if not lines or lines[0].strip() != "---":
-        return False
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return False
-        if SNAPSHOT.match(line.strip()):
-            return True
-    return False
+        return None
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return lines[1:index]
+    return lines[1:]
 
 
-def quote_texts(line):
+def input_kind(rel, text):
+    """What an inputs/*.md file is (X11, F03): "snapshot" when its front matter names document-summary/1, quoted or
+    not; "internal" when it has front matter with no schema line, which the lint cannot place and so never takes as
+    client-document text; "raw" with no front matter. A newer or another schema is exit 3 (G57, A9.6)."""
+    block = front_matter_lines(text)
+    if block is None:
+        return "raw"
+    schemas = [m.group(1) for m in (SCHEMA_LINE.match(line) for line in block) if m]
+    if not schemas:
+        return "internal"
+    found = SNAPSHOT_SCHEMA.fullmatch(schemas[0])
+    if found and int(found.group(1)) == 1 and len(set(schemas)) == 1:
+        return "snapshot"
+    if found and int(found.group(1)) > 1:
+        raise cannot(rel, "schema", "schema %s is newer than this lint's" % schemas[0], "document-summary/1")
+    raise cannot(rel, "schema", "schema %r is not a document snapshot's" % schemas[0], "document-summary/1, or a raw "
+                 "client document with no front matter")
+
+
+def is_snapshot(rel, text):
+    return rel.lower().endswith(".md") and input_kind(rel, text) == "snapshot"
+
+
+def quote_texts(line, whole=False):
     """X24: the client quote a marked line holds: the text between double quotation marks, else the line with the
-    marker, the location forms and the speaker label removed."""
+    marker, the location forms and the speaker label removed. With `whole` (the Q set, F06), a line that holds
+    quotation marks gives both: a word quoted inside an utterance never shrinks the quote to that word."""
     quoted = [m.group(1) for m in QUOTE_SPANS.finditer(line)]
-    if quoted:
+    if quoted and not whole:
         return quoted
     rest = line
     for marker in MARKERS[:5]:
@@ -1388,7 +1914,7 @@ def quote_texts(line):
     rest = LOCATION.sub(" ", rest)
     if ":" in rest:
         rest = rest.split(":", 1)[1]
-    return [rest]
+    return quoted + [rest]
 
 
 QUOTE_MARK = re.compile("|".join(re.escape(m) for m in MARKERS[:5]), re.IGNORECASE)
@@ -1424,23 +1950,85 @@ def skipped_dir(parts):
     return len(parts) == 3 and parts[0] == "strands" and parts[2] in ("drafts", "deliverables")
 
 
-def record_files(run):
-    """Every .md, .txt and .docx of the record that may feed a set, in sorted POSIX path order."""
-    found = []
+def real_parts(real, base):
+    """The parts of a resolved path relative to the resolved base, or None when it lies outside."""
+    try:
+        return Path(real).relative_to(base).parts
+    except ValueError:
+        return None
+
+
+def walk_inside(top, base, failed, outside, skip=None):
+    """R09, R38: (walked folder, real parts, file names) for each folder under top. A linked folder is followed once
+    when it resolves inside base, and outside(path, True) raises (exit 3) when it resolves outside. The parts are
+    the folder's real place relative to base, so a link never changes a file's name or kind; skip(parts) leaves a
+    folder out by that real place."""
+    base = os.path.realpath(str(base))
+    seen = {os.path.realpath(str(top))}
+    for folder, dirs, files in os.walk(str(top), onerror=failed, followlinks=True):
+        kept = []
+        for name in sorted(dirs):
+            real = os.path.realpath(os.path.join(folder, name))
+            parts = real_parts(real, base)
+            if parts is None:
+                outside(os.path.join(folder, name), True)
+            if real in seen or (skip and skip(parts)):
+                continue
+            seen.add(real)
+            kept.append(name)
+        dirs[:] = kept
+        yield folder, real_parts(os.path.realpath(folder), base), sorted(files)
+
+
+def walk_files(top, base, failed, outside, skip=None):
+    """{real POSIX name relative to base: path} of every file walk_inside finds, system files left out. A linked
+    file is read under its real name, once, and outside(path, False) raises when it resolves outside base (R38)."""
+    found, real_base = {}, os.path.realpath(str(base))
+    for folder, _, files in walk_inside(top, base, failed, outside, skip):
+        for name in files:
+            if name.lower() in SYSTEM_FILES:
+                continue
+            path = os.path.join(folder, name)
+            parts = real_parts(os.path.realpath(path), real_base)
+            if parts is None:
+                outside(path, False)
+            if skip and skip(parts[:-1]):
+                continue
+            found.setdefault("/".join(parts), Path(path))
+    return found
+
+
+def record_walk(root, failed, outside):
+    """{record-relative name: path} of every .md, .txt and .docx under a record folder that may feed a set (X11):
+    .work/, drafts/, deliverables/ and .git/ left out, a link followed inside the record and named by its real
+    place, and outside(path, folder) called for one that resolves outside (R38). record_files and the age check
+    of R44 both walk this way, so the files an entry is built from and the files its age is taken from never drift."""
+
+    def skip(parts):
+        return any(skipped_dir(parts[:end]) for end in range(1, len(parts) + 1))
+
+    found = walk_files(root, root, failed, outside, skip)
+    return {rel: path for rel, path in found.items() if os.path.splitext(rel)[1].lower() in TEXT_EXT}
+
+
+def record_failures(run):
+    """(failed, outside) for a walk of this record: each names a path in this record, never a link's target."""
 
     def failed(exc):
         raise cannot(run.name(exc.filename or run.root), WHOLE, "cannot list the folder: %s" % exc,
                      "a readable record folder")
 
-    for folder, dirs, files in os.walk(str(run.root), onerror=failed):
-        rel = Path(folder).relative_to(run.root).as_posix()
-        parts = () if rel == "." else tuple(rel.split("/"))
-        dirs[:] = sorted(d for d in dirs if not skipped_dir(parts + (d,)))
-        for name in sorted(files):
-            if name.lower() in SYSTEM_FILES or os.path.splitext(name)[1].lower() not in TEXT_EXT:
-                continue
-            found.append("/".join(parts + (name,)))
-    return sorted(found)
+    def outside(path, folder):  # X30: the link in this record is named, never what it points at
+        raise cannot(run.name(path), WHOLE, "a linked %s resolves outside the record" % ("folder" if folder else
+                     "file"), "files inside the record only; copy them in or remove the link, then run this again")
+
+    return failed, outside
+
+
+def record_files(run):
+    """Every .md, .txt and .docx of the record that may feed a set, in sorted POSIX path order. A link is
+    followed inside the record and named by its real place; one that resolves outside is exit 3 (R38)."""
+    return sorted(record_walk(run.root, *record_failures(run)))
 
 
 def lines_to_segments(file, lines, tags):
@@ -1470,10 +2058,14 @@ def file_segments(run, rel, text):
         return lines_to_segments(rel, lines, [None if m else body_noq for m in marks])
     if kind == "internal":
         return lines_to_segments(rel, lines, [None if m else body_all for m in marks])
-    if kind == "input" and not (rel.lower().endswith(".md") and is_snapshot(text)):
+    state = input_kind(rel, text) if kind == "input" and rel.lower().endswith(".md") else "raw"
+    if kind == "input" and state == "internal":
+        return lines_to_segments(rel, lines, [None if m else body_all for m in marks])
+    if kind == "input" and state == "raw":
         return lines_to_segments(rel, lines, [None if m else ("body", frozenset("FE")) for m in marks])
-    if kind == "blueprint":
-        client = blueprint_client_lines(lines)
+    if kind == "blueprint":  # R52: a heading of sections 1 to 15 is client-facing, so it feeds no set either
+        client = blueprint_client_lines(lines) | {i for i, line in enumerate(lines) if section_number(line) in
+                                                  CLIENT_SECTIONS}
         return lines_to_segments(rel, lines, [None if m or i in client else body_all for i, m in enumerate(marks)])
     blocks, problem = block_lines(lines, BLOCK_MARKS[0], BLOCK_MARKS[1])
     if problem:
@@ -1519,8 +2111,8 @@ class Sets:
     def __init__(self):
         self.cost, self.cost_percent, self.record, self.record_percent = [], [], [], []
         self.runs, self.docs, self.quotes = {}, {}, {}
-        self.near_runs = self.near_docs = None
-        self.run_tokens, self.doc_tokens = [], []
+        self.run_tokens, self.doc_tokens, self.quote_tokens = [], [], []
+        self.indexes = {}
 
     def add_numbers(self, segment):
         folded = fold(segment.text)
@@ -1539,35 +2131,64 @@ class Sets:
         for i in range(len(words) - size + 1):
             index.setdefault(tuple(words[i:i + size]), []).append(entry)
 
-    def near(self, which):
-        """The eight-word windows of R (or E) with each position in turn left open, for the near-copy check."""
-        if which == "runs" and self.near_runs is None:
-            self.near_runs = near_index(self.run_tokens)
-        if which == "docs" and self.near_docs is None:
-            self.near_docs = near_index(self.doc_tokens)
-        return self.near_runs if which == "runs" else self.near_docs
+    def index(self, which, kind):
+        """F14, F15: the substitution ("sub") or deletion ("del") index of R, E or Q, built once on first use."""
+        key = (which, kind)
+        if key not in self.indexes:
+            sources = {"runs": self.run_tokens, "docs": self.doc_tokens, "quotes": self.quote_tokens}[which]
+            inner = which == "quotes"  # F15: a quote's first and last words stay, so seven words never block
+            self.indexes[key] = near_index(sources, inner) if kind == "sub" else deletion_index(sources, inner)
+        return self.indexes[key]
 
 
-def near_index(sources):
+def deletion_index(sources, inner=False):
+    """F14: every eight-word window of a source with each word in turn left out, as seven-word tuples. A checked
+    seven-word window found here dropped a word; a checked eight-word window with one word left out found here
+    added one (or changed one)."""
     index = {}
     for words, entry in sources:
         for i in range(len(words) - NEAR_WORDS + 1):
             window = words[i:i + NEAR_WORDS]
-            for position in range(NEAR_WORDS):
+            for position in positions(inner):
+                index.setdefault(tuple(window[:position]) + tuple(window[position + 1:]), []).append(entry)
+    return index
+
+
+def positions(inner):
+    """The positions of an eight-word window a near copy may change: all, or (for a quote) all but the two ends."""
+    return range(1, NEAR_WORDS - 1) if inner else range(NEAR_WORDS)
+
+
+def near_index(sources, inner=False):
+    index = {}
+    for words, entry in sources:
+        for i in range(len(words) - NEAR_WORDS + 1):
+            window = words[i:i + NEAR_WORDS]
+            for position in positions(inner):
                 key = (position,) + tuple(window[:position]) + tuple(window[position + 1:])
                 index.setdefault(key, []).append(entry)
     return index
 
 
+def record_texts(run):
+    """{record-relative name: text} of every file record_files lists, read once per run and kept for the wall's
+    own set O and the index's harvest (X11, X26, X27)."""
+    if run.texts is None:
+        texts = {}
+        for rel in record_files(run):
+            path = run.root.joinpath(*rel.split("/"))
+            if rel.lower().endswith(".docx"):
+                texts[rel] = "\n".join("\n".join(paragraphs) for _, paragraphs, _ in docx_text(run, path, rel))
+            else:
+                texts[rel] = run.text(path, rel)
+        run.texts = texts
+    return run.texts
+
+
 def build_sets(run):
     """Read every record file the sets need (X11), listing each with its hash, and build F, R, Q and E."""
     sets = Sets()
-    for rel in record_files(run):
-        path = run.root.joinpath(*rel.split("/"))
-        if rel.lower().endswith(".docx"):
-            text = "\n".join("\n".join(paragraphs) for _, paragraphs, _ in docx_text(run, path, rel))
-        else:
-            text = run.text(path, rel)
+    for rel, text in record_texts(run).items():
         for segment in file_segments(run, rel, text):
             flags = segment.flags
             if "F" in flags:
@@ -1584,8 +2205,10 @@ def build_sets(run):
             if "Q" in flags:
                 for line in segment.text.split("\n"):
                     if QUOTE_MARK.search(line):
-                        for quote in quote_texts(line):
-                            sets.add_grams(sets.quotes, words_of(quote), QUOTE_WORDS, (segment.file, segment.part))
+                        for quote in quote_texts(line, whole=True):
+                            quote_words = words_of(quote)
+                            sets.add_grams(sets.quotes, quote_words, QUOTE_WORDS, (segment.file, segment.part))
+                            sets.quote_tokens.append((quote_words, (segment.file, segment.part)))
     return sets
 
 
@@ -1607,15 +2230,58 @@ def row_parts(text):
     return text.strip(), {}
 
 
-def section_rows(text, title, name):
-    """(line number, term, keys) of every row under the level-2 heading `title`; an empty term is exit 3."""
+BULLET = re.compile(r"^\s*(?:[-*+\u2022]|\d{1,3}[.)])\s*\S")
+KEYED_GROUP = re.compile(r"\[\s*[a-z_]+\s*:[^\[\]]*\]\s*$", re.IGNORECASE)
+
+
+def strict_rows(lines, section, title, name):
+    """F04 (X09, X33, fail closed): an exclusions file is read whole or not at all. Exit 3 on a heading of the
+    section's name in another form, on rows or bullets with no pinned heading, and on any line under the heading
+    that is neither a row, a blank line, a comment nor a sub-heading."""
+    same = re.compile(r"^#{2,6}\s*%s\b" % re.escape(title.split(" ", 1)[1]), re.IGNORECASE)
+    present = False
+    for index, line in enumerate(lines):
+        heading = HEADING.match(line)
+        if heading and len(heading.group(1)) == 2 and line.strip().lower() == title.lower():
+            present = True
+        elif same.match(line.strip()):
+            raise cannot(name, "line %d" % (index + 1), "a heading %r that is not the pinned %s" %
+                         (line.strip(), title),
+                         "one heading that reads exactly %s, with the rows under it" % title)
+    if not present:
+        for index, line in enumerate(lines):
+            if BULLET.match(line) and line.strip() != "---":
+                raise cannot(name, "line %d" % (index + 1), "a row with no %s heading above it" % title,
+                             "the rows under a heading that reads exactly %s" % title)
+        return
+    comment = False
+    for index in sorted(section):
+        line = lines[index].strip()
+        if comment or line.startswith("<!--"):
+            comment = "-->" not in (line[4:] if line.startswith("<!--") else line)
+            continue
+        if not line or line.startswith("#") or line.startswith("- "):
+            continue
+        raise cannot(name, "line %d" % (index + 1), "a line under %s that is not a row" % title,
+                     "- <term> [key: value; ...], one row per line, a hyphen and a space first")
+
+
+def section_rows(text, title, name, strict=False):
+    """(line number, term, keys) of every row under the level-2 heading `title`; an empty term is exit 3. With
+    `strict` (the exclusions, F04), anything the reader cannot apply as a row is exit 3 too."""
     lines = text.split("\n")
+    section = section_lines(lines, title)
+    if strict:
+        strict_rows(lines, section, title, name)
     rows = []
-    for index in sorted(section_lines(lines, title)):
+    for index in sorted(section):
         match = ROW_LINE.match(lines[index].strip()) if lines[index].strip().startswith("- ") else None
         if not match:
             continue
         term, keys = row_parts(match.group(1))
+        if strict and not keys and KEYED_GROUP.search(match.group(1)):
+            raise cannot(name, "line %d" % (index + 1), "a bracketed key list with a key the row does not have",
+                         "keys among %s, as key: value pairs separated by semicolons" % ", ".join(ROW_KEYS))
         if not words_of(term) and not term.strip():
             raise cannot(name, "line %d" % (index + 1), "a row with an empty term",
                          "- <term> [key: value; ...], the term first")
@@ -1656,7 +2322,7 @@ def load_exclusions(run):
         if not path.exists():
             run.absent(name)
             continue
-        for line, term, keys in section_rows(run.text(path, name), HEADINGS[1], name):
+        for line, term, keys in section_rows(run.text(path, name), HEADINGS[1], name, strict=True):
             kind = keys.get("kind")
             if kind is not None and kind not in EXCLUSION_KINDS:
                 raise cannot(name, "line %d" % line, "the row kind %r is not name, term or figure" % kind,
@@ -1674,7 +2340,7 @@ def load_exclusions(run):
                 if regex is None:
                     raise cannot(name, "line %d" % line, "a row whose term has no letters or digits",
                                  "a name or a term")
-                found.patterns.append(Pattern("exclusion", kind, regex, where, term))
+                found.patterns.append(Pattern("exclusion", kind, regex, where, term, tokenised=True))
     return found
 
 
@@ -1683,6 +2349,16 @@ class AllowRow:
 
     def __init__(self, term, ok, file, line):
         self.term, self.normal, self.ok, self.file, self.line = term, normal_form(term), ok, file, line
+
+
+NOT_YES = frozenset(("no", "not", "nope", "never", "pending", "tbc", "tbd", "todo", "ask", "asked", "awaiting",
+                     "waiting", "unanswered", "unknown", "maybe", "none", "false", "n"))
+
+
+def ok_granted(ok):
+    """F19 (X09): an ok whose first word says no, not yet or ask is not the user's yes, so it clears nothing."""
+    words = words_of(ok)
+    return bool(words) and words[0] not in NOT_YES
 
 
 def load_allowlist(run, short):
@@ -1699,10 +2375,15 @@ def load_allowlist(run, short):
     else:
         for line, term, keys in section_rows(run.text(path, name), HEADINGS[2], name):
             ok = (keys.get("ok") or "").strip()
-            row = AllowRow(term, ok, name, line)
+            refused = bool(ok) and not ok_granted(ok)
+            row = AllowRow(term, "" if refused else ok, name, line)
             if not ok:
                 run.add(record_warning(name, line, "an allowlist row without the user's ok clears nothing",
                                        "the row with ok: and the user's words, or the row removed", "allowlist"))
+            elif refused:
+                run.add(record_warning(name, line, "an allowlist row whose ok is not the user's yes (%s) clears "
+                                       "nothing" % cut(ok), "the row with ok: and the user's words, or the row "
+                                       "removed", "allowlist"))
             rows.append(row)
     run.allowlists[short] = rows
     return rows
@@ -1711,7 +2392,14 @@ def load_allowlist(run, short):
 # .docx (X35): read in memory, the body and every part that carries text, with the guards of X35 and X42.
 
 W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-WORD_PART = re.compile(r"word/(?:document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml")
+WORD_PART = re.compile(r"word/(?:document|header\d*|footer\d*|footnotes|endnotes|comments|people)\.xml", re.IGNORECASE)
+RELS_PART = re.compile(r"(?:word/)?_rels/[^/]*\.rels", re.IGNORECASE)
+UNREAD_PART = re.compile(r"(?:^|/)embeddings/|\.(?:docx|docm|dotx|dotm|htm|html|mht|mhtml|rtf|xlsx|xlsm|pptx|bin)$",
+                         re.IGNORECASE)  # F08: a part Word may show that the lint does not read is exit 3
+PLAIN_PART = re.compile(r"(?:^|/)printerSettings/printerSettings\d*\.bin$", re.IGNORECASE)  # R08: holds no text
+ANOTHER_FILE = ("this document has another file inside it",
+                "take that file out and add it as its own input, then run this again")  # R08, the user's wording
+SHOWN_ATTRIBUTES = ("author", "initials", "instr", "tooltip", "descr", "title")  # F08: attribute text Word shows
 PROPERTY_PARTS = ("docProps/core.xml", "docProps/app.xml", "docProps/custom.xml")
 PREFIXES = {"http://purl.org/dc/elements/1.1/": "dc:", "http://purl.org/dc/terms/": "dcterms:",
             "http://schemas.openxmlformats.org/package/2006/metadata/core-properties": "cp:",
@@ -1724,6 +2412,18 @@ def element_name(tag):
         space, _, local = tag[1:].partition("}")
         return PREFIXES.get(space, "") + local
     return tag
+
+
+def shown_attributes(root):
+    """F08: [(label, value)] of the attributes Word shows to a reader (comment and revision authors and initials,
+    field instructions such as a hyperlink's, tooltips, picture alt text and titles), in document order."""
+    found = []
+    for node in root.iter():
+        for key, value in node.attrib.items():
+            local = key.rsplit("}", 1)[-1]
+            if local in SHOWN_ATTRIBUTES and value and value.strip():
+                found.append(("%s %s" % (element_name(node.tag).rsplit("}", 1)[-1], local), " ".join(value.split())))
+    return found
 
 
 def word_paragraphs(root):
@@ -1778,8 +2478,11 @@ def docx_parts(data, name):
         raise cannot(name, WHOLE, "not a .docx (zip) archive: %s" % exc, "a Word document")
     if "word/document.xml" not in infos:
         raise cannot(name, "word/document.xml", "the archive has no word/document.xml", "a Word document")
+    unread = sorted(n for n in infos if UNREAD_PART.search(n) and not PLAIN_PART.search(n))
+    if unread:
+        raise cannot(name, unread[0], *ANOTHER_FILE)
     wanted = ["word/document.xml"] + sorted(n for n in infos if WORD_PART.fullmatch(n) and n != "word/document.xml") \
-        + [n for n in PROPERTY_PARTS if n in infos]
+        + [n for n in PROPERTY_PARTS if n in infos] + sorted(n for n in infos if RELS_PART.fullmatch(n))
     total, parts = 0, []
     for part in wanted:
         info = infos[part]
@@ -1794,7 +2497,7 @@ def docx_parts(data, name):
             raw = archive.read(part)
         except (zipfile.BadZipFile, OSError, RuntimeError, ValueError, NotImplementedError) as exc:
             raise cannot(name, part, "cannot read the part: %s" % exc, "a readable Word document")
-        if DTD.search(raw):
+        if DTD.search(raw) or DTD.search(raw.replace(b"\x00", b"")):  # F29: a UTF-16 part as well
             raise cannot(name, part, "the part declares a DOCTYPE or an ENTITY", "a Word part without a DTD")
         try:
             root = ET.fromstring(raw)
@@ -1803,8 +2506,21 @@ def docx_parts(data, name):
         if part in PROPERTY_PARTS:
             lines, labels = property_lines(root)
             parts.append((part, lines, labels))
+        elif RELS_PART.fullmatch(part):
+            targets = [" ".join(node.get("Target", "").split()) for node in root.iter()
+                       if node.tag.rsplit("}", 1)[-1] == "Relationship" and node.get("TargetMode") == "External" and
+                       node.get("Target", "").strip()]
+            if targets:
+                parts.append((part, targets, ["Relationship Target"] * len(targets)))
         else:
-            parts.append((part, word_paragraphs(root), None))
+            if any(node.tag.rsplit("}", 1)[-1] == "altChunk" for node in root.iter()):
+                raise cannot(name, part, *ANOTHER_FILE)
+            lines = word_paragraphs(root)
+            labels = ["paragraph %d" % (i + 1) for i in range(len(lines))]
+            for label, value in shown_attributes(root):
+                lines.append(value)
+                labels.append(label)
+            parts.append((part, lines, labels))
     return parts
 
 
@@ -1817,8 +2533,11 @@ class Unit:
                  structural=False, raw=None, labels=None):
         self.file, self.text, self.seq, self.field, self.part = file, text, seq, field, part
         self.strand, self.mode, self.kind, self.structural = strand, mode, kind, structural
-        self.raw, self.labels = raw, labels
+        self.raw, self.labels, self.raw_json = raw, labels, False
+        self.joins = False  # G19 (R53): whether the string is part of its payload's joined text
         self.own = (file, ("block",) if mode == "client-safe-block" else ("body", "block"))
+        if mode in ("blueprint", "glossary"):
+            self.own = (None, ())  # the blueprint's client-facing text feeds no set, so its own rest still counts
         self.line_starts = [0] + [i + 1 for i, c in enumerate(text) if c == "\n"]
 
     def where(self, offset):
@@ -1857,10 +2576,10 @@ class Check:
         self.run, self.unit, self.lists, self.sets = run, unit, run.lists, run.sets
         self.text = blank_marks(unit.text)
         self.vf = fold(self.text)
-        decoded = percent_decode(plain(self.text)) if "%" in self.text else None
+        decoded = percent_decode_all(plain(self.text)) if "%" in self.text else None
         self.vfd = fold_variant(decoded) if decoded is not None and decoded.text != self.text else None
         self.tokens = tokenise(self.text, self.vf)
-        self.hits, self.counted = [], []
+        self.hits = []
         self.links = link_spans(self.vf.text)
 
     def hit(self, rule, cls, severity, start, end, problem, expected, source=None, **extra):
@@ -1873,19 +2592,16 @@ class Check:
     # Literal rows of every list, the firm, the seller's names, the vocabulary groups, notes, exclusions.
 
     def literals(self):
-        patterns = list(self.lists.literals) + list(self.run.exclusions.patterns)
-        summary = self.unit.mode == "summary"
+        if self.unit.mode == "terms":  # X31: the firm rule alone, no shipped row and no exclusion
+            patterns = [p for p in self.lists.literals if p.rule == "term" and p.cls == "firm"]
+        else:
+            patterns = list(self.lists.literals) + list(self.run.exclusions.patterns)
         for variant_index, variant in enumerate([self.vf] + ([self.vfd] if self.vfd else [])):
+            tokens = self.tokens if variant_index == 0 else tokenise(self.text, variant)
             for pattern in patterns:
-                if summary and not pattern.counted:
-                    continue
-                if pattern.counted and variant_index:
-                    continue
-                for match in pattern.regex.finditer(variant.text):
-                    start, end = variant.span(match.start(), match.end())
-                    if pattern.counted:
-                        self.counted.append((pattern.cls, match.start(), match.end(), start, end))
-                        continue
+                spans = [variant.span(m.start(), m.end()) for m in pattern.regex.finditer(variant.text)]
+                spans += [span for span in token_matches(tokens, pattern.forms) if not overlaps(spans, *span)]
+                for start, end in spans:
                     if pattern.rule == "term":
                         problem = PROBLEMS["term"][0] % (pattern.cls, pattern.origin)
                         expected = PROBLEMS["term"][1]
@@ -1914,12 +2630,12 @@ class Check:
         if "\\" in line:
             found.append(slashed(base))
         if "%" in line:
-            decoded = percent_decode(base)
+            decoded = percent_decode_all(base)
             found += [decoded, slashed(decoded)]
         folded = fold_variant(base)
         if folded.text != line.lower():
             found.append(folded)
-            if "\\" in line:
+            if "\\" in folded.text:  # F12: a full-width backslash folds to one
                 found.append(slashed(folded))
         return found
 
@@ -1931,24 +2647,49 @@ class Check:
             variants = self.variants_of(start, line)
             masked = None
             for row in self.lists.regexes:
-                is_id = row is id_row
-                if is_id and self.unit.structural:
+                if self.unit.mode == "terms" and row.cls != "firm":
                     continue
-                if is_id and masked is None:
-                    masked = [Variant(mask(v.text, link_spans(v.text)), v.offsets) for v in variants]
+                is_id = row is id_row
+                if is_id and (self.unit.structural or self.unit.raw_json):
+                    continue
+                if is_id and masked is None:  # F31: only a link with a scheme hides its ids
+                    masked = [Variant(mask(v.text, real_links(v.text)), v.offsets) for v in variants]
                 for variant in (masked if is_id else variants):
                     for begin, finish in windows(len(variant.text)):
                         if is_id:
                             for match in ID_WIDE.finditer(variant.text, begin, finish):
-                                s, e = variant.span(match.start(), match.end())
-                                self.hit("term", row.cls, "block", s, e, PROBLEMS["term"][0] % (row.cls, row.where()),
-                                         PROBLEMS["term"][1])
+                                self.id_hit(variant, match, row)
                         for match in row.regex.finditer(variant.text, begin, finish):
                             if match.end() == match.start():
+                                continue
+                            if is_id:
+                                self.id_hit(variant, match, row)
                                 continue
                             s, e = variant.span(match.start(), match.end())
                             self.hit("term", row.cls, "block", s, e, PROBLEMS["term"][0] % (row.cls, row.where()),
                                      PROBLEMS["term"][1])
+
+    def id_hit(self, variant, match, row):
+        """The id row's hit, unless (F27) the digits follow a decimal point, as a coordinate's do, or are eight digits
+        that read as a date from 1900 to 2099 (YYYYMMDD), which warns as a date in split form does (Y02)."""
+        kind = id_kind(variant.text, match.start(), match.end())
+        if kind == "decimal":
+            return
+        s, e = variant.span(match.start(), match.end())
+        if kind == "date":
+            self.hit("split-figure", None, "warn", s, e, "a date written as eight digits, or an id that reads as one",
+                     "the date written with its separators, such as 2026-11-03")
+            return
+        self.hit("term", row.cls, "block", s, e, PROBLEMS["term"][0] % (row.cls, row.where()), PROBLEMS["term"][1])
+
+    def number_id(self):
+        """Y08, F02: a JSON number outside a structural key is checked by the id row as its decimal text, so an id
+        written as a number, a float or with a sign blocks as it does in a string."""
+        id_row = self.lists.id_row
+        if self.unit.structural or id_row is None:
+            return
+        for match in ID_WIDE.finditer(self.vf.text):
+            self.id_hit(self.vf, match, id_row)
 
     def notes_and_credentials(self):
         lines = list(self.lines())
@@ -1959,8 +2700,7 @@ class Check:
             if match:
                 self.hit("internal-note", None, "block", start, start + match.end(), PROBLEMS["internal-note"][0] %
                          "a front-matter line", PROBLEMS["internal-note"][1])
-            if line.strip() == "---" and index + 1 < len(lines) and \
-                    lines[index + 1][1].strip().lower().startswith("schema:"):
+            if line.strip() == "---" and front_matter_schema(lines, index):
                 s = start + line.index("-")
                 self.hit("internal-note", None, "block", s, s + 3, PROBLEMS["internal-note"][0] %
                          "a front-matter block", PROBLEMS["internal-note"][1])
@@ -1969,23 +2709,45 @@ class Check:
                 s, e = folded.span(match.start(), match.end())
                 self.hit("internal-note", None, "block", s, e, PROBLEMS["internal-note"][0] % "a speaker label",
                          PROBLEMS["internal-note"][1])
-            variants = [plain(line, start)]
-            if "%" in line:
-                variants.append(percent_decode(variants[0]))
-            for variant in variants:
-                for shape, pattern, flags in CREDENTIAL_SHAPES:
-                    for match in re.finditer(pattern, variant.text, flags):
-                        s, e = variant.span(match.start(), match.end())
-                        self.hit("credential", None, "block", s, e, PROBLEMS["credential"][0] % shape,
-                                 PROBLEMS["credential"][1])
-                outside = mask(variant.text, link_spans(variant.text))
-                for match in re.finditer(LONG_SECRET, outside):
-                    value = match.group()
-                    if any(c.isdigit() for c in value) and any(c.islower() for c in value) and \
-                            any(c.isupper() for c in value):
-                        s, e = variant.span(match.start(), match.end())
-                        self.hit("credential", None, "block", s, e, PROBLEMS["credential"][0] % "a long mixed string",
-                                 PROBLEMS["credential"][1])
+            self.credentials(line, start, lines[index + 1] if index + 1 < len(lines) else None)
+
+    def credentials(self, line, start, after):
+        """X15's shapes on the line as written, its percent-decoded copy and its folded copy (F12), the looser pairs
+        whose value looks like a secret, a key at a line's end with its value on the next line (F10), and shape 6."""
+        variants = [plain(line, start)]
+        if "%" in line:
+            variants.append(percent_decode_all(variants[0]))
+        folded = fold_variant(variants[0])
+        if folded.text != line.lower():  # F12: a look-alike, a full-width mark or an invisible character
+            variants.append(folded)
+        for variant in variants:
+            found = []
+            for shape, pattern, flags in CREDENTIAL_SHAPES:
+                for match in re.finditer(pattern, variant.text, flags):
+                    found.append(match.span())
+                    s, e = variant.span(match.start(), match.end())
+                    self.hit("credential", None, "block", s, e, PROBLEMS["credential"][0] % shape,
+                             PROBLEMS["credential"][1])
+            for match in re.finditer(LOOSE_SECRET, variant.text, re.IGNORECASE):
+                if secretish(match.group("value")) and not overlaps(found, match.start(), match.end()):
+                    s, e = variant.span(match.start(), match.end())
+                    self.hit("credential", None, "block", s, e, PROBLEMS["credential"][0] % "a secret pair",
+                             PROBLEMS["credential"][1])
+            outside = mask(variant.text, link_spans(variant.text))
+            for match in re.finditer(LONG_SECRET, outside):
+                value = match.group()
+                if any(c.isdigit() for c in value) and any(c.islower() for c in value) and \
+                        any(c.isupper() for c in value):
+                    s, e = variant.span(match.start(), match.end())
+                    self.hit("credential", None, "block", s, e, PROBLEMS["credential"][0] % "a long mixed string",
+                             PROBLEMS["credential"][1])
+        if after is not None and re.search(SECRET_AT_END, folded.text, re.IGNORECASE):
+            after_start, after_line = after
+            value = re.match(r"[ \t]*([^\s]{4,})", after_line)
+            if value and secretish(value.group(1)):
+                s = after_start + value.start(1)
+                self.hit("credential", None, "block", s, s + len(value.group(1)), PROBLEMS["credential"][0] %
+                         "a secret pair across a line break", PROBLEMS["credential"][1])
 
     def seller_ids(self):
         for variant in [self.vf] + ([self.vfd] if self.vfd else []):
@@ -2000,6 +2762,8 @@ class Check:
 
     def phonetic(self):
         sources = self.lists.phonetic
+        if self.unit.mode == "terms":
+            sources = [source for source in sources if source.cls == "firm"]
         if not sources or not self.tokens:
             return
         words = [t.word for t in self.tokens]
@@ -2071,7 +2835,9 @@ class Check:
             if not cues:
                 continue
             used = {k for _, a, b in cues for k in range(a, b)}
-            people = [t for i, t in enumerate(sentence) if i not in used and self.person(sentence, i)]
+            kinds = {i: self.person(sentence, i) for i in range(len(sentence)) if i not in used}
+            names = [sentence[i] for i, kind in sorted(kinds.items()) if kind == "name"]
+            people = [sentence[i] for i, kind in sorted(kinds.items()) if kind]
             if not people:
                 continue
             cues.sort(key=lambda c: (c[1], -(c[2] - c[1])))
@@ -2079,8 +2845,10 @@ class Check:
             for group, a, b in cues:
                 if any(g == group and x <= a and b <= y for g, x, y in kept):
                     continue
+                if " ".join(words[a:b]) in NAME_ONLY_CUES and not names:
+                    continue
                 kept.append((group, a, b))
-            who = self.text[people[0].start:people[0].end]
+            who = self.text[(names or people)[0].start:(names or people)[0].end]
             for group, a, b in kept:
                 self.hit("paraphrase", group, "block", sentence[a].start, sentence[b - 1].end,
                          "a remark about a person (%s): the cue %r beside %r" %
@@ -2088,11 +2856,24 @@ class Check:
                          "the point made about the work, with no person's stakes, health, plans or standing")
 
     def person(self, sentence, index):
+        """"name" for a person's name, "role" for a role word anchored to one person, else None (X06, F24)."""
         token = sentence[index]
-        if token.word in ROLE_SINGLE:
-            return True
-        if index + 1 < len(sentence) and (token.word, sentence[index + 1].word) in ROLE_PAIRS:
-            return True
+        if self.named(token):
+            return "name"
+        role = token.word in ROLE_SINGLE or (index + 1 < len(sentence) and
+                                              (token.word, sentence[index + 1].word) in ROLE_PAIRS)
+        if not role:
+            return None
+        before = sentence[max(0, index - 2):index]
+        if any(t.word in POSSESSIVES or self.text[t.end - 2:t.end] in ("'s", "\u2019s") for t in before):
+            return "role"
+        beside = sentence[max(0, index - 1):index] + sentence[index + 1:index + 2]
+        if any(t.cap and t.word not in COMMON_WORDS and t.word not in PRONOUNS and t.word not in STOP_WORDS and
+               not t.word.isdigit() for t in beside):
+            return "role"
+        return None
+
+    def named(self, token):
         return token.cap and not token.first and not token.word.isdigit() and token.word not in COMMON_WORDS and \
             token.word not in PRONOUNS and token.word not in STOP_WORDS
 
@@ -2204,7 +2985,7 @@ class Check:
                  "check the number is meant for the client")
 
     def split_ids(self):
-        if self.unit.structural or self.unit.kind == "number":
+        if self.unit.structural or self.unit.raw_json or self.unit.kind == "number":
             return
         text = self.vf.text
         for chain in id_chains(text):
@@ -2214,42 +2995,6 @@ class Check:
             start, end = self.vf.span(s, e)
             self.hit("term", "id-patterns", "block", start, end, "an id or a phone number written in digit groups "
                      "(split id, X34)", PROBLEMS["term"][1])
-
-    # The tool-category assertion (X12).
-
-    def tool_categories(self):
-        if not self.counted:
-            return
-        text = self.vf.text
-        sentences = sentence_spans(text)
-        starts = [s for s, _ in sentences]
-        by_sentence = {}
-        for cls, fs, fe, start, end in self.counted:
-            index = max(0, bisect.bisect_right(starts, fs) - 1)
-            by_sentence.setdefault(index, []).append((cls, start, end, fs))
-        for index, hits in sorted(by_sentence.items()):
-            if len({h[0] for h in hits}) < 3:
-                continue
-            paragraph = self.paragraph_of(hits[0][3])
-            if any(self.proper(t) for t in self.tokens if t.paragraph == paragraph):
-                continue
-            hits.sort(key=lambda h: h[1])
-            self.hit("tool-categories", None, "block", hits[0][1], hits[0][2], "names %d tool categories in one "
-                     "sentence of a paragraph with no proper noun" % len({h[0] for h in hits}),
-                     "two categories at most in a sentence, or the client's own tool names")
-
-    def paragraph_of(self, fstart):
-        spans = paragraph_spans(self.vf.text)
-        starts = [s for s, _ in spans]
-        return max(0, bisect.bisect_right(starts, fstart) - 1)
-
-    def proper(self, token):
-        words = self.lists.category_words
-        if token.cap and not token.first and token.word != "i" and token.word not in COMMON_WORDS and \
-                token.word not in words and token.word not in PRODUCT_WORDS and not token.word.isdigit():
-            return True
-        return token.upper and 2 <= len(token.word) <= 6 and token.word.isalpha() and token.word not in words and \
-            token.word not in STOP_WORDS and token.word not in PRODUCT_WORDS
 
     # Quotes, copied runs and near copies (X19, X24, X36, X37).
 
@@ -2263,8 +3008,16 @@ class Check:
             self.hit("quote", None, "block", self.tokens[a].start, self.tokens[b - 1].end, "eight or more words of a "
                      "client quote (%s)" % file, "the point in new words: a client's own words stay in the record",
                      file)
-        if self.unit.mode == "client-safe-block":
-            return
+        if len(words) >= NEAR_WORDS - 1 and sets.quote_tokens:  # F15: a quote with one word changed, dropped or added
+            for a, b, file in stretches(self.near_windows(words, "quotes", self.usable, lambda keys: False)):
+                if any(k in covered for k in range(a, b)):
+                    continue
+                covered.update(range(a, b))
+                self.hit("quote", None, "block", self.tokens[a].start, self.tokens[b - 1].end, "eight words that "
+                         "match a client quote's but for one word (%s)" % file, "the point in new words: a client's "
+                         "own words stay in the record", file, near=True)
+        if self.unit.mode in ("client-safe-block", "glossary"):
+            return  # X36, X38, L163: a client-safe block and the blueprint's glossary are exempt from runs only
 
         def runs_usable(entry):
             return self.usable(entry) and not (summary and SUMMARY_FILE.fullmatch(entry[0]))
@@ -2289,30 +3042,48 @@ class Check:
             self.hit("copied-run", None, "block", self.tokens[a].start, self.tokens[b - 1].end, "six or more words "
                      "copied from an internal file (%s)" % file, "new words: internal text never reaches the client",
                      file)
-        if len(words) < NEAR_WORDS:
+        if len(words) < NEAR_WORDS - 1:
             return
-        near_runs, near_docs = sets.near("runs"), sets.near("docs")
 
-        def near(gram):
-            if distinct(gram) < RUN_MIN_DISTINCT:
-                return []
-            keys = [(p,) + gram[:p] + gram[p + 1:] for p in range(NEAR_WORDS)]
-            entries = [e for k in keys for e in near_runs.get(k, ()) if runs_usable(e)]
-            if not entries:
-                return []
-            conflict = [e for e in entries if e[2]]
-            if conflict:
-                return [conflict[0][0]]
-            if any(self.usable(e) for k in keys for e in near_docs.get(k, ())):
-                return []
-            return [sorted(entries)[0][0]]
+        def in_docs(lookups):
+            return any(self.usable(e) for which, key in lookups for e in sets.index("docs", which).get(key, ()))
 
-        for a, b, file in stretches(self.grams(words, NEAR_WORDS, near)):
+        for a, b, file in stretches(self.near_windows(words, "runs", runs_usable, in_docs)):
             if any(k in covered for k in range(a, b)):
                 continue
             self.hit("copied-run", None, "block", self.tokens[a].start, self.tokens[b - 1].end, "eight words that "
                      "match an internal file's in seven places (%s)" % file, "new words: internal text never reaches "
                      "the client", file, near=True)
+
+    def near_windows(self, words, which, usable, exempt):
+        """X24, F14, F15: the windows of the checked words that are one word away from a window of R or Q: eight
+        words with one changed (in place, or with one left out on each side), or seven words that drop one. A
+        conflict row wins, then the client-document text exempts (runs only), then the source blocks."""
+        sub, dele = self.sets.index(which, "sub"), self.sets.index(which, "del")
+        found = []
+        for size in (NEAR_WORDS, NEAR_WORDS - 1):
+            for i in range(len(words) - size + 1):
+                gram = tuple(words[i:i + size])
+                if distinct(gram) < RUN_MIN_DISTINCT:
+                    continue
+                if size == NEAR_WORDS:
+                    places = positions(which == "quotes")
+                    lookups = [("sub", (p,) + gram[:p] + gram[p + 1:]) for p in places] + \
+                        [("del", gram[:p] + gram[p + 1:]) for p in places]
+                else:
+                    lookups = [("del", gram)]
+                entries = [e for kind, key in lookups for e in (sub if kind == "sub" else dele).get(key, ())
+                           if usable(e)]
+                if not entries:
+                    continue
+                conflict = [e for e in entries if len(e) > 2 and e[2]]
+                if conflict:
+                    found.append((i, i + size, conflict[0][0]))
+                    continue
+                if exempt(lookups):
+                    continue
+                found.append((i, i + size, sorted(entries)[0][0]))
+        return sorted(found)
 
     @staticmethod
     def grams(words, size, lookup):
@@ -2325,12 +3096,23 @@ class Check:
 
     def execute(self):
         unit, mode = self.unit, self.unit.mode
+        if mode == "wall":
+            self.hits += wall_hits(self.run, self)
+            return self.hits
+        if mode == "terms":  # X31: the firm rule and the wall's digests and slugs
+            self.literals()
+            self.regex_rows()
+            self.phonetic()
+            self.hits += wall_hits(self.run, self)
+            return self.hits
         if unit.kind == "number":
             self.numbers()
             self.seller_ids()
+            self.number_id()
+            self.hits += wall_hits(self.run, self)
             return self.hits
-        self.literals()
         if mode != "summary":
+            self.literals()
             self.regex_rows()
             self.notes_and_credentials()
             self.seller_ids()
@@ -2338,11 +3120,33 @@ class Check:
             self.paraphrase()
             self.split_ids()
         self.numbers()
-        self.tool_categories()
         self.runs_and_quotes()
         if mode != "summary":
             self.hits += wall_hits(self.run, self)
         return self.hits
+
+
+def id_kind(text, start, end):
+    """F27: "decimal" for digits after a decimal point that follows a digit, "date" for eight digits that form a
+    real YYYYMMDD date from 1900 to 2099, else None (an id)."""
+    if start >= 2 and text[start - 1] == "." and text[start - 2].isdigit():
+        return "decimal"
+    digits = text[start:end]
+    if len(digits) == 8 and digits.isdigit() and valid_date(digits[:4], digits[4:6], digits[6:]):
+        return "date"
+    return None
+
+
+def secretish(value):
+    """F10: a value that looks like a secret rather than a word: a digit, a capital after a small letter, or a mark
+    such as . @ _ / inside it (a passphrase's hyphens too, when no space breaks it)."""
+    value = value.strip(".,;:!?)]}>" + QUOTES)
+    if len(value) < 4 or value.lower() in COMMON_WORDS:
+        return False
+    if any(c.isdigit() for c in value) or re.search(r"[a-z][A-Z]", value):
+        return True
+    return bool(re.search(r"[^\W\d][._@/\\#$%^&*+=~!-][^\W\d]", value)) and not re.fullmatch(r"[A-Za-z]+-[A-Za-z]+",
+                                                                                                 value)
 
 
 SUMMARY_FILE = re.compile(r"strands/\d{3}-[^/]+/SUMMARY\.md")
@@ -2394,36 +3198,896 @@ def show(value):
     return "{:,}".format(float(value))
 
 
-# The cross-client wall (X01, X21, X27, X30) is part 2's. Until it is built, a home that holds another client
-# record or an index stops every check that would run it, so a payload never passes the wall unchecked.
+# The cross-client wall (U1; X01, X02, X21, X25 to X31, X45, X46). Each record publishes into <home>/clients-index.json
+# the hashes of its names, its exclusion terms, the phonetic keys of its names and its distinctive cost figures. A
+# checked text blocks with rule wall on a candidate whose hash is in another record's entry, or that is another
+# folder's slug, and that this record's own set O does not hold. One cutter, wall/1, serves every side.
 
-def wall_guard(run):
-    others = 0
+INDEX_NAME = "<home>/clients-index.json"
+LIST_FIELDS = INDEX_FIELDS[6:10]  # names, phonetic, terms, figures
+HEX32 = re.compile(r"[0-9a-f]{32}")
+UTC_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+CALENDAR_WORDS = frozenset("""monday tuesday wednesday thursday friday saturday sunday january february march april
+may june july august september october november december""".split())
+WALL_JOINERS = frozenset(("of", "and", "the", "de"))  # X26 step 2: they may join two capitalised tokens
+RUN_BREAK = re.compile(r"[.!?][\"'”’)\]]*\s|\n[ \t]*\n")  # a sentence end or a blank line ends a run (X27)
+# Tokens joined with no space are also fused (X27 type 3). G03: so are the halves of a word broken by a hyphen at a
+# line end, with spaces or tabs around the break, and a word broken by Markdown marks (X24 makes them separators
+# for the word rules; the wall fuses across them). Both forms keep the spaced twin as well.
+FUSE_GAP = re.compile(r"[-._@/&+]{1,3}|-[ \t]*\r?\n[ \t]*|[*_~`]+")
+HARVEST_GAP = re.compile(r"[ \t]+|[ \t]*[-&+][ \t]*")  # what may sit between two words of one harvested name
+INITIAL_GAP = re.compile(r"[ \t]*['\u2019\u2018`][ \t]*|[ \t]+")  # G12: between an initial and its word (O’ Rourke)
+INITIALS_GAP = re.compile(r"\.?[ \t]*")  # G25: between two letters of initials (T F M, T. F. M.)
+EMAIL = re.compile(r"[a-z0-9][a-z0-9._%+-]*@[a-z0-9-]+(?:\.[a-z0-9-]+)+")
+TERMS_EXT = (".md", ".txt", ".json", ".py", ".yml", ".yaml", ".csv", ".html", ".xml", ".toml", ".ini", ".cfg")
+TERMS_SKIP = (".git", "__pycache__")
+TERMS_SKIP_PARTS = [(name,) for name in TERMS_SKIP]  # a folder skipped by its real name
+WALL_PROBLEMS = {"name": "matches a name of another client record under the home",
+                 "term": "matches a term of another client record under the home",
+                 "figure": "matches a figure of another client record under the home",
+                 "slug": "matches the folder name of another client record under the home"}
+WALL_EXPECTED = "the text without it: another client's names, terms and figures never reach this client"
+_KEY_CACHE = {}
+
+
+digest = mc.digest  # X02, X28: sha256 of the prefixed normal form, 128 bits; one implementation with mc.slug_key (R39)
+
+
+def word_key(word):
+    key = _KEY_CACHE.get(word)
+    if key is None:
+        key = _KEY_CACHE[word] = phonetic_key(word)
+    return key
+
+
+def wall_cut(text, folded=None, tokens=None):
+    """wall/1's cut of one text (X27, X28): its tokens and the gap of folded text between each two of them."""
+    if folded is None:
+        folded = fold(text)
+    if tokens is None:
+        tokens = tokenise(text, folded)
+    return tokens, [folded.text[a.fend:b.fstart] for a, b in zip(tokens, tokens[1:])]
+
+
+def wall_candidates(tokens, gaps):
+    """X27 types 1 to 3 as (first token, end token, form, fused): every token of three or more characters and
+    every two-letter token written in capitals; every run of two to four tokens across commas and single line
+    breaks but not across a sentence end or a blank line; and the fused forms of tokens joined with no space."""
+    found = []
+    for i, token in enumerate(tokens):
+        if len(token.word) >= 3 or (len(token.word) == 2 and token.upper):
+            found.append((i, i + 1, token.word, False))
+        spaced = fused = True
+        for j in range(i + 1, min(len(tokens), i + 4)):
+            gap = gaps[j - 1]
+            spaced = spaced and not RUN_BREAK.search(gap)
+            fused = fused and bool(FUSE_GAP.fullmatch(gap))
+            if not (spaced or fused):
+                break
+            words = [t.word for t in tokens[i:j + 1]]
+            if spaced:
+                found.append((i, j + 1, " ".join(words), False))
+            if fused:
+                found.append((i, j + 1, "".join(words), True))
+    return found
+
+
+def wall_keys(words, joined=False):
+    """X27 type 4 and Y09: a run's key is its words' keys joined by a space (and, for an index entry, also joined
+    end to end, so a fused spelling of the name keys the same); a single word has a key only at seven letters or
+    more."""
+    keys = [word_key(w) for w in words]
+    if len(words) == 1:
+        return {keys[0]} if keys[0] and len(letters(words[0])) >= 7 else set()
+    if not all(keys):
+        return set()
+    return {" ".join(keys), "".join(keys)} if joined else {" ".join(keys)}
+
+
+def plural_stems(word):
+    """G12 (R43): the singular a plural or plural-possessive shape may stand for, the checked side only: a trailing s
+    removed, and es after s, x, z, ch or sh; a word ending in ss, or a stem under three characters, gives none."""
+    if len(word) < 4 or word[-1] != "s" or word[-2] == "s" or not word[-2].isalpha():
+        return ()
+    if word.endswith("es") and len(word) >= 5 and word[:-2].endswith(("s", "x", "z", "ch", "sh")):
+        return word[:-1], word[:-2]
+    return (word[:-1],)
+
+
+def plural_forms(word):
+    """G18 (R50): the plural shapes R43's plural_stems would read as this word, s or es added, so the harvest drops
+    a single word whose plural is a stop word as it drops a plural of one (R47); a possessive is the word itself or
+    its plural once X24 has removed the apostrophe."""
+    return [form for form in (word + "s", word + "es") if word in plural_stems(form)]
+
+
+def inflection_stems(word):
+    """G16 (R47): the words a plural or inflected form may stand for, which the harvest drops with its stop words:
+    R43's plural stems, ies as y, and ed or ing removed, with a final e restored or a doubled letter undone. A stem
+    under three characters gives none."""
+    stems = set(plural_stems(word))
+    if len(word) >= 5 and word.endswith("ies"):
+        stems.add(word[:-3] + "y")
+    for ending in ("ed", "ing"):
+        if word.endswith(ending):
+            stem = word[:-len(ending)]
+            stems.update((stem, stem + "e"))
+            if len(stem) >= 2 and stem[-1] == stem[-2]:
+                stems.add(stem[:-1])
+    return {stem for stem in stems if len(stem) >= 3}
+
+
+def lower_words(text, alt=False):
+    """G16 (R47): the words a D text writes in lower case as prose: a token with no capital letter that is joined to
+    neither neighbour by a fuse gap (X27 type 3), by no gap at all or across a backtick, so the parts of an e-mail
+    address, a link, a joined name or a code word are not counted."""
+    tokens, gaps = wall_cut(text, fold(text, alt=alt))
+    found = set()
+    for i, token in enumerate(tokens):
+        shown = text[token.start:token.end]
+        if token.cap or any(c.isupper() for c in shown) or not token.word[:1].isalpha():
+            continue
+        if any(not gap or FUSE_GAP.fullmatch(gap) or "`" in gap for gap in gaps[max(0, i - 1):i + 1]):
+            continue
+        found.add(token.word)
+    return found
+
+
+def half_up(value):
+    return (2 * value.numerator + value.denominator) // (2 * value.denominator)
+
+
+def figure_forms(value, floor, top=9):
+    """X25: the n of f:<n>e<k> for k from 0 to `top` (9 unless given), the value divided by 10^k both truncated and
+    rounded, where n keeps `floor` or more (100 for three digits of a cost figure, 1 for an exclusion figure and
+    for O)."""
+    forms = set()
+    for k in range(min(top, 9) + 1):
+        scaled = Fraction(value) / 10 ** k
+        for n in (scaled.numerator // scaled.denominator, half_up(scaled)):
+            if n >= floor:
+                forms.add("%de%d" % (n, k))
+    return forms
+
+
+def tested_forms(value, precision):
+    """X25: a number of precision 10^k is tested as f:<round(v / 10^k)>e<k>; below a unit, k is 0, and the value is
+    tested truncated as well as rounded (G23, R58), so 412,870.50 meets 412,870 as X25's tolerance says it does."""
+    k, unit = 0, Fraction(precision)
+    while unit >= 10 and k < 9:
+        unit, k = unit / 10, k + 1
+    scaled = Fraction(value) / 10 ** k
+    ns = [half_up(scaled)] + ([scaled.numerator // scaled.denominator] if unit < 1 else [])
+    return ["%de%d" % (n, k) for n in sorted(set(ns)) if n >= 1]
+
+
+def exclusion_top(value):
+    """G22 (R57): the largest k at which an exclusion figure's form still holds its first two significant digits, or
+    its one for a figure written with one (70,000), so a coarse round number never stands for it; k = 0 always."""
+    whole = abs(Fraction(value).numerator // Fraction(value).denominator)
+    return max(0, len(str(whole)) - min(2, significant(value))) if whole else 0
+
+
+def significant(value):
+    """The significant digits of an exact value: 318,460 has five, 65,000 two."""
+    value, steps = Fraction(value), 0
+    while value.denominator != 1 and steps < 12:
+        value, steps = value * 10, steps + 1
+    return len(str(abs(value.numerator // value.denominator)).strip("0"))
+
+
+def text_numbers(folded, original):
+    """(value, precision) of every number of a text that is not a percentage, digit chains read whole (X25)."""
+    found = [(n.value, n.precision, n.start, n.end) for n in parse_numbers(folded, original) if not n.percent]
+    text = folded.text
+    for chain in digit_chains(text, date_spans(text)):
+        if not chain_is_date(text, chain):
+            found.append((Fraction(int("".join(text[s:e] for s, e in chain))), Fraction(1), chain[0][0],
+                          chain[-1][1]))
+    return found
+
+
+def vocabulary(text):
+    """The normalised words of a long text; ASCII lines with no backtick are lower-cased directly, which is what
+    fold() does."""
+    found = set()
+    for line in text.split("\n"):
+        folded = line.lower() if line.isascii() and "`" not in line else fold_text(line)
+        for match in TOKEN.finditer(folded):
+            word = POSSESSIVE.sub("", match.group()) if len(match.group()) > 2 else match.group()
+            word = word.replace("'", "").replace("’", "")
+            if word:
+                found.add(word)
+    return found
+
+
+def wall_stop(run):
+    """X26 step 6 with Z12: the stop list of the harvest, the phonetic keys its words hold, and X26's own small
+    list (G04: the days and months, the product words, the titles and acronyms and the plugin's shipped rows)."""
+    if run.stop is None:
+        rows = run.lists.rows if run.lists is not None else load_shipped(run)
+        small = set(STOP_WORDS | PRODUCT_WORDS | CALENDAR_WORDS) | plugin_words(rows)
+        # G01: the shared/ words come from the reviewed SHARED_WORDS region, never from the live folder.
+        words = small | SHARED_WORDS
+        keys = {word_key(w) for w in words | COMMON_WORDS} - {""}
+        run.stop = (frozenset(words), frozenset(keys), frozenset(small))
+    return run.stop
+
+
+def shared_vocabulary(base=None):
+    """G01: the words SHARED_WORDS should hold for the shared/ folder as it is now (its .md and .txt files, less the
+    common words and the words with no letter). Used by the test that keeps the region equal to the shipped folder,
+    and to regenerate the region after a reviewed change; the lint itself never calls it."""
+    base = Path(base) if base is not None else PLUGIN / "shared"
+    words = set()
+    for path in sorted(base.iterdir()):
+        if path.is_file() and path.suffix.lower() in (".md", ".txt"):
+            words |= vocabulary(read_bytes(path).decode("utf-8-sig").replace("\r\n", "\n"))
+    return {w for w in words if w not in COMMON_WORDS and any(c.isalpha() for c in w)}
+
+
+def shared_phrases(base=None):
+    """G04: the phrases SHARED_PHRASES should hold for the shared/ folder as it is now: each capitalised run of two
+    to four words the harvest cuts from its .md and .txt files whose every word is made of letters and is a stop
+    word (X26's small list, the rows of the folder's leak-terms.txt, or the folder's own words). Like
+    shared_vocabulary(), it serves the test and a reviewed regeneration; the lint itself never calls it."""
+    base = Path(base) if base is not None else PLUGIN / "shared"
+    rows = parse_list(read_bytes(base / "leak-terms.txt").decode("utf-8-sig"), SHIPPED_NAME, local=False)
+    stop = set(STOP_WORDS | PRODUCT_WORDS | CALENDAR_WORDS) | plugin_words(rows) | shared_vocabulary(base)
+    found = set()
+    for path in sorted(base.iterdir()):
+        if path.is_file() and path.suffix.lower() in (".md", ".txt"):
+            text = read_bytes(path).decode("utf-8-sig").replace("\r\n", "\n")
+            for words in harvest(text, frozenset(), frozenset(), phrases=frozenset()):
+                if len(words) > 1 and all(w.isalpha() and w in stop for w in words):
+                    found.add(" ".join(words))
+    return found
+
+
+def kept(words, stop, small, initials=False, phrases=SHARED_PHRASES):
+    """X26 steps 5 and 6: a candidate kept for the digest, as its words with trailing legal suffixes dropped. G04: a
+    run of two or more words is dropped only as a phrase the plugin writes or when every word is in X26's own small
+    list; stop, which holds the shared/ words of Z12, filters single words only. G16 (R47): a single word is also
+    dropped when it is a plural or inflected form of a stop word (thursdays with thursday), and G18 (R50) when its
+    plural is one (requirement with requirements), since the checked side reads a plural as its singular (R43)."""
+    words = list(words)
+    while len(words) > 1 and words[-1] in LEGAL_SUFFIXES:
+        words.pop()
+    if len(words) > 1:
+        return None if " ".join(words) in phrases or all(w in small for w in words) else tuple(words)
+    word = words[0] if words else ""
+    if not word or word.isdigit() or word in LEGAL_SUFFIXES or word in COMMON_WORDS or word in stop or \
+            any(stem in stop for stem in inflection_stems(word)) or any(form in stop for form in plural_forms(word)):
+        return None
+    return (word,) if len(word) >= 3 or (len(word) == 2 and initials) else None
+
+
+def harvest(text, stop, small, alt=False, phrases=SHARED_PHRASES):
+    """X26 steps 2 to 4 over one D text: the capitalised runs and their sub-runs, the acronyms and the parts of
+    every e-mail address, each kept by the filters of steps 5 and 6 (with alt, G02's second reading)."""
+    folded = fold(text, alt=alt)
+    tokens, gaps = wall_cut(text, folded)
+    found, k = set(), 0
+    while k < len(tokens):
+        if not tokens[k].cap:
+            k += 1
+            continue
+        run, m = [k], k
+        while True:
+            if m + 1 < len(tokens) and HARVEST_GAP.fullmatch(gaps[m]) and tokens[m + 1].cap:
+                run.append(m + 1)
+                m += 1
+            elif m + 2 < len(tokens) and tokens[m + 1].word in WALL_JOINERS and not tokens[m + 1].cap and \
+                    HARVEST_GAP.fullmatch(gaps[m]) and HARVEST_GAP.fullmatch(gaps[m + 1]) and tokens[m + 2].cap:
+                run += [m + 1, m + 2]
+                m += 2
+            else:
+                break
+        for a in range(len(run)):
+            for b in range(a + 1, min(len(run), a + 4) + 1):
+                first, last = tokens[run[a]], tokens[run[b - 1]]
+                if first.cap and last.cap:
+                    candidate = kept([tokens[x].word for x in run[a:b]], stop, small, b - a == 1 and first.upper,
+                                     phrases)
+                    if candidate:
+                        found.add(candidate)
+        k = m + 1
+    for match in EMAIL.finditer(folded.text):
+        local, _, domain = match.group().partition("@")
+        parts = [p for p in re.split(r"[._%+-]+", local) if p]
+        pieces = [[p] for p in parts] + ([parts, ["".join(parts)]] if len(parts) > 1 else [])
+        for label in domain.split(".")[:-1]:
+            words = words_of(label)
+            if words and sum(c.isalpha() for c in label) >= 3:
+                pieces += [words] + ([["".join(words)]] if len(words) > 1 else [])
+        for piece in pieces:
+            candidate = kept(piece, stop, small, phrases=phrases)
+            if candidate:
+                found.add(candidate)
+    return found
+
+
+def name_digests(candidates, vocabulary_keys):
+    """(names, phonetic) of kept candidates (X26 steps 7 and 8; Z13 for the phonetic key of a single word)."""
+    names, phonetic = set(), set()
+    for words in candidates:
+        names.add(digest("n:", " ".join(words)))
+        if len(words) > 1:
+            names.add(digest("n:", "".join(words)))
+        for key in wall_keys(words, joined=True):
+            if len(words) > 1 or key not in vocabulary_keys:
+                phonetic.add(digest("p:", key))
+    return names, phonetic
+
+
+def spaced_and_fused(term):
+    """The spaced and fused forms of a term, with and without trailing legal suffixes (X28 steps 6 and 7), in both
+    readings of G02's letters."""
+    forms = set()
+    for alt in ((False, True) if has_alt(term) else (False,)):
+        words = words_of(term, alt)
+        while words:
+            forms.update((" ".join(words), "".join(words)))
+            if len(words) < 2 or words[-1] not in LEGAL_SUFFIXES:
+                break
+            words = words[:-1]
+    return forms
+
+
+def term_windows(term, small, phrases=SHARED_PHRASES):
+    """G05: the spaced and fused forms of every window of two to four words of an exclusion term longer than four
+    words, in both readings of G02's letters, since the cut of wall/1 makes no run longer than four (X27). A window
+    whose every word is a common word or one of X26's own small list, or that is a phrase the plugin writes, is
+    not published."""
+    forms = set()
+    for alt in ((False, True) if has_alt(term) else (False,)):
+        words = words_of(term, alt)
+        if len(words) <= 4:
+            continue
+        for i in range(len(words) - 1):
+            for j in range(i + 2, min(len(words), i + 4) + 1):
+                window = words[i:j]
+                if " ".join(window) in phrases or all(w in COMMON_WORDS or w in small for w in window):
+                    continue
+                forms.update((" ".join(window), "".join(window)))
+    return forms
+
+
+def d_text(rel, text):
+    """X11's D column: a record file's text that feeds the names, or None."""
+    kind = kind_of(rel)
+    if kind == "skip":
+        return None
+    if kind == "blueprint":
+        lines = text.split("\n")
+        client = blueprint_client_lines(lines)
+        text = "\n".join("" if i in client else line for i, line in enumerate(lines))
+    return blank_marks(text)
+
+
+def build_entry(run, client, slug, former=()):
+    """This record's clients-index/1 lists (X02, X25, X26): names, phonetic keys, exclusion terms and figures, and the
+    sorted single words the names publish (G16, for index's output). The client's former names (R40) are published
+    in X26 step 1's forms beside its name, so a renamed client stays walled under its old names for every other
+    record."""
+    stop, vocabulary_keys, small = wall_stop(run)
+    candidates, lower = set(), set()
+    for rel, text in record_texts(run).items():
+        piece = d_text(rel, text)
+        if piece:
+            candidates |= harvest(piece, stop, small)
+            lower |= lower_words(piece)
+            if has_alt(piece):
+                candidates |= harvest(piece, stop, small, alt=True)
+                lower |= lower_words(piece, alt=True)
+    # G16 (R47): a harvested single word is published only when the record never writes it in lower case as prose,
+    # since a real name is capitalised every time; a run keeps it, and X26 step 1's forms below are always kept.
+    candidates = {words for words in candidates if len(words) > 1 or words[0] not in lower}
+    named = [client] + list(former)
+    for value, alt in [(slug, False)] + [(v, False) for v in named] + [(v, True) for v in named if has_alt(v or "")]:
+        forms = [w for w in [words_of(value, alt)] if w]  # X26 step 1: always included
+        while forms and len(forms[-1]) > 1 and forms[-1][-1] in LEGAL_SUFFIXES:
+            forms.append(forms[-1][:-1])
+        candidates.update(tuple(words) for words in forms)
+    names, phonetic = name_digests(candidates, vocabulary_keys)
+    terms, figures = set(), set()
+    for pattern in run.exclusions.patterns:
+        forms = spaced_and_fused(pattern.term) | term_windows(pattern.term, small)  # G05: a long term's windows
+        terms.update(digest("n:", form) for form in forms)
+    for value, _, _, _ in run.sets.cost:
+        if value >= 1000 and significant(value) >= 3:
+            figures.update(digest("f:", form) for form in figure_forms(value, 100))
+    for value, _, _, _ in run.exclusions.figures:  # G22 (R57): two significant digits, or the figure's own one
+        figures.update(digest("f:", form) for form in figure_forms(value, 1, exclusion_top(value)))
+    lists = {"names": sorted(names), "phonetic": sorted(phonetic), "terms": sorted(terms), "figures": sorted(figures)}
+    return lists, sorted({words[0] for words in candidates if len(words) == 1})
+
+
+def index_problem(field, problem, expected="a clients-index/1 file written by leak_lint.py index"):
+    return cannot(INDEX_NAME, field, problem, expected)
+
+
+def read_index(run, locked=False):
+    """(entries, the text as read or None): the index read with utf-8-sig and checked against clients-index/1;
+    an absent index reads as empty (L48); a newer, other or malformed one is exit 3 (L47, L203, X02). A reader
+    holds the home mutex when it already exists, and never creates it (X29)."""
+    path = run.home / "clients-index.json"
+    unread = index_problem(WHOLE, "the home cannot be read, so the index or its mutex cannot be looked at",
+                           "a home readable by the user who runs the lint, then run this again")
+    try:  # G08, A24: a home that cannot be looked into is exit 3 on 3.9 and 3.14 alike, never an absent index
+        kind = path_kind(path)
+    except OSError:
+        raise unread
+    if kind is None:
+        run.absent(INDEX_NAME)
+        return {}, None
+    if kind != "file":
+        raise index_problem(WHOLE, "the index is not a file")
+    try:
+        held = not locked and path_kind(run.home / ".work" / "record.mutex") == "file"
+    except OSError:
+        raise unread
+    if held:
+        with mc.record_mutex(run.home):
+            return read_index(run, locked=True)
+    text = run.text(path, INDEX_NAME)
+    data = json_value(text, INDEX_NAME, "each key written once in its object, as leak_lint.py index writes it; "
+                      "restore the last copy from <home>/local/backup/ if the file was edited by hand")
+    if not isinstance(data, dict):
+        raise index_problem(WHOLE, "the index is not a JSON object")
+    schema = data.get(INDEX_FIELDS[1])
+    if schema != INDEX_FIELDS[0]:
+        name, _, number = str(schema).partition("/")
+        newer = name == "clients-index" and number.isdigit() and int(number) > 1
+        raise index_problem(INDEX_FIELDS[1], "schema %s is newer than this lint's" % schema if newer else
+                            "schema %r is not clients-index/1" % (schema,), INDEX_FIELDS[0])
+    for field, value in ((INDEX_FIELDS[2], INDEX_FORMS[0]), (INDEX_FIELDS[3], INDEX_FORMS[1])):
+        if data.get(field) != value:
+            raise index_problem(field, "%s is %r, which this lint does not read" % (field, data.get(field)), value)
+    if set(data) != set(INDEX_FIELDS[1:5]) or not isinstance(data[INDEX_FIELDS[4]], dict):
+        raise index_problem(WHOLE, "the index does not hold exactly schema, hash, normalisation and an entries "
+                            "object")
+    entries = data[INDEX_FIELDS[4]]
+    for key, entry in entries.items():
+        field = "entries.%s" % key
+        if not HEX32.fullmatch(key) or not isinstance(entry, dict) or set(entry) != set(INDEX_FIELDS[5:10]):
+            raise index_problem(field, "an entry that is not a 32-hex key over updated and the four lists")
+        if not isinstance(entry[INDEX_FIELDS[5]], str) or not UTC_STAMP.fullmatch(entry[INDEX_FIELDS[5]]):
+            raise index_problem(field + ".updated", "not a UTC time")
+        try:  # R44 compares the stamp with file times, so it must be a real moment
+            mc.parse_utc(entry[INDEX_FIELDS[5]])
+        except ValueError:
+            raise index_problem(field + ".updated", "not a UTC time")
+        for name in LIST_FIELDS:
+            values = entry[name]
+            if not isinstance(values, list) or not all(isinstance(v, str) and HEX32.fullmatch(v) for v in values):
+                raise index_problem("%s.%s" % (field, name), "not a list of 32-hex digests")
+    return entries, text
+
+
+def index_text(entries):
+    return mc.json_text({INDEX_FIELDS[1]: INDEX_FIELDS[0], INDEX_FIELDS[2]: INDEX_FORMS[0],
+                         INDEX_FIELDS[3]: INDEX_FORMS[1], INDEX_FIELDS[4]: {k: entries[k] for k in sorted(entries)}})
+
+
+EXCLUSIONS_FILE = re.compile(r"strands/[^/]+/solution/exclusions\.md")
+ENTRY_SLACK = 2  # R44: seconds past the end of an entry's stamped second before a newer file makes it older
+
+
+def feeds_entry(rel):
+    """R44: whether a record file's text can reach the record's index entry: every file d_text and the sets read
+    (X11's D and F columns), and every strand's exclusions.md, whose rows are the entry's terms. The allowlist and
+    the live map feed O only (Y01), so they leave the entry as current as it was."""
+    return kind_of(rel) != "skip" or bool(EXCLUSIONS_FILE.fullmatch(rel))
+
+
+def newest_change(found, failed):
+    """R44: the latest modification or status-change time, in seconds, of the files of record_walk's result that
+    feed the entry, by os.stat alone; no file is opened (X30). The status-change time also moves when a file is
+    copied or moved in with an older modification time. A file gone since the walk is passed over, since a removal
+    adds nothing; any other failure goes to failed(exc). 0 when there is no such file."""
+    newest = 0.0
+    for rel in sorted(found):
+        if not feeds_entry(rel):
+            continue
+        try:
+            info = os.stat(str(found[rel]))
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            failed(exc)
+        newest = max(newest, info.st_mtime, info.st_ctime)
+    return newest
+
+
+def entry_is_older(entry, newest):
+    """R44: whether an index entry is older than the newest change of its record's files. The stamp keeps whole
+    seconds, so a file changed later in the same second, or within ENTRY_SLACK seconds after it, is not counted
+    against the entry: coarse file times and a small disagreement between the file system's clock and this one."""
+    return newest >= mc.parse_utc(entry[INDEX_FIELDS[5]]).timestamp() + 1 + ENTRY_SLACK
+
+
+def other_record_newest(path):
+    """R44: newest_change for another client record under the home. A folder in it that cannot be listed or
+    looked at, or a link that leads out of it, is exit 3 naming no folder (X30): the wall cannot tell whether that
+    record's entry is current, and the record's own index run names what stops it there."""
+
+    def stop(*_):
+        raise cannot(INDEX_NAME, INDEX_FIELDS[4], "a client record under the home cannot be looked through, so the "
+                     "wall cannot tell whether its index entry is current", "every client record under the home "
+                     "readable by the user who runs the lint, with no link that leads out of it; leak_lint.py index "
+                     "run from a record names what stops it there; then run this again")
+
+    return newest_change(record_walk(path, stop, stop), stop)
+
+
+def path_kind(path):
+    """G08, A24: "dir", "file", "other" or None (no such path) for a home path, by os.stat, which follows a link
+    as pathlib does. Any other failure, such as a folder that cannot be searched, raises OSError: pathlib's is_dir,
+    is_file and exists raise it under 3.9 and answer False under 3.14, so each caller turns it into its own exit 3
+    and both interpreters stop alike (X30, L205)."""
+    try:
+        mode = os.stat(str(path)).st_mode
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    return "dir" if stat.S_ISDIR(mode) else "file" if stat.S_ISREG(mode) else "other"
+
+
+def twin_folder(run):
+    """G07, G15: this record's place under the home, checked before the wall or the index is built from it. First,
+    the record's resolved parent must be <home>/clients or <home>/archive, both sides resolved so that a home reached
+    through a link still matches (A§5.3): a record under no root of this home (another MMB_HOME, a moved home, a
+    record copied out) cannot see its neighbours on this home's wall, and its entry would land in an index that holds
+    no folder of it (X30). Then a folder of this record's name under the home's other root (archive/ for a record in
+    clients/, and the other way round) is another client with the same slug, which Z18 item 4 would take for this
+    record. Exit 3, naming the root only (X30). Two paths are looked at; nothing is listed or opened, and a path that
+    cannot be looked at counts as a twin."""
+    here = os.path.normcase(str(run.root.parent))
+    roots = [f for f in ("clients", "archive") if os.path.normcase(os.path.realpath(str(run.home / f))) == here]
+    if not roots:
+        raise cannot("CLIENT.md", "record", "this record is not under <home>/clients/ or <home>/archive/ of the home "
+                     "in use, so the wall cannot see the client records beside it", "a record at "
+                     "<home>/clients/<slug>/ or <home>/archive/<slug>/: point MMB_HOME at the home that holds this "
+                     "record, or move the record into that home's clients/, then run this again")
+    for folder in ("clients", "archive"):
+        if folder in roots:  # the record's own root: the path is this record
+            continue
+        twin = run.home / folder / run.root.name
+        try:
+            if path_kind(twin) != "dir" or twin.resolve() == run.root:
+                continue
+        except OSError:
+            pass
+        raise cannot("<home>/%s/" % folder, WHOLE, "a folder with this record's name is also under <home>/%s/, so "
+                     "the wall cannot tell this record from that client" % folder,
+                     "one folder per slug across <home>/clients/ and <home>/archive/: give one of the two records "
+                     "another slug, then run this again")
+
+
+def name_key(name):
+    """G07: the digest every entry holds for its CLIENT.md name (X26 step 1), or None for a record with no name."""
+    words = words_of(name or "")
+    return digest("n:", " ".join(words)) if words else None
+
+
+def holds_own_name(entry, names):
+    """G07, R40: whether an index entry holds the digest of this record's CLIENT.md name or of any of its former
+    names, the one test that tells this client's own entry from another client's on the same slug."""
+    return bool(({name_key(name) for name in names} - {None}) & set(entry["names"]))
+
+
+def entry_is_damaged(entry, folder=None):
+    """G14, R45: whether an index entry cannot be one index wrote. X26 step 1 always publishes the slug, which is the
+    folder's name (X30), so every entry holds at least that name's spaced digest: an entry with no names, or, where
+    its folder is known, without that digest, was emptied or only partly restored."""
+    return not entry["names"] or (folder is not None and name_key(folder) not in entry["names"])
+
+
+def home_folders(run):
+    """[(folder name, holds CLIENT.md, path)] of the folders directly under <home>/clients/ and <home>/archive/, this
+    record's own and any folder of its name left out (X21, X30); twin_folder has already stopped a run where a
+    folder of its name is another record (G07). Only the listing is read."""
+    found = []
     for folder in ("clients", "archive"):
         base = run.home / folder
         try:
-            entries = sorted(base.iterdir()) if base.is_dir() else []
+            entries = sorted(base.iterdir()) if path_kind(base) == "dir" else []
         except OSError as exc:
             raise cannot("<home>/%s/" % folder, WHOLE, "cannot list the folder: %s" % exc, "a readable home")
         for entry in entries:
             try:
-                same = entry.resolve() == run.root
+                if path_kind(entry) != "dir":
+                    continue
+                if run.record:
+                    try:
+                        same = entry.resolve() == run.root
+                    except OSError:
+                        same = False
+                    if same or entry.name == run.root.name:
+                        continue
+                found.append((entry.name, path_kind(entry / "CLIENT.md") == "file", entry))
             except OSError:
-                same = False
-            if not same and entry.is_dir() and (entry / "CLIENT.md").is_file():
-                others += 1
-    if others or (run.home / "clients-index.json").exists():
-        raise cannot("<home>/clients-index.json", "wall", "the cross-client wall is not built in this version of the "
-                     "lint, and the home holds %d other client record(s) or an index, so it cannot check them"
-                     % others, "the lint with its wall built; until then a check in this home stops here")
+                # G08, X30: a folder that cannot be looked into may be a client record; the error names no folder,
+                # because its name would carry that client's slug into this session.
+                raise cannot("<home>/%s/" % folder, INDEX_FIELDS[4], "a folder under the home cannot be read, so "
+                             "the wall cannot tell whether it is a client record", "every folder directly under "
+                             "<home>/clients/ and <home>/archive/ readable by the user who runs the lint, then run "
+                             "this again")
+    return found
+
+
+class Own:
+    """O, this record's own set (X27): every wall/1 candidate ("n"), phonetic key ("p") and figure form ("f") of
+    its O sources, in plaintext in memory only, with the files that hold each, so a checked record file never
+    makes its own words this record's (Z15)."""
+
+    def __init__(self):
+        self.count, self.files, self.skip = {}, {}, {}
+
+    def left_out(self, file):
+        """The files O leaves out while `file` is checked (Z15): the file itself and, for a blueprint, every
+        blueprint file of its strand, because record.py freeze copies its bytes into versions/ (G09)."""
+        if file not in self.skip:
+            strand = file.split("/")[:2]
+            self.skip[file] = {file} | ({rel for rel in self.files if kind_of(rel) == "blueprint" and
+                                         rel.split("/")[:2] == strand} if kind_of(file) == "blueprint" else set())
+        return self.skip[file]
+
+    def add(self, rel, text):
+        folded = fold(text)
+        mine = set()
+        for reading in [folded] + ([fold(text, alt=True)] if has_alt(text) else []):  # G02: both readings
+            tokens, gaps = wall_cut(text, reading)
+            for i, j, form, fused in wall_candidates(tokens, gaps):
+                mine.add(("n", form))
+                if not fused:
+                    mine.update(("p", key) for key in wall_keys([t.word for t in tokens[i:j]]))
+        for value, _, _, _ in text_numbers(folded, text):
+            mine.update(("f", form) for form in figure_forms(value, 1))
+        self.files[rel] = mine
+        for item in mine:
+            self.count[item] = self.count.get(item, 0) + 1
+
+    def has(self, kind, value, file):
+        item = (kind, value)
+        count = self.count.get(item, 0)
+        if count:
+            count -= sum(1 for rel in self.left_out(file) if item in self.files.get(rel, ()))
+        return count > 0
+
+
+class Wall:
+    """The other records' digests, the other folders' slugs, and O (absent under terms, which has no record)."""
+
+    def __init__(self):
+        self.names, self.terms, self.phonetic, self.figures = set(), set(), set(), set()
+        self.slugs, self.slug_keys, self.own = set(), set(), None
+        self.entries = self.folders = 0
+        self.ordinary = COMMON_WORDS
+
+    def name_class(self, form, file):
+        if self.own is not None and self.own.has("n", form, file):
+            return None
+        hashed = digest("n:", form)
+        if hashed in self.names:
+            return "name"
+        if hashed in self.terms:
+            return "term"
+        return "slug" if form in self.slugs else None
+
+    def key_class(self, key, file):
+        if self.own is not None and self.own.has("p", key, file):
+            return None
+        if digest("p:", key) in self.phonetic:
+            return "name"
+        return "slug" if key in self.slug_keys else None
+
+    def gated(self, words):
+        """Z13 item 2's gate: a word outside the ordinary words, and seven letters or more in all."""
+        return not all(w in self.ordinary for w in words) and sum(len(letters(w)) for w in words) >= 7
+
+    def shape_class(self, form, words, fused, split, initial, file):
+        """G12 (R43), the checked side only: an initial written apart from its capitalised word (O Rourke, O’ Rourke)
+        looked up fused to it, and each word with a plural ending removed (plural_stems), spaced or fused as the
+        candidate is and, for a run of two or three words with only white space between them that passes Z13 item 2's
+        gate, also joined (G11). Nothing is looked up when O holds the candidate itself."""
+        shapes = [[words[0] + words[1]] + words[2:]] if initial else []
+        for base in [words] + shapes:
+            for k, word in enumerate(base):
+                shapes.extend(base[:k] + [stem] + base[k + 1:] for stem in plural_stems(word))
+        if not shapes or (self.own is not None and self.own.has("n", form, file)):
+            return None
+        for shape in shapes:
+            cls = self.name_class(("" if fused else " ").join(shape), file)
+            if cls is None and split and len(shape) > 1 and self.gated(shape):
+                cls = self.name_class("".join(shape), file)
+            if cls:
+                return cls
+        return None
+
+    def initials(self, tokens, gaps, file):
+        """G25 (R60), the checked side only: single capital letters with spaces, tabs or a full stop between them
+        (T F M, T  F  M, T. F. M.) are initials, and each run of two to six of them, the lengths X26 step 3 publishes,
+        is looked up fused, unless O holds the run spaced. Capitals only, so a lone a or I in prose never joins."""
+        found, i = [], 0
+        while i < len(tokens):
+            j = i
+            while j < len(tokens) and len(tokens[j].word) == 1 and tokens[j].word.isalpha() and tokens[j].upper and \
+                    (j == i or INITIALS_GAP.fullmatch(gaps[j - 1])):
+                j += 1
+            for a in range(i, j):
+                for b in range(a + 2, min(j, a + 6) + 1):
+                    words = [t.word for t in tokens[a:b]]
+                    if self.own is not None and self.own.has("n", " ".join(words), file):
+                        continue
+                    cls = self.name_class("".join(words), file)
+                    if cls:
+                        found.append((tokens[a].start, tokens[b - 1].end, cls))
+            i = max(j, i + 1)
+        return found
+
+    def hits(self, check):
+        unit, found = check.unit, []
+        if unit.kind != "number":
+            variants = [(check.vf, check.tokens)]
+            if check.vfd is not None:
+                variants.append((check.vfd, tokenise(check.text, check.vfd)))
+            if has_alt(check.text):  # G02: the second reading of ø, æ and œ
+                second = fold(check.text, alt=True)
+                variants.append((second, tokenise(check.text, second)))
+            for folded, tokens in variants:
+                tokens, gaps = wall_cut(check.text, folded, tokens)
+                for i, j, form, fused in wall_candidates(tokens, gaps):
+                    cls = self.name_class(form, unit.file)
+                    words = [t.word for t in tokens[i:j]]
+                    split = not fused and 2 <= j - i <= 3 and not any(gap.strip() for gap in gaps[i:j - 1])
+                    if cls is None and not fused and self.gated(words):  # Z13: what may sound like another's name
+                        for key in sorted(wall_keys(words)):
+                            cls = cls or self.key_class(key, unit.file)
+                        # G11: under the same gate, a run of two or three words with only white space between them is
+                        # also looked up joined, as another record's one-word name written split, unless O holds it.
+                        if cls is None and split and not (self.own is not None and self.own.has("n", form, unit.file)):
+                            cls = self.name_class("".join(words), unit.file)
+                    if cls is None:
+                        initial = not fused and j - i >= 2 and len(words[0]) == 1 and words[0].isalpha() and \
+                            tokens[i + 1].cap and bool(INITIAL_GAP.fullmatch(gaps[i]))
+                        cls = self.shape_class(form, words, fused, split, initial, unit.file)
+                    if cls:
+                        found.append((tokens[i].start, tokens[j - 1].end, cls))
+                found.extend(self.initials(tokens, gaps, unit.file))
+        if not unit.structural and self.figures:
+            for folded in [check.vf] + ([check.vfd] if check.vfd is not None else []):
+                for value, precision, start, end in text_numbers(folded, check.text):
+                    if any(digest("f:", form) in self.figures and
+                           (self.own is None or not self.own.has("f", form, unit.file))
+                           for form in tested_forms(value, precision)):
+                        found.append(folded.span(start, end) + ("figure",))
+        found.sort(key=lambda h: (h[0], -h[1]))
+        merged = []
+        for start, end, cls in found:
+            same = [m for m in merged if m[2] == cls and start < m[1] and m[0] < end]
+            if same:
+                index = merged.index(same[-1])
+                merged[index] = (min(start, same[-1][0]), max(end, same[-1][1]), cls)
+                continue
+            merged.append((start, end, cls))
+        return [("wall", cls, "block", start, end, WALL_PROBLEMS[cls], WALL_EXPECTED, None, {})
+                for start, end, cls in merged]
+
+
+def build_wall(run):
+    """The wall for this run: the index read and checked, the coverage check of X30, the other entries' digests
+    joined, the slugs of X21, and O built fresh from the record (X27)."""
+    if run.record:
+        twin_folder(run)
+    entries, _ = read_index(run)
+    folders = home_folders(run)
+    missing = sum(1 for name, has_client, _ in folders if has_client and mc.slug_key(name) not in entries)
+    if missing:
+        raise cannot(INDEX_NAME, INDEX_FIELDS[4], "%d other client record%s under the home %s no index entry, so the "
+                     "wall cannot see %s" % (missing, "" if missing == 1 else "s", "has" if missing == 1 else "have",
+                                             "it" if missing == 1 else "them"),
+                     "run leak_lint.py index from each of those records, then run this again")
+    # G14, R45: an entry index cannot have written passes Z18 item 3's shape check but may wall less than its record
+    # holds, so it fails closed as a malformed index does. The folder test needs the folder's name only, and the
+    # error gives the count only (X30).
+    keyed = {mc.slug_key(name): name for name, _, _ in folders}
+    damaged = sum(1 for key, entry in entries.items() if entry_is_damaged(entry, keyed.get(key)))
+    if damaged:
+        raise cannot(INDEX_NAME, INDEX_FIELDS[4], "%d entr%s of the index %s damaged: leak_lint.py index always writes "
+                     "a client's folder name among its names, and %s no names, or not that one, so the index was "
+                     "emptied or only partly restored" % (damaged, "y" if damaged == 1 else "ies",
+                                                          "is" if damaged == 1 else "are",
+                                                          "it holds" if damaged == 1 else "they hold"),
+                     "run leak_lint.py index from each client record under the home; if the index was restored from "
+                     "a backup, restore the whole file from that backup, not part of it; then run this again")
+    # G13, R44: an entry older than its record's files may lack what was added since, so it fails closed as an
+    # absent one does (X30); only the count is given. This record's folder is not in folders, so its own entry is
+    # never checked for its age.
+    older = sum(1 for name, _, path in folders if mc.slug_key(name) in entries and
+                entry_is_older(entries[mc.slug_key(name)], other_record_newest(path)))
+    if older:
+        raise cannot(INDEX_NAME, INDEX_FIELDS[4], "%d other client record%s under the home %s changed since %s last "
+                     "index, so the wall may not see what was added to %s" % (
+                         older, "" if older == 1 else "s", "has" if older == 1 else "have",
+                         "its" if older == 1 else "their", "it" if older == 1 else "them"),
+                     "run leak_lint.py index from each client record changed since its last index, then run this "
+                     "again")
+    wall = Wall()
+    own_key = mc.slug_key(run.root.name) if run.record else None
+    if own_key in entries:
+        # G07: the entry under this record's key is its own only when it holds this record's CLIENT.md name or one
+        # of its former names (R40); one left by another client of the same slug stays that client's wall (X29).
+        meta = mc.front_matter(record_texts(run).get("CLIENT.md") or run.text(run.root / "CLIENT.md", "CLIENT.md"),
+                               "CLIENT.md")
+        if not holds_own_name(entries[own_key], [meta.get("name") or ""] + mc.former_names(meta.get("former_names"))):
+            own_key = None
+    for key, entry in entries.items():
+        if key == own_key:
+            continue
+        wall.entries += 1
+        wall.names.update(entry["names"])
+        wall.phonetic.update(entry["phonetic"])
+        wall.terms.update(entry["terms"])
+        wall.figures.update(entry["figures"])
+    wall.folders = len(folders)
+    if wall.phonetic or folders:
+        wall.ordinary = COMMON_WORDS | wall_stop(run)[0]
+    if folders:
+        stop, vocabulary_keys, small = wall_stop(run)
+        for name, _, _ in folders:
+            words = words_of(name)
+            candidates = {tuple(words)} if words else set()
+            for a in range(len(words)):
+                for b in range(a + 1, min(len(words), a + 4) + 1):
+                    candidate = kept(words[a:b], stop, small)
+                    if candidate:
+                        candidates.add(candidate)
+            for candidate in candidates:
+                wall.slugs.add(" ".join(candidate))
+                if len(candidate) > 1:
+                    wall.slugs.add("".join(candidate))
+                wall.slug_keys |= {k for k in wall_keys(candidate, joined=True)
+                                   if len(candidate) > 1 or k not in vocabulary_keys}
+    if run.record and (wall.names or wall.terms or wall.phonetic or wall.figures or wall.slugs):
+        wall.own = Own()  # with nothing to compare, O is not needed and not read
+        for rel, text in record_texts(run).items():
+            text = own_text(rel, text)
+            if text is not None:
+                wall.own.add(rel, text)
+    return wall
+
+
+def own_text(rel, text):
+    """G17 (R51): the part of a record file that feeds O, or None. Only this client's own words make a word this
+    record's: calls/, inputs/ and research/ whole, and CLIENT.md's name, former names and slug. The blueprint's
+    client-facing lines stay O, since payloads copy them (X11, R37). The session's working files (log.md,
+    meetings.md, the strand files, solution/ notes, CLIENT.md's body, the blueprint's other lines) feed the harvest
+    and the sets as before, and never O, so a line written in a mix-up of two clients never clears the other
+    client's name. The allowlist feeds no set (Y01)."""
+    kind = kind_of(rel)
+    if kind in ("input", "call", "transcript") or rel.split("/")[0] == "research":
+        return text
+    if rel == "CLIENT.md":
+        try:
+            meta = mc.front_matter(text, "CLIENT.md")
+        except mc.FrontMatterError:  # index refuses such a record; here O only loses its names, which adds blocks
+            return None
+        names = [meta.get("name") or "", meta.get("slug") or ""] + mc.former_names(meta.get("former_names"))
+        return "\n\n".join(names)  # a blank line between them, so no run crosses from one name to the next
+    if kind == "blueprint":  # the other lines are blanked in place, so no candidate runs across them
+        lines = text.split("\n")
+        client = blueprint_client_lines(lines)
+        return "\n".join(line if index in client else "" for index, line in enumerate(lines))
+    return None
 
 
 def wall_hits(run, check):
-    """The wall's findings for one unit; part 2 replaces this. Here it only proves there is nothing to see."""
-    if not run.wall_checked:
-        wall_guard(run)
-        run.wall_checked = True
-    return []
+    """The wall's findings for one unit (X01, X27, X45); with no unit, the wall is only built, so its index and
+    coverage checks run before any text is judged."""
+    if run.wall is None:
+        run.wall = build_wall(run)
+    return [] if check is None else run.wall.hits(check)
 
 
 def finding(run, unit, text, rule, cls, severity, start, end, problem, expected, source, extra):
@@ -2441,10 +4105,67 @@ def finding(run, unit, text, rule, cls, severity, start, end, problem, expected,
 CONTAINED = ("term", "exclusion", "seller-account", "internal-note", "credential", "paraphrase", "split-figure")
 
 
+HTML_PIECE = re.compile(r"<(/?)([A-Za-z][A-Za-z0-9]*)\b[^<>]*>|&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|"
+                        r"[A-Za-z][A-Za-z0-9]{1,31});?")
+HTML_BREAKS = frozenset("p br div li ul ol tr td th table thead tbody h1 h2 h3 h4 h5 h6 blockquote pre hr section "
+                        "article header footer".split())
+
+
+def html_copy(text):
+    """F05 (X24, X28): (the text with every tag blanked and every entity decoded, each character's offset in the
+    text), or None when the text holds no tag or entity. A block tag becomes a line break, any other tag a space."""
+    if "<" not in text and "&" not in text:
+        return None
+    out, where, last, changed = [], [], 0, False
+    for match in HTML_PIECE.finditer(text):
+        if match.group(2):
+            piece = "\n" if match.group(2).lower() in HTML_BREAKS else " "
+        else:
+            piece = html.unescape(match.group())
+        if piece == match.group():
+            continue
+        out.append(text[last:match.start()])
+        where.extend(range(last, match.start()))
+        out.append(piece)
+        where.extend([match.start()] * len(piece))
+        last, changed = match.end(), True
+    if not changed:
+        return None
+    out.append(text[last:])
+    where.extend(range(last, len(text)))
+    return "".join(out), where
+
+
+def html_hits(run, unit, text, hits, rules=None):
+    """The hits of the HTML-decoded copy of a unit's text that its plain copy did not find, mapped back (F05);
+    `rules` narrows the rules run on the copy (G19), every rule of the unit's mode by default."""
+    copy = html_copy(text)
+    if copy is None:
+        return []
+    decoded, where = copy
+    sub = Unit(unit.file, decoded, unit.seq, field=unit.field, part=unit.part, strand=unit.strand, mode=unit.mode,
+               kind=unit.kind, structural=unit.structural)
+    sub.own, sub.raw_json = unit.own, unit.raw_json
+    plain_spans = [(h[0], h[1], h[3], h[4]) for h in hits]
+    found = []
+    check = Check(run, sub)
+    for rule, cls, severity, start, end, problem, expected, source, extra in \
+            (rules(run, check) if rules else check.execute()):
+        if end <= start:
+            continue
+        start, end = where[start], where[end - 1] + 1
+        if any(r == rule and c == cls and s < end and start < e for r, c, s, e in plain_spans):
+            continue
+        found.append((rule, cls, severity, start, end, problem, expected, source, extra))
+    return found
+
+
 def check_unit(run, unit):
-    """Every rule the unit's mode runs, the findings deduplicated, then the strand's allowlist applied."""
+    """Every rule the unit's mode runs, on the text and on its HTML-decoded copy, the findings deduplicated, then
+    the strand's allowlist applied."""
     check = Check(run, unit)
     hits = check.execute()
+    hits += html_hits(run, unit, check.text, hits)
     findings, seen = [], set()
     for rule, cls, severity, start, end, problem, expected, source, extra in hits:
         key = (rule, cls, start, end)
@@ -2469,8 +4190,9 @@ def check_unit(run, unit):
 
 
 def apply_allowlist(run, unit, text, findings):
-    """X10, X39, Y06: a row of the strand's own allowlist with the user's ok clears a vocabulary term or a
-    paraphrase cue to a caution; a row that meets anything else leaves the block and warns once per finding."""
+    """X10, X39, Y06: a row of the strand's own allowlist with the user's ok clears a vocabulary term, a
+    paraphrase cue or one of the three internal-use phrases (R62) to a caution; a row that meets anything else leaves
+    the block and warns once per finding."""
     rows = load_allowlist(run, unit.strand)
     if not rows:
         return findings
@@ -2482,7 +4204,8 @@ def apply_allowlist(run, unit, text, findings):
         matched = [r for r in rows if r.normal and r.normal == target]
         if not matched:
             continue
-        if f["rule"] in ("term", "paraphrase") and f["class"] in CLEARABLE:
+        if f["rule"] in ("term", "paraphrase") and f["class"] in CLEARABLE or \
+                f["rule"] == "internal-note" and target in CLEARABLE_NOTES:
             granted = [r for r in matched if r.ok]
             if granted:
                 f["severity"], f["cleared_by"] = "caution", "%s line %d" % (granted[0].file, granted[0].line)
@@ -2544,8 +4267,8 @@ def scan_targets(run, paths, flag):
             def failed(exc):
                 raise cannot(rel, WHOLE, "cannot list the folder: %s" % exc, "a readable folder")
 
-            for folder, dirs, files in os.walk(str(path), onerror=failed):
-                dirs.sort()
+            # F09: a linked folder is walked when it lies inside the record, else exit 3 naming it (R09)
+            for folder, _, files in walk_inside(path, run.root, failed, lambda link, _: target_of(run, link, True)):
                 for name in files:
                     found.append(Path(folder) / name)
             for item in sorted(found, key=lambda p: Path(os.path.realpath(str(p))).as_posix()):
@@ -2562,13 +4285,15 @@ def scan_targets(run, paths, flag):
     return targets
 
 
-def target_of(run, path):
+def target_of(run, path, folder=False):
     resolved = Path(os.path.realpath(str(path)))
     try:
         rel = resolved.relative_to(Path(os.path.realpath(str(run.root)))).as_posix()
     except ValueError:
-        raise cannot(Path(path).name, "path", "a file in the folder resolves outside the record",
-                     "files inside the record only")
+        raise cannot(Path(path).name, "path", "a %s in the folder resolves outside the record" %
+                     ("linked folder" if folder else "file"), "files inside the record only")
+    if folder:
+        return rel
     if os.path.splitext(rel)[1].lower() not in SCAN_EXT:
         raise cannot(rel, WHOLE, "the lint cannot read this kind of file", "a file the lint can read (.md, .txt, "
                      ".docx, .json); move this one out of the folder or convert it")
@@ -2578,7 +4303,8 @@ def target_of(run, path):
 def scan_mode(rel, text):
     if re.fullmatch(r"strands/\d{3}-[^/]+/SUMMARY\.md", rel):
         return "summary"
-    if rel.lower().endswith(".md") and (rel.startswith("calls/") or (rel.startswith("inputs/") and is_snapshot(text))):
+    if rel.lower().endswith(".md") and (rel.startswith("calls/") or
+                                        (rel.startswith("inputs/") and is_snapshot(rel, text))):
         return "client-safe-block"
     return "full"
 
@@ -2592,7 +4318,7 @@ def file_units(run, rel, path, strand, seq):
             units.append(Unit(rel, "\n".join(lines), (seq, index), part=part, strand=strand, labels=labels))
         return "full", units
     if ext == ".json":
-        data = json_value(decode(run.read(path, rel, PAYLOAD_LIMIT), rel)[0], rel)
+        data = json_value(decode(run.read(path, rel, PAYLOAD_LIMIT), rel)[0], rel, ONCE_PAYLOAD)
         return "full", payload_units(rel, data, strand, seq)
     text, raw = decode(run.read(path, rel), rel)
     mode = scan_mode(rel, text)
@@ -2625,8 +4351,7 @@ def payload_units(file, data, strand, seq):
             pushed = []
             for key, sub in value.items():
                 key = str(key)
-                sub_path = path + ("." + key if SIMPLE_KEY.fullmatch(key) else "[%s]" % json.dumps(key,
-                                                                                                    ensure_ascii=False))
+                sub_path = key_path(path, key)
                 units.append(Unit(file, key, (seq, len(units)), field=sub_path + "<key>", strand=strand,
                                   kind="payload"))
                 if key in STRUCTURAL_ID_KEYS and isinstance(sub, list):
@@ -2638,21 +4363,82 @@ def payload_units(file, data, strand, seq):
         elif isinstance(value, list):
             stack.extend(reversed([("%s[%d]" % (path, i), item, depth + 1, False) for i, item in enumerate(value)]))
         elif isinstance(value, str):
-            units.append(Unit(file, value, (seq, len(units)), field=path, strand=strand, kind="payload",
-                              structural=structural))
-            stripped = value.strip()
-            if stripped[:1] in ("{", "["):
-                try:
-                    inner = json.loads(stripped)
+            unit = Unit(file, value, (seq, len(units)), field=path, strand=strand, kind="payload",
+                        structural=structural)
+            unit.joins = not structural  # G19 (R53): a structural id is structure, as a key is
+            units.append(unit)
+            # G06: format characters dropped first, and a JSON string literal (a text column's value) parsed too.
+            stripped = "".join(c for c in value if c not in IGNORABLE and unicodedata.category(c) != "Cf").strip()
+            if stripped[:1] in ("{", "[", '"'):
+                try:  # G20 (R54): a key written twice in JSON inside a string is exit 3, at the path through it
+                    inner = strict_json(stripped, path + "<json>")
+                except RepeatedKey as exc:
+                    raise repeated(file, exc, ONCE_PAYLOAD)
                 except ValueError:
                     inner = None
                 if isinstance(inner, (dict, list)):
+                    unit.raw_json = True  # F26: the walk checks every inner value, so the id rows skip the raw string
                     stack.append((path + "<json>", inner, depth + 1, False))
+                elif isinstance(inner, str):  # R34: its own unit; the raw string keeps every rule, the id rows too
+                    stack.append((path + "<json>", inner, depth + 1, False))
+                if isinstance(inner, (dict, list, str)):
+                    unit.joins = False  # G19 (R53): the strings walked inside it join in its place
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
             text = str(value) if isinstance(value, int) else repr(value)
             units.append(Unit(file, text, (seq, len(units)), field=path, strand=strand, kind="number",
                               structural=structural))
     return units
+
+
+def spanning_rules(run, check):
+    """G19 (R53): the rules a text split over two payload strings can still meet: copied runs, quotes and the wall.
+    The single-text rules stay with each string, so the joined text never reports them twice."""
+    check.runs_and_quotes()
+    return check.hits + wall_hits(run, check)
+
+
+def check_joined(run, file, units, strand):
+    """G19 (R53, A§:916, X22): one joined text per payload or scanned JSON file: every string that joins (no key, no
+    number, no structural id, and a string holding JSON replaced by the strings walked inside it) in walk order,
+    joined by single line breaks, under spanning_rules on the text and on its HTML-decoded copy. A hit inside one
+    string is that string's own check's; a hit across strings is reported at the first one it touches, with `fields`
+    naming every string it spans, unless a finding of its rule and class in one of those strings already overlaps it."""
+    parts = [unit for unit in units if unit.joins]
+    if len(parts) < 2:
+        return
+    starts, at = [], 0
+    for unit in parts:
+        starts.append(at)
+        at += len(unit.text) + 1
+    joined = Unit(file, "\n".join(unit.text for unit in parts), (parts[0].seq[0], len(units)), field="$",
+                  strand=strand, kind="payload")
+    check = Check(run, joined)
+    hits = spanning_rules(run, check)
+    hits += html_hits(run, joined, check.text, hits, spanning_rules)
+    offsets = {unit.field: start for unit, start in zip(parts, starts)}
+    found_before = [(f["rule"], f["class"], offsets[f["field"]] + f["_start"], offsets[f["field"]] + f["_end"])
+                    for f in run.findings if f["file"] == file and f.get("field") in offsets and "_start" in f]
+    findings, seen = [], set()
+    for rule, cls, severity, start, end, problem, expected, source, extra in hits:
+        first, last = bisect.bisect_right(starts, start) - 1, bisect.bisect_right(starts, end - 1) - 1
+        if end <= start or first == last or (rule, cls, start, end) in seen or any(
+                r == rule and c == cls and s < end and start < e for r, c, s, e in found_before):
+            continue
+        seen.add((rule, cls, start, end))
+        extra = dict(extra, fields=[unit.field for unit in parts[first:last + 1]])
+        f = finding(run, parts[first], check.text, rule, cls, severity, start, end, problem, expected, source, extra)
+        f["_unit"] = first
+        findings.append(f)
+    for f in apply_allowlist(run, joined, check.text, findings):
+        if "_unit" in f:  # back to the first string's own offsets, for the order and for --spans
+            index = f.pop("_unit")
+            unit, base = parts[index], starts[index]
+            f["_start"], f["_end"] = f["_start"] - base, min(f["_end"] - base, len(unit.text))
+            f["_order"] = (0, unit.seq, f["_start"]) + f["_order"][3:]
+            if run.spans and f["severity"] == "block":
+                start, end = unit.raw_span(f["_start"], f["_end"])
+                f["span"] = {"start": start, "end": end}
+        run.add(f)
 
 
 def is_structural(value):
@@ -2677,6 +4463,10 @@ def cmd_scan(run):
     if flag is not None:
         strand_folder(run, flag)
     targets = scan_targets(run, run.args.paths, flag)
+    if not targets:  # F23 (A9.6, fail closed): a scan that judged nothing never reads as clean
+        where = run.args.paths[0].replace("\\", "/") if run.args.paths else "strands/"
+        raise cannot(where, "path", "no draft or handoff file to check", "the drafts/ or deliverables/handoff/ files "
+                     "of the strand, or the paths to check")
     prepare(run)
     modes, strands = [], set()
     for seq, (rel, path, strand) in enumerate(targets):
@@ -2687,6 +4477,8 @@ def cmd_scan(run):
             run.inputs[rel]["mode"] = mode
         for unit in units:
             check_unit(run, unit)
+        if os.path.splitext(rel)[1].lower() == ".json":  # G19 (R53): a scanned JSON file is walked as a payload is
+            check_joined(run, rel, units, strand)
     run.mode = modes[0] if modes and len(set(modes)) == 1 else (None if modes else "full")
     run.strand = strands.pop() if len(strands) == 1 else (flag if not strands else None)
     return outcome(run)
@@ -2700,7 +4492,7 @@ def cmd_payload(run):
     rel, path = inside_record(run, args.file, "--file")
     if not path.is_file():
         raise cannot(rel, "--file", "the payload is not a file", "the tool input written as one JSON file")
-    data = json_value(decode(run.read(path, rel, PAYLOAD_LIMIT), rel)[0], rel)
+    data = json_value(decode(run.read(path, rel, PAYLOAD_LIMIT), rel)[0], rel, ONCE_PAYLOAD)
     canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     run.args_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     prepare(run)
@@ -2708,16 +4500,226 @@ def cmd_payload(run):
     wall_hits(run, None)
     for unit in units:
         check_unit(run, unit)
+    check_joined(run, rel, units, args.strand)
     return outcome(run)
 
 
-def cmd_not_built(run):
-    raise cannot("leak_lint.py", run.command, "the %s command is not built yet" % run.command,
-                 "a later build of leak_lint.py; until then this command stops and never passes")
+def cmd_blueprint(run):
+    """X08, X09, X36: the blueprint's client-facing text (sections 1 to 15, the prompt blocks, the glossary) under
+    every rule, the wall included, the glossary exempt from the copied-run rule only."""
+    run.locate()
+    folder = strand_folder(run, run.args.strand)
+    run.strand, run.mode = run.args.strand, MODES[3]
+    path = folder / "solution" / "blueprint.md"
+    rel = run.name(path)
+    if not path.is_file():
+        raise cannot(rel, WHOLE, "the strand has no blueprint", "solution/blueprint.md, the blueprint drafted for "
+                     "this strand")
+    prepare(run)
+    text, raw = decode(run.read(path, rel), rel)
+    lines = text.split("\n")
+    problem = section_problem(lines)
+    if problem:
+        raise cannot(rel, *problem)
+    client = blueprint_client_lines(lines)
+    glossary, problem = block_lines(lines, BLOCK_MARKS[2], BLOCK_MARKS[3])
+    if problem:  # X09: malformed marks exempt nothing, and the text after each mark is checked to its heading
+        run.add(record_warning(rel, problem[0], "glossary marks not well formed (%s); nothing in this file is exempt"
+                               % problem[1], "an opening and a closing mark, each alone on its line"))
+        client = set(client) | marked_lines(lines, BLOCK_MARKS[2:4])
+    # R52: the title of each heading of sections 1 to 15 is client-facing too, checked with the section's text
+    # under every rule and never as glossary text; its number and marks are blanked, so a hit sits on its line.
+    titles = section_titles(lines)
+    glossary = glossary - set(titles)
+    checked = [i for i in sorted(set(client) | set(titles)) if i not in glossary]
+    for mode, chosen in (("blueprint", set(checked)), ("glossary", glossary)):
+        if chosen:
+            kept_text = "\n".join(titles.get(i, line) if i in chosen else " " * len(line)
+                                  for i, line in enumerate(lines))
+            check_unit(run, Unit(rel, kept_text, (0, 0), strand=run.strand, mode=mode, raw=raw))
+    return outcome(run)
 
 
-COMMANDS = {"scan": cmd_scan, "payload": cmd_payload, "blueprint": cmd_not_built, "wall": cmd_not_built,
-            "terms": cmd_not_built, "index": cmd_not_built}
+def section_number(line):
+    """X09, R49: the number a level-2 heading opens with (`## 4`, `## 4.`, `## 4)`, `## 4:`, `## 4 Title`), or None
+    for any other line."""
+    heading = HEADING.match(line)
+    if not heading or len(heading.group(1)) != 2:
+        return None
+    number = SECTION_NUMBER.match(heading.group(2))
+    return int(number.group(1)) if number else None
+
+
+def section_titles(lines):
+    """R52: {index: the line with only its title kept} for each level-2 heading numbered 1 to 15 whose title is not
+    its section's own in the template (SECTION_TITLES). The title is the text after the number and its separator,
+    before any closing hashes; the rest is blanked so positions stay."""
+    titles = {}
+    for index, line in enumerate(lines):
+        number = section_number(line)
+        if number in CLIENT_SECTIONS:
+            heading = HEADING.match(line)
+            start, end = heading.start(2) + SECTION_NUMBER.match(heading.group(2)).end(), heading.end(2)
+            if words_of(line[start:end]) != words_of(SECTION_TITLES[number - 1]):
+                titles[index] = " " * start + line[start:end] + " " * (len(line) - end)
+    return titles
+
+
+def section_problem(lines):
+    """R49 (G18, X09, D19): None when level-2 headings numbered 1 to 15 are each found once and in order before
+    section 16, and no other level-1 or level-2 heading sits among them; else the (field, problem, expected) of the
+    stop. The text after section 16 is internal, under any heading. A blueprint without section 16 runs its
+    sections to the end of the file, so every heading after section 15 counts as before section 16."""
+    guide = ("write the sixteen section headings as blueprint-guide.md numbers them (## 4. Structure mapping), with "
+             "every added item inside one of them as a level-3 subsection (### <item>), then run this again")
+    numbers = [n for n in map(section_number, lines) if n in CLIENT_SECTIONS or n == 16]
+    head = numbers[:numbers.index(16)] if 16 in numbers else numbers
+    if head != list(CLIENT_SECTIONS) or len(numbers) - numbers.count(16) != len(CLIENT_SECTIONS):
+        first = next(n for n in [m for i, m in enumerate(CLIENT_SECTIONS) if head[i:i + 1] != [m]] +
+                     numbers[len(head):] if n != 16)
+        return (WHOLE, "cannot find sections 1 to 15", "level-2 headings numbered 1 to 15, each once and in order, "
+                "then section 16 (section %d is missing, repeated or out of order): %s" % (first, guide))
+    started = False
+    for index, line in enumerate(lines):
+        heading = HEADING.match(line)
+        if not heading or len(heading.group(1)) > 2:
+            continue
+        number = section_number(line)
+        if number == 16:
+            return None
+        if number in CLIENT_SECTIONS:
+            started = True
+        elif started or len(heading.group(1)) == 2:
+            return ("line %d" % (index + 1), "a level-%d heading that is not one of the sixteen numbered sections "
+                    "sits before section 16, so the text under it would not be checked" % len(heading.group(1)),
+                    "every item inside one of the sixteen sections as a level-3 subsection (### <item>), internal "
+                    "notes under section 16: %s" % guide)
+    return None
+
+
+def marked_lines(lines, marks):
+    """Every line from a mark to the next level-1 or level-2 heading, the mark lines included."""
+    found, active = set(), False
+    for index, line in enumerate(lines):
+        heading = HEADING.match(line)
+        if heading and len(heading.group(1)) <= 2:
+            active = False
+        if line.strip() in marks or near_mark(line) == "glossary":
+            active = True
+        if active:
+            found.add(index)
+    return found
+
+
+def cmd_wall(run):
+    """X08: the wall alone, on one planned name or text, against the index, the slugs and this record's O."""
+    run.locate()
+    check_unit(run, Unit("--text", run.args.text, (0, 0), mode="wall"))
+    return outcome(run)
+
+
+def client_identity(run):
+    """(name, slug, former names) from CLIENT.md's front matter (R40); X30: the slug must be the folder's name."""
+    meta = mc.front_matter(run.text(run.root / "CLIENT.md", "CLIENT.md"), "CLIENT.md")
+    slug, name = (meta.get("slug") or "").strip(), (meta.get("name") or "").strip()
+    if not slug or not words_of(slug):
+        raise cannot("CLIENT.md", "slug", "the record has no slug", 'slug: "<the folder name>" in the front matter')
+    if slug != run.root.name:
+        raise cannot("CLIENT.md", "slug", "the slug %r is not the folder's name %r" % (slug, run.root.name),
+                     "a record whose CLIENT.md slug is its folder name, so its index key matches its folder")
+    return name, slug, mc.former_names(meta.get("former_names"))
+
+
+def cmd_index(run):
+    """X02, X29, X46: write this record's clients-index/1 entry under the home mutex, in place with a backup, and
+    nothing at all when the four lists are unchanged and the entry is not older than the record's files (R44)."""
+    run.locate()
+    name, slug, former = client_identity(run)
+    twin_folder(run)
+    wall_stop(run)
+    # G13, R44: the clock and the newest change are taken before any file is read, so a file written while the
+    # entry is built is newer than the entry. The stamp is the later of the two, so an entry is never older than
+    # the files it was built from, whatever the clock or a file's time says.
+    begun, (failed, outside) = mc.now_utc(), record_failures(run)
+    newest = newest_change(record_walk(run.root, failed, outside), failed)
+    run.exclusions = load_exclusions(run)
+    run.sets = build_sets(run)
+    run.findings = []  # the record's own mark warnings belong to scan; index runs no rule
+    lists, single = build_entry(run, name, slug, former)
+    run.extra["single_words"] = {"count": len(single), "words": single}  # G16: this record's own, so shown
+    key, path = mc.slug_key(slug), run.home / "clients-index.json"
+    with mc.record_mutex(run.home):
+        entries, old = read_index(run, locked=True)
+        entry = entries.get(key)
+        if entry is not None and not holds_own_name(entry, [name] + former) and entry_is_damaged(entry, slug):
+            # G14, R45: an entry without the slug's name is no client's entry as index wrote it, so R35's name test
+            # cannot tell; it is replaced only when this record's lists hold every digest it still holds
+            if any(set(entry[field]) - set(lists[field]) for field in LIST_FIELDS):
+                raise index_problem(INDEX_FIELDS[4], "the entry under this record's slug is damaged (it lacks the "
+                                    "slug's name, which index always writes) and holds digests this record would "
+                                    "not write, so replacing it could drop another client's wall", "restore the "
+                                    "whole clients-index.json from its backup under <home>/local/backup/, then run "
+                                    "index again")
+        elif entry is not None and not holds_own_name(entry, [name] + former):
+            # G07, X29, R40: an entry that holds neither this record's CLIENT.md name nor one of its former names is
+            # another client's; never replaced
+            raise index_problem(INDEX_FIELDS[4], "the entry under this record's slug belongs to another client "
+                                "(it holds neither this record's CLIENT.md name nor any of its former names), and an "
+                                "entry is never replaced by another client's", "one slug per client: give this record "
+                                "another slug, or, if this client was renamed, keep its old name with record.py "
+                                "client rename or in CLIENT.md's former_names, then run index again")
+        if entry is None or any(entry[field] != lists[field] for field in LIST_FIELDS) or \
+                entry_is_older(entry, newest):
+            moment = max(begun, datetime.fromtimestamp(newest, timezone.utc))
+            entry = dict([(INDEX_FIELDS[5], mc.stamp("utc", moment))] +
+                         [(field, lists[field]) for field in LIST_FIELDS])
+        entries[key] = entry
+        text = index_text(entries)
+        written = text != old
+        if written:
+            mc.write_file(path, text, run.home, backup_dir=run.home / "local" / "backup")
+    run.extra["written"] = written
+    return 0
+
+
+def cmd_terms(run):
+    """X31: every file under a folder, against every entry's digests, every folder's slug and the firm rule."""
+    folder = Path(run.args.folder)
+    if not folder.is_dir():
+        raise cannot(run.args.folder.replace("\\", "/"), "folder", "not a folder", "a folder to check, such as the "
+                     "plugin's shared/")
+    run.root, run.home, run.record = folder.resolve(), mc.home(), False
+    load_lists(run)
+    wall_hits(run, None)
+    run.extra.update(entries_compared=run.wall.entries, slugs_compared=run.wall.folders)
+
+    def failed(exc):
+        raise cannot(exc.filename or run.args.folder, WHOLE, "cannot list the folder: %s" % exc, "a readable folder")
+
+    def outside(path, folder):  # R38: a release bundle follows links, so one that leaves the folder is a stop
+        raise cannot(Path(os.path.relpath(path, str(run.root))).as_posix(), WHOLE, "a linked %s resolves outside "
+                     "the folder checked" % ("folder" if folder else "file"), "files inside the folder only; copy "
+                     "them in or remove the link, then run this again")
+
+    found = walk_files(run.root, run.root, failed, outside, lambda parts: parts[-1:] in TERMS_SKIP_PARTS)
+    for seq, rel in enumerate(sorted(found)):
+        path = found[rel]
+        ext = os.path.splitext(rel)[1].lower()
+        if ext == ".docx":
+            for index, (part, lines, labels) in enumerate(docx_text(run, path, rel)):
+                check_unit(run, Unit(rel, "\n".join(lines), (seq, index), part=part, mode="terms", labels=labels))
+            continue
+        data = run.read(path, rel)
+        if ext not in TERMS_EXT and data:  # Z14: an empty file holds nothing to prove, whatever its name
+            raise cannot(rel, WHOLE, "the lint cannot read this kind of file", "a text file (%s) or a .docx; move "
+                         "this one out of the folder" % ", ".join(TERMS_EXT))
+        text, raw = decode(data, rel)
+        check_unit(run, Unit(rel, text, (seq, 0), mode="terms", raw=raw))
+    return outcome(run)
+
+
+COMMANDS = {"scan": cmd_scan, "payload": cmd_payload, "blueprint": cmd_blueprint, "wall": cmd_wall,
+            "terms": cmd_terms, "index": cmd_index}
 EXIT_VERDICT = {0: VERDICTS[0], 1: VERDICTS[2], 2: VERDICTS[1], 3: VERDICTS[3]}
 
 
@@ -2734,6 +4736,7 @@ def envelope(run, code):
     data["inputs"] = [run.inputs[name] for name in sorted(run.inputs)]
     if run.command == "payload":
         data["args_digest"] = run.args_digest
+    data.update(run.extra)
     findings = sorted(run.findings, key=lambda f: f["_order"])
     data["findings"] = [{k: v for k, v in f.items() if not k.startswith("_")} for f in findings]
     data["counts"] = {severity: sum(1 for f in findings if f["severity"] == severity) for severity in SEVERITIES}
@@ -2774,15 +4777,16 @@ def build_parser():
     return parser
 
 
-def main(argv=None):
+def run_command(argv=None):
+    """(exit code, the envelope) of one command, printing nothing: main() prints it, and record.py calls it in
+    process for `index` after its own writes, so its output stays one envelope (R48)."""
     parser = build_parser()
     try:
         args = parser.parse_args(argv)
     except Usage as exc:
-        emit({"ok": False, "command": None, "verdict": VERDICTS[3], "inputs": [], "findings": [],
-              "counts": {severity: 0 for severity in SEVERITIES},
-              "error": dict(zip(KEYS, ("leak_lint.py", "arguments", str(exc), parser.format_usage().strip())))})
-        return 3
+        return 3, {"ok": False, "command": None, "verdict": VERDICTS[3], "inputs": [], "findings": [],
+                   "counts": {severity: 0 for severity in SEVERITIES},
+                   "error": dict(zip(KEYS, ("leak_lint.py", "arguments", str(exc), parser.format_usage().strip())))}
     run = Run(args.command, args)
     try:
         handler = COMMANDS[args.command]
@@ -2793,7 +4797,12 @@ def main(argv=None):
         run.error, code = full_error({"file": "leak_lint.py", "field": type(exc).__name__, "problem": str(exc) or
                                       "an internal error with no message", "expected": "a run without an internal "
                                       "error"}), 3
-    emit(envelope(run, code))
+    return code, envelope(run, code)
+
+
+def main(argv=None):
+    code, data = run_command(argv)
+    emit(data)
     return code
 
 

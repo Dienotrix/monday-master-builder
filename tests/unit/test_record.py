@@ -39,13 +39,23 @@ def is_stdlib(name):
     return spec is not None and "site-packages" not in str(spec.origin)
 
 
+def add_lint(plugin):
+    """R48: leak_lint.py beside record.py and the shipped list it reads, so that record.py's index after a write
+    runs in a plugin copy as it does in the plugin. One helper for every test file that builds a plugin root."""
+    shutil.copy(SCRIPTS / "leak_lint.py", plugin / "scripts" / "leak_lint.py")
+    (plugin / "shared").mkdir(exist_ok=True)
+    shutil.copy(SCRIPTS.parent / "shared" / "leak-terms.txt", plugin / "shared" / "leak-terms.txt")
+    return plugin
+
+
 def make_plugin(target):
-    """A plugin root as G31 has the tests build it: the stand-in templates and plugin.json, and scripts/."""
+    """A plugin root as G31 has the tests build it: the stand-in templates and plugin.json, scripts/ and the
+    shipped leak list (R48)."""
     plugin = Path(shutil.copytree(FIXTURES / "plugin", target))
     (plugin / "scripts").mkdir()
     for name in ("mmb_common.py", "record.py"):
         shutil.copy(SCRIPTS / name, plugin / "scripts" / name)
-    return plugin
+    return add_lint(plugin)
 
 
 def summary_draft(built="Nothing yet: the strand has no released version.", extra=0):
@@ -200,7 +210,7 @@ class FrameTest(Base):
                      "lease sync", "lease repair",
                      "strand open", "strand list", "strand pause", "strand kind", "strand close", "strand summary",
                      "strand resume", "version open", "version mark", "version condense-plan", "version condense-apply",
-                     "version release"}
+                     "version release", "client rename"}
         self.assertEqual(set(self.rec.COMMANDS), catalogue)
         self.assertTrue(all(callable(command) for command in self.rec.COMMANDS.values()))  # part 2 built
         for argv in (("migrate",), ("tools-check",), ("log", "--strand", "001"), ("strand",), ("status", "--bogus"), (),

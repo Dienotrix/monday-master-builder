@@ -133,9 +133,59 @@ def read_text(path, name=None):
     except (OSError, UnicodeDecodeError) as exc:
         raise CannotRun((name or path.name, WHOLE_FILE, "cannot read the file: %s" % exc, "a readable UTF-8 file"))
 
-def read_json(path, name=None):
+
+class RepeatedKey(Exception):
+    """A key written twice in one JSON object (WP4's R54, R55); `args` holds its path (X22's form) and the key."""
+
+
+class _Pairs(list):
+    """One JSON object's pairs as written, kept so the repeated key can be found and named."""
+
+
+def _unique_pairs(items):
+    found = dict(items)
+    if len(found) < len(items):
+        raise RepeatedKey()
+    return found
+
+SIMPLE_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+def key_path(path, key):
+    """X22: a key's path below `path`, `.key` for a plain name and `["key"]` for any other."""
+    return path + ("." + key if SIMPLE_KEY.fullmatch(key) else "[%s]" % json.dumps(key, ensure_ascii=False))
+
+def strict_json(text, base="$"):
+    """The one strict JSON reader (WP4's R54, R55): json.loads with a key written twice in one object refused, since
+    another reader may keep the other value. ValueError when the text is not JSON at all; RepeatedKey(path, key) of
+    the first repeated key in walk order when it is. The second, slower parse runs only when a key is repeated."""
     try:
-        return json.loads(read_text(path, name))
+        return json.loads(text, object_pairs_hook=_unique_pairs)
+    except RepeatedKey:
+        pass
+    stack = [(base, json.loads(text, object_pairs_hook=_Pairs))]  # text after the value is still not JSON
+    while stack:
+        path, value = stack.pop()
+        if isinstance(value, _Pairs):
+            seen, pushed = set(), []
+            for key, sub in value:
+                sub_path = key_path(path, key)
+                if key in seen:
+                    raise RepeatedKey(sub_path + "<key>", key)
+                seen.add(key)
+                pushed.append((sub_path, sub))
+            stack.extend(reversed(pushed))
+        elif isinstance(value, list):
+            stack.extend(reversed([("%s[%d]" % (path, i), item) for i, item in enumerate(value)]))
+    raise RepeatedKey(base, "")
+
+def read_json(path, name=None):
+    """A JSON file read strictly (R55): not JSON, or a key written twice in one object, is exit 3 naming the file."""
+    try:
+        return strict_json(read_text(path, name))
+    except RepeatedKey as exc:
+        raise CannotRun((name or path.name, exc.args[0], "the key %s is written twice in one object, so what the file "
+                         "says depends on the program that reads it" % json.dumps(exc.args[1], ensure_ascii=False),
+                         "each key written once in its object: keep the copy meant and remove the other"))
     except ValueError as exc:
         raise CannotRun((name or path.name, WHOLE_FILE, "not valid JSON: %s" % exc, "a JSON object"))
 
@@ -156,6 +206,20 @@ def sha256_text(text):
     while lines and not lines[-1].strip():
         lines.pop()
     return hashlib.sha256("".join(line + "\n" for line in lines).encode("utf-8")).hexdigest()
+
+def digest(prefix, form):
+    """The clients-index digest (WP4's X02, X28): sha256 of the prefixed normal form as UTF-8, cut to its first
+    128 bits (32 hex characters). leak_lint.py hashes every index key and list value with it."""
+    return hashlib.sha256((prefix + form).encode("utf-8")).hexdigest()[:32]
+
+def slug_key(slug):
+    """A client's key in <home>/clients-index.json: the one form leak_lint.py writes and record.py init checks (R39)."""
+    return digest("s:", slug)
+
+def former_names(value):
+    """A client's earlier names from CLIENT.md's `former_names` (WP4's R40): one-line names joined by `; `, an absent
+    or empty value meaning none. record.py writes the field and leak_lint.py reads it, both through this."""
+    return [part.strip() for part in (value or "").split(";") if part.strip()]
 
 def backup_file(path, root, backup_dir=None):
     """Copy the old bytes to <backup_dir or root/.work/backup>/<path from root>.<UTC stamp>, `-2` on a clash."""

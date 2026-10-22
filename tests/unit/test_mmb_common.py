@@ -6,7 +6,7 @@ fixture's reference time; tearDown asserts the canary and the real default home 
 The Windows side is simulated with PureWindowsPath, CRLF copies and a patched Path.home(); tests whose
 docstring says "Windows run" must be repeated on a real Windows machine (C04).
 """
-import ast, contextlib, importlib.util, json, os, random, re, shutil, subprocess, sys, tempfile  # noqa: E401
+import ast, contextlib, hashlib, importlib.util, json, os, random, re, shutil, subprocess, sys, tempfile  # noqa: E401
 import errno, threading, time, unittest  # noqa: E401
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -340,6 +340,44 @@ class TextTest(Base):
         entries = re.split(r"(?m)^(?=## \d{4}-)", log)[1:]
         self.assertEqual([mc.sha256_text(e) for e in entries], self.json(".work/history.json")["entries"])
         self.assertEqual(mc.sha256_text(entries[0].replace("\n", "\r\n") + "\n\n"), mc.sha256_text(entries[0]))
+
+    def test_R39_one_slug_key_for_the_index_and_init(self):
+        """The index key leak_lint.py writes and record.py init checks has one implementation, here."""
+        self.assertEqual(mc.slug_key("brindle-tiles"), hashlib.sha256(b"s:brindle-tiles").hexdigest()[:32])
+        self.assertEqual(mc.digest("n:", "østby freight"),
+                         hashlib.sha256("n:østby freight".encode("utf-8")).hexdigest()[:32])
+        lint = (SCRIPTS / "leak_lint.py").read_text(encoding="utf-8")
+        self.assertIn("\ndigest = mc.digest", lint)
+        self.assertNotIn("def digest(", lint)
+        self.assertNotIn('digest("s:"', lint)
+        self.assertIn("mc.slug_key(", (SCRIPTS / "record.py").read_text(encoding="utf-8"))
+
+    def test_R55_R54_a_key_written_twice_in_one_object_is_exit_3_naming_its_path(self):
+        """The one strict JSON reader, which read_json and leak_lint.py share: a repeat at the top or nested stops."""
+        path = self.tmp / "repeated.json"
+        for text, field, key in (('{"schema": "settings/1", "archive": "github", "archive": "local"}', "$.archive<key>",
+                                  "archive"),
+                                 ('{"firm": {"name": "Fernhollow Supply", "name": "Østby Freight"}}',
+                                  "$.firm.name<key>", "name"),
+                                 ('{"runs": [{"id": "run-1"}, {"id": "run-2", "id": "run-3"}]}', "$.runs[1].id<key>",
+                                  "id"),
+                                 ('{"entries": {"0f": 1, "0f": 2}}', '$.entries["0f"]<key>', "0f")):
+            with self.assertRaises(mc.RepeatedKey) as caught:
+                mc.strict_json(text)
+            self.assertEqual(caught.exception.args, (field, key), text)
+            path.write_text(text, encoding="utf-8")
+            with self.assertRaises(mc.CannotRun) as caught:
+                mc.read_json(path, "named.json")
+            finding = caught.exception.findings[0]
+            self.assertEqual((caught.exception.code, finding["file"], finding["field"]), (3, "named.json", field))
+            self.assertIn('the key "%s" is written twice in one object' % key, finding["problem"])
+            self.assertIn("each key written once", finding["expected"])
+        clean = '{"name": "Blue Harbour", "firm": {"name": "Tallowmere", "renderings": [{"name": "x"}, {"name": "y"}]}}'
+        path.write_text(clean, encoding="utf-8")
+        self.assertEqual(mc.read_json(path), json.loads(clean))  # the same key at two depths and in two objects
+        lint = (SCRIPTS / "leak_lint.py").read_text(encoding="utf-8")
+        self.assertNotIn("def strict_json(", lint)
+        self.assertIn("mc.strict_json", lint)
 
     def test_G40_time_formats(self):
         local = CLOCK.astimezone()

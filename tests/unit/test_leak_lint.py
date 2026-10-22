@@ -306,7 +306,8 @@ class RuntimeTest(Base):
                                    str(self.root)] + form, env=env, cwd=str(self.tmp), capture_output=True)
             json.loads(done.stdout.decode("utf-8"))
             codes.append(done.returncode)
-        self.assertEqual(codes, [0, 0, 0, 3, 3, 3, 3, 3])
+        # blueprint: the strand has no blueprint; terms: the record has no index entry yet, so X30 stops it
+        self.assertEqual(codes, [0, 0, 0, 3, 0, 3, 0, 3])
         self.assertEqual(sorted(p.relative_to(plugin).as_posix() for p in plugin.rglob("*")), listing)
 
 
@@ -325,11 +326,12 @@ class FrameTest(Base):
         names = set(parser._subparsers._group_actions[0].choices)
         self.assertEqual(names, {"scan", "payload", "blueprint", "wall", "terms", "index"})
 
-    def test_X08_commands_part_2_builds_are_exit_3_not_built_yet(self):
-        for argv in (["blueprint", "--strand", "001"], ["wall", "--text", "Orders"], ["terms", "x"], ["index"]):
+    def test_X08_the_part_2_commands_are_built_and_none_answers_not_built_yet(self):
+        for argv, expected in ((["blueprint", "--strand", "001"], 3), (["wall", "--text", "Orders"], 0),
+                               (["terms", "x"], 3), (["index"], 0)):
             code, data = self.lint(*argv)
-            self.assertEqual((code, data["ok"]), (3, False))
-            self.assertIn("not built yet", data["error"]["problem"])
+            self.assertEqual(code, expected, argv)
+            self.assertNotIn("not built", json.dumps(data))
 
     def test_L22_no_client_md_is_exit_3_naming_it(self):
         (self.root / "CLIENT.md").unlink()
@@ -430,9 +432,11 @@ class ListsTest(Base):
         return mock.patch.object(lint, "PLUGIN", plugin)
 
     def test_L33_literal_boundaries(self):
-        self.assertBlocks("Take the exit ramp now.", "term", "method")
-        self.assertBlocks("The exit ramp.", "term", "method")
-        self.assertClean("The boexit rampx sign.")
+        self.assertBlocks("Take the exit-ramp now.", "term", "method")
+        self.assertBlocks("The exit-ramp.", "term", "method")
+        self.assertClean("The boexit-rampx sign.")
+        # R61 (R13 (b)): the spaced form is an everyday phrase and blocks only hyphenated.
+        self.assertClean("Take the exit ramp now.")
 
     def test_L34_L35_classes_and_re_rows(self):
         data = self.assertBlocks("Open p3 today; see P12.", "term", "pain-ids")
@@ -589,7 +593,7 @@ class TermTest(Base):
         self.assertClean("Built on monday for the office.")
 
     def test_L57_method_terms_and_grades(self):
-        for text in ("Show the cost of waiting.", "This is a fit risk.", "R4 Met after the visit.",
+        for text in ("Show the cost-of-waiting.", "This is a fit risk.", "R4 Met after the visit.",
                      "Met for R4 now."):
             self.assertBlocks(text, "term", "method")
         self.assertClean("The bakers met at noon.")
@@ -875,23 +879,20 @@ class ParaphraseTest(Base):
             self.assertClean(text)
 
 
-# 2.8 The two structural assertions
+# 2.8 The structural assertion (the tool-category assertion is dropped, A30, R64)
 
 class AssertionTest(Base):
 
-    def test_L107_to_L111_tool_categories(self):
-        three = "The office keeps orders in a spreadsheet, wages in a payroll system and photos in a shared drive."
-        data = self.assertBlocks(three, "tool-categories")
-        self.assertEqual(self.found(data, "tool-categories")[0]["match"], "spreadsheet")
-        self.assertClean("The office keeps orders in a spreadsheet and wages in a payroll system.")
-        self.assertClean("Orders sit in a spreadsheet. Wages sit in a payroll system. Photos sit in a shared drive.")
-        self.assertClean("The office keeps orders for Brindlecombe in a spreadsheet, wages in a payroll system and "
-                         "photos in a shared drive.")
-        self.assertClean("Orders sit in a spreadsheet.")
+    def test_L104_R64_the_split_figure_assertion_runs_in_payloads_too(self):
+        code, data = self.payload({"markdown": "The proofer comes to 52 000 in all."})
+        self.assertEqual(code, 1, data["findings"])
+        self.assertTrue(self.found(data, "split-figure", severity="block"), data["findings"])
 
-    def test_L104_assertions_run_in_payloads_too(self):
-        code, data = self.payload({"markdown": "Orders in a spreadsheet, wages in a payroll system, files in a wiki."})
-        self.assertTrue(self.found(data, "tool-categories"))
+    def test_L107_R64_three_tool_categories_in_one_sentence_are_no_finding(self):
+        # A30: the lint runs no tool-category check; the planted sentence of L107 is clean, and no rule is named for it.
+        self.assertClean("The office keeps orders in a spreadsheet, wages in a payroll system and photos in a shared "
+                         "drive.")
+        self.assertNotIn("tool-categories", lint.RULES)
 
 
 # 2.9 The allowlist, the warnings and the two non-removals
@@ -1184,17 +1185,22 @@ class FailClosedTest(Base):
         self.assertEqual((code, data["verdict"]), (3, "could-not-run"))
         self.assertTrue(self.found(data, "term", "local"))
 
-    def test_X01_part_1_has_no_wall_so_another_record_or_an_index_stops_the_check(self):
+    def test_X30_another_record_without_an_index_entry_stops_the_check(self):
+        """Z02's interim stop is replaced by X30's coverage check; test_leak_wall.py proves the wall itself."""
         write(self.home / "clients" / "other-client" / "CLIENT.md", "---\nslug: \"other-client\"\n---\n")
         code, data = self.scan("Orders.")
-        self.assertEqual((code, data["error"]["field"]), (3, "wall"))
+        self.assertEqual((code, data["error"]["field"]), (3, "entries"))
+        self.assertNotIn("other-client", json.dumps(data))
         self.assertEqual(self.payload({"name": "Orders"})[0], 3)
         rel = "%s/SUMMARY.md" % S1
         write(self.root.joinpath(*rel.split("/")), "Orders.\n")
         self.assertEqual(self.lint("scan", rel)[0], 0)
         shutil.rmtree(str(self.home / "clients" / "other-client"))
         write(self.home / "clients-index.json", '{"schema": "clients-index/1", "entries": {}}')
-        self.assertEqual(self.scan("Orders.")[0], 3)
+        self.assertEqual(self.scan("Orders.")[0], 3)  # an index that is not clients-index/1 in full
+        write(self.home / "clients-index.json", '{"schema": "clients-index/1", "hash": "sha256-128", '
+                                                '"normalisation": "wall/1", "entries": {}}')
+        self.assertEqual(self.scan("Orders.")[0], 0)
         (self.home / "clients-index.json").unlink()
         write(self.home / "archive" / "closed-client" / "CLIENT.md", "---\n---\n")
         self.assertEqual(self.scan("Orders.")[0], 3)
@@ -1224,6 +1230,431 @@ class RedactionTest(Base):
         self.assertEqual(self.scan(text)[1]["findings"], first)
 
 
+# 2.17 The review's blocking findings, part 1 (leak-review.md F01 to F11; DECISIONS R entries)
+
+class ReviewBlockingTest(Base):
+
+    def docx(self, parts, name="pack.docx"):
+        rel = "%s/drafts/%s" % (S1, name)
+        path = self.root.joinpath(*rel.split("/"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(docx_bytes(parts))
+        return rel
+
+    def test_F01_X25_a_figure_after_a_sign_a_dash_a_slash_or_a_quote_is_a_number(self):
+        for text in ("The spend sits at 150k-184k for the year.", "Spend was 150,000–184,260 last year.",
+                     "The waste cost is -184,260 on the ledger.", "The waste cost is −184,260.",
+                     "The cost was '184k' last year.", "The cost was USD184,260 last year.", "Cost: EUR184k.",
+                     "A c.184k overrun in waste costs.", "Waste cost per year/184,260.",
+                     "A 184-thousand-dollar waste cost."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "figure")
+        self.assertBlocks("Fee band 40k-47k.\n", "exclusion", "figure")
+        for data in ({"name": "Orders", "loss": -184260}, {"column_values": json.dumps({"numbers": "-184,260"})}):
+            code, out = self.payload(data)
+            self.assertEqual(code, 1, out["findings"])
+            self.assertTrue(self.found(out, "figure", severity="block"), out["findings"])
+        self.assertClean("The trial ran 2026-09-01 to 2026-09-30 on v1.2.3, pages 4-6.\n")
+
+    def test_F02_Y08_a_monday_id_as_a_json_number_outside_a_structural_key_blocks(self):
+        for data in ({"name": "Orders", "notes_ref": 73100482}, {"name": "Orders", "refs": [73100482]},
+                     {"name": "Orders", "board_id": 73100482.0}, {"name": "Orders", "board_id": -73100482}):
+            with self.subTest(data=data):
+                code, out = self.payload(data)
+                self.assertEqual(code, 1, out["findings"])
+                self.assertTrue(self.found(out, "term", "id-patterns", "block"), out["findings"])
+        code, out = self.payload({"name": "Orders", "board_id": 73100482, "item_ids": [73100483]})
+        self.assertEqual((code, out["findings"]), (0, []))
+
+    def test_F03_X11_G57_a_snapshot_is_read_by_its_schema_quoted_or_not_and_a_newer_one_stops(self):
+        snapshot = ('---\nschema: %s\nsource: "2026-09-20-proving"\n---\n# Snapshot\n\n'
+                    "Analyst read: the proving room lead is overloaded and quietly resents the new owner.\n")
+        draft = "Analyst read: the proving room lead is overloaded and quietly resents things.\n"
+        rel = "inputs/2026-09-20-proving.md"
+        for schema in ('"document-summary/1"', "document-summary/1", "'document-summary/1'"):
+            with self.subTest(schema=schema):
+                write(self.root.joinpath(*rel.split("/")), snapshot % schema)
+                self.assertBlocks(draft, "copied-run")
+        for schema in ('"document-summary/2"', "document-summary/3", '"call-summary/1"'):
+            with self.subTest(schema=schema):
+                write(self.root.joinpath(*rel.split("/")), snapshot % schema)
+                code, out = self.scan(draft)
+                self.assertEqual((code, out["error"]["file"], out["error"]["field"]), (3, rel, "schema"))
+        write(self.root.joinpath(*rel.split("/")), "---\ntitle: notes\n---\n" + snapshot.split("---\n", 2)[2])
+        self.assertBlocks(draft, "copied-run")  # front matter the lint cannot place never feeds the exemption
+
+    def test_F04_X09_X33_an_exclusions_row_that_does_not_parse_is_exit_3(self):
+        rel = "%s/solution/exclusions.md" % S1
+        bodies = ("## Exclusions\n* Odell Quarry\n", "## Exclusions\n-Odell Quarry\n",
+                  "## Exclusions\n1. Odell Quarry\n",
+                  "### Exclusions\n- Odell Quarry\n", "## Exclusions (client asked)\n- Odell Quarry\n",
+                  "## Exclusions\n- Odell Quarry [kind: name; note: from the call]\n",
+                  "## Exclusions\n- 77,250 [knd: figure]\n",
+                  "## Exclusions\nThe client asked us to leave out Odell Quarry.\n")
+        for text in bodies:
+            with self.subTest(text=text):
+                write(self.root.joinpath(*rel.split("/")), "# Exclusions\n\n" + text)
+                code, out = self.scan("Order from Odell Quarry this week.\n")
+                self.assertEqual((code, out["error"]["file"]), (3, rel), out.get("error"))
+                self.assertTrue(out["error"]["field"].startswith("line "), out["error"])
+        write(self.root.joinpath(*rel.split("/")), "# Exclusions\n\n## Exclusions\n<!-- rows below -->\n\n"
+                                                    "- Odell Quarry [kind: name; added: 2026-09-11]\n")
+        self.assertBlocks("Order from Odell Quarry this week.\n", "exclusion")
+        write(self.root / S1 / "solution" / "allowlist.md", "# Allowlist\n\nRows the user said yes to.\n\n"
+                                                             "## Allowlist\n"
+                                                             "* stray bullet\n- callback [ok: yes]\n")
+        self.assertEqual(self.scan("Orders for the office.\n")[0], 0)
+
+    def test_F05_X24_X28_html_entities_and_tags_never_break_a_match(self):
+        for body_text, rule in (("<p>Order from Brackwater&nbsp;Mills this week.</p>", "exclusion"),
+                                ("<p>Order from <b>Brackwater</b> Mills this week.</p>", "exclusion"),
+                                ("<p>Set up by Quell&#109;oor.</p>", "term"),
+                                ("<p>Waste cost 184,<br>260 a year.</p>", "split-figure"),
+                                ("<p>Waste cost $184&#44;260 a year.</p>", "figure"),
+                                ("<p>The proofing <b>cabinet</b> overheats during the <i>long</i> summer "
+                                 "afternoons.</p>", "copied-run"),
+                                ("The proofing cabinet<br>overheats during the long<br>summer afternoons.",
+                                 "copied-run")):
+            with self.subTest(body=body_text):
+                code, out = self.payload({"body": body_text}, "doc")
+                self.assertEqual(code, 1, out["findings"])
+                self.assertTrue(self.found(out, rule, severity="block"), out["findings"])
+        code, out = self.payload({"body": "<p>The board lists every <b>order</b> &amp; its day.</p>"}, "doc")
+        self.assertEqual((code, out["findings"]), (0, []))
+        self.assertBlocks("Order from Brackwater&nbsp;Mills.\n", "exclusion")
+
+    def test_F06_X24_a_quote_line_with_a_quoted_word_inside_keeps_its_whole_quote(self):
+        write(self.root / "calls" / "2026-09-20-review.md", '---\nschema: "call-summary/1"\n---\n# Call\n\n'
+              '<!-- client-safe:start -->\n[Q] Ysolde Marr: we lose the "rye" tickets on the bench almost every week\n'
+              '<!-- client-safe:end -->\n')
+        self.assertBlocks("We lose the rye tickets on the bench almost every week.\n", "quote")
+        self.assertClean("We lose the rye tickets on Mondays.\n")
+
+    def test_F07_X03_a_marker_written_straight_onto_a_word_blocks(self):
+        for text in ("The planner is overloaded[I].", "[Q]Ysolde said the tickets go missing.", "See the note[E]s."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "term", "markers")
+        self.assertClean("See note E and part Q for the order list.\n")
+
+    def test_F08_X35_docx_text_word_shows_is_read_and_parts_it_cannot_read_are_exit_3(self):
+        ok = body(["Order pack"])
+        rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship '
+                'Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" '
+                'Target="file:///Users/x/clients/%s/calls/2026-09-10-discovery.md" TargetMode="External"/>'
+                '</Relationships>' % SLUG)
+        blocked = (
+            {"word/document.xml": ok, "word/comments.xml": '<w:comments %s><w:comment w:id="0" w:author="Quellmoor '
+             'Advisory" w:initials="QA"><w:p><w:r><w:t>Fine.</w:t></w:r></w:p></w:comment></w:comments>' % W},
+            {"word/document.xml": body().replace("<w:body></w:body>", '<w:body><w:p><w:ins w:id="1" w:author='
+                                                   '"Quellmoor Advisory"><w:r><w:t>Orders.</w:t></w:r></w:ins></w:p>'
+                                                   '</w:body>')},
+            {"word/document.xml": ok, "word/_rels/document.xml.rels": rels},
+            {"word/document.xml": body().replace("<w:body></w:body>", '<w:body><w:p><w:fldSimple w:instr="HYPERLINK '
+                                                   '&quot;https://quellmoor.example/x&quot;"><w:r><w:t>site</w:t></w:r>'
+                                                   '</w:fldSimple></w:p></w:body>')},
+            {"word/document.xml": body().replace("<w:body></w:body>", '<w:body><w:p><w:r><w:drawing><wp:inline '
+                                                   'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/'
+                                                   'wordprocessingDrawing"><wp:docPr id="1" name="Picture 1" descr='
+                                                   '"Logo of Quellmoor Advisory"/></wp:inline></w:drawing></w:r></w:p>'
+                                                   '</w:body>')})
+        for parts in blocked:
+            with self.subTest(parts=sorted(parts)):
+                code, out = self.lint("scan", self.docx(parts))
+                self.assertEqual(code, 1, out["findings"])
+        for parts in ({"word/document.xml": body().replace("<w:body></w:body>", '<w:body><w:altChunk r:id="rId5" '
+                                                             'xmlns:r="urn:r"/></w:body>'), "word/afchunk.docx": "x"},
+                      {"word/document.xml": ok, "word/afchunk.htm": "<p>Quellmoor</p>"},
+                      {"word/document.xml": ok, "word/embeddings/Sheet1.xlsx": "x"}):
+            with self.subTest(parts=sorted(parts)):
+                self.assertEqual(self.lint("scan", self.docx(parts))[0], 3)
+        twin = {"word/document.xml": ok, "word/comments.xml": '<w:comments %s><w:comment w:id="0" w:author="The '
+                'office"><w:p><w:r><w:t>Fine.</w:t></w:r></w:p></w:comment></w:comments>' % W}
+        self.assertEqual(self.lint("scan", self.docx(twin))[0], 0)
+
+    def test_R08_another_file_inside_stops_in_plain_words_and_a_picture_passes(self):
+        ok = body().replace("<w:body></w:body>", "<w:body><w:p><w:r><w:t>Orders.</w:t></w:r></w:p></w:body>")
+        picture = body().replace("<w:body></w:body>", '<w:body><w:p><w:r><w:drawing><wp:inline xmlns:wp="http://'
+                                 'schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:docPr id="1" '
+                                 'name="Picture 1" descr="A delivery van"/></wp:inline></w:drawing></w:r></w:p>'
+                                 '</w:body>')
+        rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship '
+                'Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+                'Target="media/image1.png"/></Relationships>')
+        for parts in ({"word/document.xml": picture, "word/_rels/document.xml.rels": rels,
+                       "word/media/image1.png": "\x89PNG", "word/media/image2.emf": "x"},
+                      {"word/document.xml": ok, "word/printerSettings/printerSettings1.bin": "x"}):
+            with self.subTest(parts=sorted(parts)):
+                code, out = self.lint("scan", self.docx(parts))
+                self.assertEqual(code, 0, out)
+        for parts in ({"word/document.xml": ok, "word/embeddings/oleObject1.bin": "x"},
+                      {"word/document.xml": ok, "word/embeddings/Report.docx": "x"},
+                      {"word/document.xml": body().replace("<w:body></w:body>", '<w:body><w:altChunk r:id="rId5" '
+                                                           'xmlns:r="urn:r"/></w:body>')}):
+            with self.subTest(parts=sorted(parts)):
+                code, out = self.lint("scan", self.docx(parts))
+                self.assertEqual(code, 3)
+                self.assertFalse(out["ok"])
+                self.assertEqual(out["error"]["problem"], "this document has another file inside it")
+                self.assertEqual(out["error"]["expected"],
+                                 "take that file out and add it as its own input, then run this again")
+
+    def test_F09_X35_a_folder_linked_into_drafts_is_walked_or_stops(self):
+        shared = self.root / S1 / "shared"
+        write(shared / "part.md", "Quellmoor set this up.\n")
+        (self.root / S1 / "drafts").mkdir(parents=True, exist_ok=True)
+        outside = self.tmp / "outside"
+        write(outside / "x.md", "Orders.\n")
+        try:
+            os.symlink(str(shared), str(self.root / S1 / "drafts" / "linked"))
+            os.symlink(str(outside), str(self.root / S1 / "drafts" / "away"))
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest("this system makes no symbolic links: %s" % exc)
+        code, out = self.lint("scan")
+        self.assertEqual(code, 3, out)
+        os.unlink(str(self.root / S1 / "drafts" / "away"))
+        code, out = self.lint("scan")
+        self.assertEqual(code, 1)
+        self.assertIn("%s/shared/part.md" % S1, [f["file"] for f in out["findings"]])
+
+    def test_F10_X15_Y04_credentials_just_outside_the_six_shapes(self):
+        for text in ("API key: 9f8e7d6c5b4a39281706f5e4d3c2b1a0", "The password is Tilework42 for the portal.",
+                     "pw: Tilework42", "passphrase = blue-otter-lamp", "Login: depot.admin / Tilework42",
+                     "Password:\nTilework42", "https://git.example/api?private_token=Ab12Cd34Ef56Gh78",
+                     "Authorization: Basic dXNlcjpwYXNz", "secret_key: Tilework42",
+                     "Key: 9F8E7D6C5B4A39281706F5E4D3C2B1A0"):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "credential")
+        for text in ("Login: use your work email.", "The password is reset every month.", "Basic training starts soon.",
+                     "The token is valid for a day.", "Credentials: stored in the office safe.",
+                     "See https://x.example/a?sort=created"):
+            with self.subTest(text=text):
+                code, out = self.scan(text + "\n")
+                self.assertFalse(self.found(out, "credential"), out["findings"])
+
+    def test_F11_X24_X28_an_excluded_or_seller_name_broken_by_any_mark_blocks(self):
+        for text, rule in (("We met Brackwater **Mills** today.", "exclusion"), ("We met Brackwater (Mills) today.",
+                                                                                 "exclusion"),
+                           ("We met Brackwater's Mills today.", "exclusion"), ("Kept in Margin Desk **Internal**.",
+                                                                               "seller-account"),
+                           ("Kept in Margin's Desk Internal.", "seller-account"), ("Brackwater: Mills.", "exclusion")):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", rule)
+        self.assertClean("Brackwater is a river, and old mills line it.\n", 0)
+
+
+# 2.18 The review's should-fix findings and the cheap notes, part 1 (leak-review.md F12 to F41)
+
+class ReviewShouldFixTest(Base):
+
+    def test_F12_X28_invisible_characters_look_alikes_and_line_separators(self):
+        for text, rule in (("We met Brackㅤwater Mills today.", "exclusion"), ("Written with clㅤaude code.", "term"),
+                           ("Built by master buılder.", "term"), ("Sent to Tarrօw Feeds.", "exclusion"),
+                           ("We met Brackwatᴇr Mills today.", "exclusion"), ("password：Tilework42", "credential"),
+                           ("pаssword: Tilework42", "credential"), ("Saved in calls＼2026-09-01.md", "term"),
+                           ("Waste cost 184 260 a year.", "split-figure")):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", rule)
+        self.assertClean("The ㅤboard lists orders.\n")
+
+    def test_F13_X24_X32_a_hyphenated_row_matches_its_words_spaced(self):
+        for text, rule in (("Check the run sheet for Friday.", "term"), ("Keep the if asked list short.", "term"),
+                           ("Copy the client safe block.", "term"), ("Internal build file: never client facing.",
+                                                                     "internal-note")):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", rule)
+        self.assertClean("Stand on the Q side of the hall.\n")
+
+    def test_F14_X24_a_near_copy_with_a_word_dropped_or_added_blocks(self):
+        write(self.root / "research" / "2026-09-03-night.md", "# Night\n\nThe night baker reweighs every batch of rye "
+                                                                "dough by hand before the ovens are lit at four.\n")
+        for text in ("The night baker reweighs batch of rye dough hand before the ovens lit at four.",
+                     "The night baker now reweighs every batch of the rye dough by hand before all the ovens are lit."):
+            with self.subTest(text=text):
+                data = self.assertBlocks(text + "\n", "copied-run")
+                self.assertTrue(any(f.get("near") for f in self.found(data, "copied-run")), data["findings"])
+        self.assertClean("The night baker checks the ovens before the shift.\n")
+
+    def test_F15_X24_X36_a_block_held_quote_with_one_word_changed_or_dropped_blocks(self):
+        for text in ("We never know which café has settled for last month.",
+                     "We never know which café paid for last month."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "quote")
+        self.assertClean("We never know which day the van comes.\n")
+
+    def test_F16_X03_record_paths_the_shipped_rows_now_cover(self):
+        for text in ("See research/2026-09-02-brief.md for more.", "See solution/exclusions.md.",
+                     "Saved under drafts/ for now.", "deliverables/handoff/close-out.md", "Logged in meetings.md.",
+                     "Listed in allowlist.md.", "%USERPROFILE%\\monday-builder\\local\\",
+                     "Under $HOME/monday-builder."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "term", "id-patterns")
+        self.assertClean("The solution/approach is simple and we go live/active soon.\n")
+
+    def test_F17_X32_a_th_spelling_heard_as_t_is_a_sound_alike(self):
+        settings = json.loads(json.dumps(SETTINGS))
+        settings["firm"] = {"name": "Thymbel", "renderings": []}
+        write(self.home / "local" / "settings.json", json.dumps(settings))
+        write(self.home / "local" / "leak-terms.txt", "class: firm\nwhitelist: thimble\n")
+        for text in ("Timbel set this up.", "Tymbol set this up.", "Timble set this up."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "phonetic")
+        self.assertClean("The thimble stays by the timber frame.\n")
+
+    def test_F18_X40_internal_notes_in_their_common_spellings(self):
+        for text in ("SPEAKER_00: we lose the tickets.", "Speaker A: we lose the tickets.",
+                     "Draft notes, not client-facing.",
+                     "For internal use only.", "Not for clients.",
+                     "---\ntitle: Discovery\nschema: call-summary/1\n---\nBody"):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "internal-note")
+        self.assertClean("The speaker at the front desk greets a customer.\n")
+
+    def test_F19_X09_an_allowlist_ok_that_says_no_clears_nothing(self):
+        allow = self.root / S1 / "solution" / "allowlist.md"
+        for ok in ("no", "pending", "not yet, ask the user", "TBC"):
+            with self.subTest(ok=ok):
+                write(allow, "# Allowlist\n\n## Allowlist\n- readiness [ok: %s]\n" % ok)
+                code, data = self.scan("The readiness check is done.\n")
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, "allowlist", severity="warn"), data["findings"])
+        write(allow, "# Allowlist\n\n## Allowlist\n- readiness [ok: yes, the bakery's word]\n")
+        self.assertEqual(self.scan("The readiness check is done.\n")[0], 2)
+
+    def test_F20_X09_X38_a_client_safe_mark_written_slightly_wrong_is_exit_3(self):
+        rel = "calls/2026-09-20-review.md"
+        for start, end in (("<!--client-safe:start-->", "<!--client-safe:end-->"),
+                           ("<!-- Client-safe:start -->", "<!-- Client-safe:end -->"),
+                           ("<!-- client‐safe:start -->", "<!-- client‐safe:end -->")):
+            with self.subTest(start=start):
+                write(self.root.joinpath(*rel.split("/")), "# Call\n\n%s\nWe heard Penwith is burnt out.\n%s\n" %
+                      (start, end))
+                code, data = self.lint("scan", rel)
+                self.assertEqual((code, data["error"]["file"]), (3, rel))
+                write(self.root.joinpath(*rel.split("/")), "# Call\n\n%s\nOrders.\n%s\n" % (start, end))
+                code, data = self.scan("Orders.\n")
+                self.assertTrue([f for f in data["findings"] if f["file"] == rel and f["severity"] == "warn"], data)
+        write(self.root.joinpath(*rel.split("/")), "# Call\n\n<!-- client-safe:start -->\nOrders.\n"
+                                                  "<!-- client-safe:end -->\n")
+        self.assertEqual(self.lint("scan", rel)[0], 0)
+
+    def test_F21_X33_X42_local_patterns_that_can_run_for_a_very_long_time_are_exit_3(self):
+        for row in ("re: (?:(?:a+))+b", "re: (a|aa)+b", "re: ((ab)*c)+", "re: (?:x|y+)*z"):
+            with self.subTest(row=row):
+                write(self.home / "local" / "leak-terms.txt", "class: codes\n%s\n" % row)
+                code, data = self.scan("a" * 34 + "\n")
+                self.assertEqual((code, data["error"]["field"]), (3, "line 2"))
+        for row in ("re: \\d{1,3}(?:,\\d{3})+", "re: (?:PO|INV)-\\d+", "re: (?:[a-z]{2}-)?\\d{4}"):
+            with self.subTest(row=row):
+                write(self.home / "local" / "leak-terms.txt", "class: codes\n%s\n" % row)
+                self.assertNotEqual(self.scan("Orders.\n")[0], 3)
+
+    def test_F22_X25_a_figure_split_at_its_thousands_comma(self):
+        for text in ("The waste cost was 184,\n260 last year.", "The waste cost was 184, 260 last year."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "split-figure")
+        code, data = self.scan("We need 4, 100 and 250 crates.\n")
+        self.assertFalse(self.found(data, severity="block"), data["findings"])
+
+    def test_F23_Z07_a_scan_with_nothing_to_check_is_exit_3(self):
+        shutil.rmtree(str(self.root / S1 / "drafts"), ignore_errors=True)
+        code, data = self.lint("scan")
+        self.assertEqual((code, data["error"]["field"]), (3, "path"))
+        (self.root / S1 / "drafts").mkdir(parents=True)
+        self.assertEqual(self.lint("scan")[0], 3)
+        write(self.root / S1 / "draft" / "a.md", "Quellmoor set this up.\n")
+        self.assertEqual(self.lint("scan")[0], 3)
+        self.draft("Orders.\n")
+        self.assertEqual(self.lint("scan")[0], 0)
+
+    def test_F24_X06_paraphrase_cues_in_ordinary_process_text_pass(self):
+        for text in ("The item owner signs off the quote before it moves to Done.",
+                     "The site manager is the approver for refunds over the limit.",
+                     "A long lead time is a risk for the install date.",
+                     "The owner wants English oak shelves and American walnut doors.",
+                     "The supervisor sets holiday cover in the rota each month.",
+                     "If a fitter is sick, the supervisor reassigns the job.",
+                     "The owner pays by Visa or bank transfer."):
+            with self.subTest(text=text):
+                code, data = self.scan(text + "\n")
+                self.assertFalse(self.found(data, "paraphrase"), data["findings"])
+        for text in ("We heard that Ysolde is burnt out.", "Her manager is burnt out after the move.",
+                     "Ysolde's manager quit last week.", "The approver, Penwith, is hostile to the change."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "paraphrase")
+
+    def test_F25_R64_a_full_stop_after_an_abbreviation_ends_no_sentence(self):
+        # R24 kept by R64 for every rule that reads sentences: the cost cue of a number and the paraphrase rule.
+        for text in ("The tray cost, e.g. 27 in all.", "The tray cost, i.e. 27 in all.", "The tray cost, approx. 27 "
+                     "in all.", "The tray cost vs. 27 in all.", "The tray cost, the oven etc. 27 in all."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "figure")
+        code, data = self.scan("The tray cost. 27 in all.\n")
+        self.assertEqual((code, [f["rule"] for f in data["findings"]]), (2, ["record-number"]))
+        self.assertBlocks("We heard that, e.g. Penwith is burnt out.\n", "paraphrase")
+        self.assertClean("We heard that. Penwith is burnt out.\n")
+
+    def test_F26_Y08_a_structural_id_inside_a_column_values_string_passes(self):
+        for values in ({"board_relation_1": {"item_ids": [73100483]}},
+                       {"person": {"personsAndTeams": [{"id": 73100484, "kind": "person"}]}}):
+            with self.subTest(values=values):
+                code, data = self.payload({"board_id": 73100482, "item_name": "Job A",
+                                           "column_values": json.dumps(values)}, "item_batch")
+                self.assertEqual((code, data["findings"]), (0, []))
+        for values in ({"text_1": "ref 73100485"}, {"numbers": 73100486}, {"item_ids": [91000023]}):
+            with self.subTest(values=values):
+                code, data = self.payload({"board_id": 73100482, "column_values": json.dumps(values)}, "item_batch")
+                self.assertEqual(code, 1, data["findings"])
+
+    def test_F27_Z03_Y02_long_numbers_that_are_not_ids(self):
+        for text in ("Depot at 51.50735095, -0.12775829.", "Report 20261017 attached.", "PO-20261017 ships Friday."):
+            with self.subTest(text=text):
+                code, data = self.scan(text + "\n")
+                self.assertFalse(self.found(data, severity="block"), data["findings"])
+        code, data = self.scan("Report 20261017 attached.\n")
+        self.assertTrue(self.found(data, "split-figure", severity="warn"), data["findings"])
+        for text in ("Board 73100482 holds orders.", "Ref 20261399 here.", "Ref 18991231 here."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "term", "id-patterns")
+        code, data = self.payload({"name": "Orders", "due": 20261017})
+        self.assertFalse(self.found(data, severity="block"), data["findings"])
+
+    def test_F29_X35_a_utf16_part_with_a_dtd_is_exit_3(self):
+        xml = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x [<!ENTITY a "b">]><w:document %s/>' % W
+        rel = "%s/drafts/u.docx" % S1
+        path = self.root.joinpath(*rel.split("/"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(docx_bytes({"word/document.xml": xml.encode("utf-16")}))
+        self.assertEqual(self.lint("scan", rel)[0], 3)
+
+    def test_F31_F32_X34_only_a_real_link_masks_an_id(self):
+        for text in ("See [the board](boards/73100482).", "See https://x.example/a,73100482 now.",
+                     "See https://x.example/a|73100482 now."):
+            with self.subTest(text=text):
+                self.assertBlocks(text + "\n", "term", "id-patterns")
+        self.assertClean("See [the board](https://x.example/boards/73100482).\n")
+
+    def test_F39_X04_settings_read_strictly(self):
+        for change in ({"never_show_workspaces": [{"id": "  ", "name": "Margin Desk Internal"}]},
+                       {"default_build_account": {"slug": "--", "id": "91000017"}}):
+            with self.subTest(change=change):
+                write(self.home / "local" / "settings.json", json.dumps(dict(SETTINGS, **change)))
+                self.assertEqual(self.scan("Orders.\n")[0], 3)
+        text = json.dumps(SETTINGS)
+        write(self.home / "local" / "settings.json", text[:-1] + ', "github_account": "other"}')
+        self.assertEqual(self.scan("Orders.\n")[0], 3)
+
+    def test_F40_X35_header_part_names_in_any_case(self):
+        rel = "%s/drafts/h.docx" % S1
+        path = self.root.joinpath(*rel.split("/"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(docx_bytes({"word/document.xml": body(["Orders"]),
+                                     "word/Header2.xml": body(["Quellmoor"]).replace("w:document", "w:hdr")}))
+        self.assertEqual(self.lint("scan", rel)[0], 1)
+
+    def test_F41_X03_a_double_percent_encoding_is_decoded(self):
+        self.assertBlocks("See https://files.example/x?f=calls%252F2026.md\n", "term", "id-patterns")
+
+
 # 2.19 Pins (DECISIONS 4.5, Y08)
 
 class PinTest(unittest.TestCase):
@@ -1247,15 +1678,18 @@ class PinTest(unittest.TestCase):
                                 isinstance(n.value, str)).split())
         self.assertEqual(copy, set(lint.STRUCTURAL_ID_KEYS))
 
-    def test_L274_L275_embedded_regions_and_the_counted_classes(self):
+    def test_L274_L275_embedded_regions_and_no_counted_class(self):
         text = (SCRIPTS / "leak_lint.py").read_text(encoding="utf-8")
         for region in ("leak", "common-words", "stop-words", "paraphrase-cues", "internal-vocabulary", "sales-framing",
-                       "cost-cues", "confusables", "credential-shapes", "internal-notes", "structural-id-keys"):
+                       "cost-cues", "confusables", "credential-shapes", "internal-notes", "structural-id-keys", "shared-words",
+                       "shared-phrases", "everyday-method-rows"):
             self.assertIn("# pinned: %s\n" % region, text)
-        self.assertEqual(text.count("# end pinned"), 11)
+        self.assertEqual(text.count("# end pinned"), 14)
         rows = lint.parse_list((PLUGIN / "shared" / "leak-terms.txt").read_text(encoding="utf-8"), "s", local=False)
-        counted = {r.cls for r in rows if r.cls.startswith(lint.COUNTED_PREFIX)}
-        self.assertEqual(len(counted), 15)
+        # A30 (R64): the tool-category classes are gone from the shipped list; a class left there would block as
+        # an ordinary term class, since the script no longer counts any class.
+        self.assertFalse([r.cls for r in rows if r.cls.startswith("tool-category")])
+        self.assertFalse(hasattr(lint, "COUNTED_PREFIX"))
         self.assertFalse(re.search(r"(?<![\d])\d{8,}(?![\d])", text))
 
 

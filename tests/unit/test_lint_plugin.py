@@ -1,7 +1,8 @@
 """Unit tests for tools/lint_plugin.py over two synthetic plugin trees.
 
 tests/unit/fixtures/tools/lint-clean/ passes every check; lint-bad/ carries one
-fault per check. Size faults are generated into a temporary copy. MMB_HOME is
+fault per check. Size faults are generated into a temporary copy. The shared-region
+check (WP4 R41) runs on the real tree and on temporary copies of it. MMB_HOME is
 always a temporary folder, so no test reads the user's real files.
 """
 import contextlib
@@ -58,7 +59,8 @@ class LintPluginTest(unittest.TestCase):
         self.assertEqual(self.clean_code, 0, self.clean)
         self.assertNotIn("error:", self.clean)
         self.assertNotIn("warning:", self.clean)
-        self.assertIn("0 error(s), 0 warning(s), 0 not present yet", self.clean)
+        # The stand-in leak_lint.py has no shared regions, so that check is the only one not present yet.
+        self.assertIn("0 error(s), 0 warning(s), 2 not present yet", self.clean)
 
     def test_bad_tree_fails(self):
         self.assertEqual(self.bad_code, 1)
@@ -162,7 +164,60 @@ class LintPluginTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("plugin folder not present yet", out)
         self.assertIn("shared/record-map.md: pinned-agreement: not present yet", out)
+        self.assertIn("shared/: shared-region: not present yet (shared-words unchecked)", out)
         self.assertNotIn("error:", out)
+
+    def copy_real(self, name):
+        dest = os.path.join(self.tmp, name)
+        shutil.copytree(os.path.join(REPO, PLUGIN), os.path.join(dest, PLUGIN),
+                        ignore=shutil.ignore_patterns("__pycache__", ".work"))
+        return dest
+
+    def test_R41_the_real_tree_has_its_shared_regions_equal_to_shared(self):
+        flag, common = sys.dont_write_bytecode, sys.modules.get("mmb_common")
+        code, out = run(["--root", REPO], self.home)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("shared-region", out)
+        # The script is loaded by path and the process is left as it was found.
+        self.assertEqual(sys.dont_write_bytecode, flag)
+        self.assertIs(sys.modules.get("mmb_common"), common)
+
+    def test_R41_a_word_shared_gained_that_the_region_lacks_is_an_error(self):
+        root = self.copy_real("shared-word")
+        with open(os.path.join(root, PLUGIN, "shared", "safety.md"), "a", encoding="utf-8") as handle:
+            handle.write("\nQuillanbrook\n")
+        code, out = run(["--root", root], self.home)
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/leak_lint.py:", out)
+        self.assertIn("shared-region: `shared-words` differs from shared/ as shipped: 1 word(s) missing, 0 extra; "
+                      "run `leak_lint.py terms` over the changed shared/, then regenerate the region with "
+                      "shared_vocabulary()", out)
+        self.assertNotIn("`shared-phrases` differs", out)
+        self.assertNotIn("quillanbrook", out.lower())
+        self.assertFalse(os.path.exists(os.path.join(root, PLUGIN, "scripts", "__pycache__")))
+
+    def test_R41_an_extra_phrase_in_the_region_is_an_error(self):
+        root = self.copy_real("shared-phrase")
+        script = os.path.join(root, PLUGIN, "scripts", "leak_lint.py")
+        with open(script, "r", encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("\nyyyymmdd hhmm,\n", text)
+        with open(script, "w", encoding="utf-8") as handle:
+            handle.write(text.replace("\nyyyymmdd hhmm,\n", "\nyyyymmdd hhmm, tallowmere depot,\n", 1))
+        code, out = run(["--root", root], self.home)
+        self.assertEqual(code, 1, out)
+        self.assertIn("shared-region: `shared-phrases` differs from shared/ as shipped: 0 phrase(s) missing, 1 extra; "
+                      "run `leak_lint.py terms` over the changed shared/, then regenerate the region with "
+                      "shared_phrases()", out)
+        self.assertNotIn("`shared-words` differs", out)
+        self.assertNotIn("tallowmere", out.lower())
+
+    def test_R41_a_script_without_the_regions_is_not_present_yet(self):
+        for ident in ("shared-words", "shared-phrases"):
+            self.assertIn("info: scripts/leak_lint.py: shared-region: not present yet (%s unchecked)" % ident,
+                          self.clean)
+        self.assertEqual(self.clean_code, 0)
+        self.assertNotIn("shared-region: `", self.clean + self.bad)
 
     def test_missing_root_exits_3(self):
         code, out = run(["--root", os.path.join(self.tmp, "nowhere")], self.home)

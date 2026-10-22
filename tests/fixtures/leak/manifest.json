@@ -135,7 +135,6 @@
       "monday-id-link",
       "exempt-blocks-and-glossary",
       "common-word-run",
-      "tool-categories-three-two",
       "firm-renderings-phonetic-whitelist",
       "flag-do-not-remove",
       "caution",
@@ -800,7 +799,7 @@
           "class": "method",
           "severity": "block",
           "where": "line 1",
-          "match": "cost of waiting"
+          "match": "cost-of-waiting"
         }
       ],
       "summary": "the seller's own day rate, which the record holds beside a cost word, and a method row"
@@ -3620,7 +3619,7 @@
           "class": "method",
           "severity": "block",
           "where": "line 1",
-          "match": "cost of waiting"
+          "match": "cost-of-waiting"
         },
         {
           "rule": "term",
@@ -6048,74 +6047,6 @@
       "outcome": "passes",
       "expect": [],
       "why_clean": "the case under test: a run copied from the call summary that is made of common words, which the run rule ignores (X19)"
-    },
-    {
-      "id": "R12-p",
-      "role": "planted",
-      "group": "rule",
-      "twin": "R12-t",
-      "record": "a",
-      "files": [
-        "cases/rule/R12-p.md"
-      ],
-      "overlay": null,
-      "install": [
-        {
-          "from": "cases/rule/R12-p.md",
-          "to": "strands/001-quote-tracker/drafts/R12-p.md"
-        }
-      ],
-      "command": "scan",
-      "args": [
-        "strands/001-quote-tracker/drafts/R12-p.md"
-      ],
-      "mode": "full",
-      "verdict": "blocked",
-      "exit": 1,
-      "outcome": "blocks",
-      "rules": [
-        "tool-categories"
-      ],
-      "covers": [
-        "rule:tool-categories-three-two"
-      ],
-      "expect": [
-        {
-          "rule": "tool-categories",
-          "class": null,
-          "severity": "block",
-          "where": "line 1",
-          "match": "spreadsheet"
-        }
-      ],
-      "summary": "a sentence naming three tool categories, in a paragraph with no proper noun"
-    },
-    {
-      "id": "R12-t",
-      "role": "twin",
-      "group": "rule",
-      "twin_of": "R12-p",
-      "record": "a",
-      "files": [
-        "cases/rule/R12-t.md"
-      ],
-      "overlay": null,
-      "install": [
-        {
-          "from": "cases/rule/R12-t.md",
-          "to": "strands/001-quote-tracker/drafts/R12-t.md"
-        }
-      ],
-      "command": "scan",
-      "args": [
-        "strands/001-quote-tracker/drafts/R12-t.md"
-      ],
-      "mode": "full",
-      "verdict": "clean",
-      "exit": 0,
-      "outcome": "passes",
-      "expect": [],
-      "why_clean": "two tool categories, which pass (the category rows are counted, never blocked)"
     },
     {
       "id": "R13a-p",

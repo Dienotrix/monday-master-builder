@@ -22,6 +22,7 @@ SCRIPTS = HERE.parent.parent / "plugins" / "monday-master-builder" / "scripts"
 sys.dont_write_bytecode = True  # nothing cached beside the scripts (G49)
 sys.path.insert(0, str(SCRIPTS))
 import mmb_common as mc  # noqa: E402
+from test_record import add_lint  # noqa: E402
 
 REAL_HOME, CLOCK = Path.home(), datetime(2026, 11, 5, 14, 30, tzinfo=timezone.utc)
 LABEL, IGNORE = "20261105-1405-r2d6", shutil.ignore_patterns(".gitkeep", ".DS_Store")
@@ -75,7 +76,7 @@ def make_plugin(target):
     (plugin / "scripts").mkdir()
     for name in ("mmb_common.py", "record.py", "ledger.py"):
         shutil.copy(SCRIPTS / name, plugin / "scripts" / name)
-    return plugin
+    return add_lint(plugin)  # R48: record.py beside ledger.py loads leak_lint.py after its commands
 
 
 def load(path, name):
@@ -395,7 +396,7 @@ class FrameTest(Base):
             module = ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 9))
             names = {a.name.split(".")[0] for n in ast.walk(module) if isinstance(n, ast.Import) for a in n.names}
             names |= {n.module.split(".")[0] for n in ast.walk(module) if isinstance(n, ast.ImportFrom)}
-            for name in names - {"mmb_common"}:
+            for name in names - {"mmb_common", "test_record"}:
                 self.assertTrue(is_stdlib(name), "%s imports %s" % (path.name, name))
         body = ast.parse(source).body
         first = next(n for n, node in enumerate(body) if isinstance(node, ast.Import) and node.names[0].name == "sys")
@@ -455,6 +456,50 @@ class FrameTest(Base):
         before = self.tree()
         code, data = self.ledger("bind", "--binding", ".work/none.json")
         self.assertEqual((code, self.tree()), (3, before))
+
+    def test_R55_a_lock_that_writes_a_key_twice_stops_as_a_torn_lock_does(self):
+        """WP4's R55: the lock read strictly; a key written twice, where a plain reader keeps the last copy, is the
+        could-not-run path of a torn lock (exit 3 on .work/lock.json, nothing written), never a silent pick."""
+        self.approve()
+        self.start()
+        path = self.root / ".work" / "lock.json"
+        sound = path.read_text(encoding="utf-8")
+        found = []
+        for text in ("{ torn", sound.replace("{\n", '{\n  "epoch": 99,\n', 1)):
+            path.write_text(text, encoding="utf-8")
+            before = self.tree()
+            code, data = self.ledger(*self.argv("intent", "--key", "B2", "--operation", "create", "--workspace", OWN_WS))
+            self.assertEqual((code, self.tree()), (3, before), text)
+            found.append(data["error"])
+        self.assertEqual([(e["file"], e["field"], e["expected"]) for e in found], [
+            (found[0]["file"], found[0]["field"], found[0]["expected"])] * 2)
+        self.assertEqual(found[0]["file"], ".work/lock.json")
+        self.assertIn('the key "epoch" is written twice in one object', found[1]["problem"])
+        path.write_text(sound, encoding="utf-8")  # the same lock with each key once runs
+        self.assertEqual(self.ledger(*self.argv("intent", "--key", "B2", "--operation", "create", "--workspace",
+                                                OWN_WS))[0], 0)
+
+    def test_R59_R55_a_json_block_that_writes_a_key_twice_is_refused_as_a_malformed_block_is(self):
+        """WP4's R59: a json block of the documents appendix is read through mmb_common's strict reader; a key
+        written twice, where a plain reader keeps the last copy and hides the first, gives the block no text, as a
+        block that does not parse does, so compare refuses that document."""
+        def appendix(*blocks):
+            return "# Audit\n\n## Documents appendix\n\n" + "".join("```json\n%s\n```\n\n" % b for b in blocks)
+
+        twice = '{"query": "mutation { delete_board (board_id: 5) { id } }", "query": "query { boards { id } }"}'
+        nested = '{"steps": [{"query": "query { me { id } }", "note": "a", "note": "b"}]}'
+        found = self.led.appendix_documents(appendix(twice, nested, "{ torn", '{"query": "query { users { id } }"}'))
+        self.assertEqual([(n, body) for n, _, body, _ in found], [(1, None), (2, None), (3, None),
+                                                                  (4, "query { users { id } }")])
+        self.assertIn('the key "query" is written twice in one object', found[0][3])
+        self.assertIn('the key "note" is written twice in one object', found[1][3])
+        self.assertEqual(found[2][3], "a json block that does not parse")
+        # the same key at two depths, or in two objects, is no repeat
+        found = self.led.appendix_documents(appendix(
+            '{"query": "query { me { id } }", "id": 1, "variables": {"id": 2}}',
+            '[{"query": "query { boards { id } }"}, {"query": "query { users { id } }"}]'))
+        self.assertEqual([body for _, _, body, _ in found], ["query { me { id } }", "query { boards { id } }",
+                                                             "query { users { id } }"])
 
     def test_K46_K111_a_mutex_held_by_another_process_is_exit_3_and_nothing_is_written(self):
         """Windows run: the msvcrt branch of the record mutex."""

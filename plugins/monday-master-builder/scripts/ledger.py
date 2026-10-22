@@ -4029,8 +4029,11 @@ def appendix_documents(text):
         elif info in ("graphql", "gql"):
             found.append((where, body, None))
         elif info == "json":
-            try:
-                value = json.loads(body)
+            try:  # WP4's R59: read strictly, so a repeated key never hides one of its two values
+                value = mc.strict_json(body)
+            except mc.RepeatedKey as repeated:
+                found.append((where, None, "a json block in which the key %s is written twice in one object"
+                              % json.dumps(repeated.args[1])))
             except ValueError:
                 found.append((where, None, "a json block that does not parse"))
             else:

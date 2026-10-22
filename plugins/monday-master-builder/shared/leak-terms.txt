@@ -25,7 +25,9 @@
 #   whitelist: <term>  a legitimate use the phonetic rule directly above it never blocks;
 #                      the test suite asserts no false positive on it
 # The per-client allowlist may clear a row of class method only. Rows of every other class
-# are never cleared by an allowlist (9.6). A term that is also the client's own vocabulary
+# are never cleared by an allowlist (9.6). The lint also lets it clear the internal notes
+# "internal only", "internal use only" and "not for clients" for one client, and never the
+# speaker labels or the note front matter. A term that is also the client's own vocabulary
 # survives with a caution rather than being removed.
 
 class: firm
@@ -58,7 +60,6 @@ class: method
 bleed
 upside
 callback
-exit ramp
 exit-ramp
 seed data
 seed row
@@ -86,7 +87,6 @@ open check-in
 structure inventory
 skipped-step map
 cost-of-waiting
-cost of waiting
 deadline anchor
 commitment question
 run-sheet
@@ -187,6 +187,13 @@ log.md
 account.json
 build.json
 live-map.md
+meetings.md
+readiness.md
+close-out.md
+exclusions.md
+allowlist.md
+re: \b(?:research|solution|versions|drafts|deliverables|live)/(?=[\w.-]*\.(?:md|txt|docx|json)\b|[\w.-]+/|\s|$)
+re: %USERPROFILE%|\$HOME\b
 re: <!--
 re: (?<![\w/=?&#.-])\d{8,}(?![\w-])
 re: \b[0-9a-f]{64}\b
@@ -194,114 +201,3 @@ re: \b(G|S0|U|V)-\d{1,2}\b
 re: \bP-\d{1,2}\b
 re: \[A\d{1,2}(-\d)?\]
 re: \[L1[4-8]\]
-
-# Tool categories (9.6, the second structural assertion). Every class below whose name starts
-# with tool-category- is counted and never blocked: leak_lint.py fails a sentence that names
-# three or more distinct categories in a paragraph with no proper noun, and a single hit is
-# never reported. The rows are generic category words, never product names, and an allowlist
-# has nothing to clear here.
-
-class: tool-category-accounting
-accounting system
-accounting software
-accounting package
-bookkeeping software
-general ledger
-invoicing software
-invoicing tool
-
-class: tool-category-crm
-crm
-customer relationship management
-contact database
-sales pipeline tool
-
-class: tool-category-erp
-erp
-enterprise resource planning
-
-class: tool-category-spreadsheet
-spreadsheet
-spreadsheets
-shared sheet
-workbook
-
-class: tool-category-scheduling
-scheduling tool
-scheduling software
-scheduling app
-booking system
-rota tool
-rostering software
-dispatch software
-calendar tool
-
-class: tool-category-hr
-payroll system
-payroll software
-hr system
-hris
-timesheet tool
-time tracking tool
-timekeeping system
-
-class: tool-category-ticketing
-ticketing system
-ticketing tool
-help desk
-helpdesk
-service desk tool
-
-class: tool-category-messaging
-chat tool
-team chat
-messaging app
-email client
-shared inbox
-
-class: tool-category-documents
-document management system
-file share
-shared drive
-cloud storage
-e-signature tool
-wiki
-
-class: tool-category-inventory
-inventory system
-warehouse management system
-stock control system
-barcode scanner
-point of sale
-
-class: tool-category-field
-telematics
-gps tracking
-fleet tracking
-route planning tool
-field service app
-
-class: tool-category-lab-quality
-lims
-laboratory information system
-quality management system
-
-class: tool-category-design
-cad software
-drawing software
-estimating software
-quoting tool
-takeoff software
-
-class: tool-category-marketing
-email marketing tool
-marketing automation
-survey tool
-panel software
-website builder
-
-class: tool-category-reporting
-bi tool
-reporting tool
-dashboard tool
-data warehouse

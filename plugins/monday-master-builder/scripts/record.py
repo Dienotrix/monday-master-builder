@@ -7,7 +7,8 @@ status/1 object itself and exits 0 whenever it printed it (G10). The record is t
 the folder named by --record. Templates and plugin.json are found from this file's own place (G31,
 G36). Standard library only, Python 3.9 and later, the same on Windows and macOS. Nothing here deletes
 or renames a file, writes the lock or its two mirrors (mmb_common's lease primitives do), or fills in
-one of the three open A11 fields.
+one of the three open A11 fields. After a command that changed a file the index's harvest reads, it runs
+leak_lint.py index for the record in process, and an index that stops is a warning (exit 2; WP4's R48).
 """
 import sys
 sys.dont_write_bytecode = True  # no cache beside the scripts (G49), set before mmb_common is imported
@@ -15,7 +16,8 @@ if sys.version_info < (3, 9):
     sys.stdout.write('{"ok": false, "command": null, "error": {"file": "record.py", "field": "python", '
                      '"problem": "Python %d.%d", "expected": "Python 3.9 or later"}}\n' % sys.version_info[:2])
     sys.exit(3)
-import argparse, fnmatch, hashlib, json, os, re, shutil  # noqa: E401,E402
+import argparse, contextlib, fnmatch, hashlib, json, os, re, shutil  # noqa: E401,E402
+import importlib.util  # noqa: E402
 from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 import mmb_common as mc  # noqa: E402
@@ -80,7 +82,10 @@ CLIENT_VALUES = {  # G15: client/2 in its order, with each value set or form (No
     "transcript_redaction": one_of("unanswered", "none", "offered-per-call", "always"),
     "sample_data_in_account": one_of("unanswered", "allowed", "not-allowed", "not-needed"),
     "ai_notice": (r"not-yet|not-needed|given \d{4}-\d{2}-\d{2}", "not-yet | not-needed | given YYYY-MM-DD"),
-    "updated": None}
+    "updated": None,
+    # R40: optional and last, where the writer appends it; a record written before it reads as having none
+    "former_names": (r"(?:[^;]*[^;\s][^;]*(?:;[^;]*[^;\s][^;]*)*)?", "empty, or earlier names joined by ; with none empty")}
+CLIENT_OPTIONAL = ("former_names",)
 STRAND_VALUES = {  # G16; the stage is checked against the ladder of the strand's kind
     "schema": None, "strand": None, "slug": None, "title": None, "kind": one_of(*OUTPUT_CLASS),
     "output_class": one_of(*OUTPUT_CLASS.values()), "opened": DATE, "opened_reason": None,
@@ -503,10 +508,10 @@ class Check:
                 self.block(rel, "schema", "schema %r is not a name and a number" % schema, '"<name>/<n>", the first key')
             self.docs[rel] = (fields, body, text)
 
-    def values(self, rel, fields, table, complete=True):
+    def values(self, rel, fields, table, complete=True, optional=()):
         for key, rule in table.items():
             if key not in fields:
-                if complete:
+                if complete and key not in optional:
                     self.block(rel, key, "the field is missing", "%s, in the order record-map.md gives" % key)
             elif rule and not re.fullmatch(rule[0], fields[key]):
                 self.block(rel, key, "%r is not an allowed value" % fields[key], rule[1])
@@ -516,7 +521,7 @@ class Check:
 
     def client(self, client):
         """G15, C125, C147: client/2 values, the target against the kind, and the binding mirrors."""
-        self.values("CLIENT.md", client, CLIENT_VALUES)
+        self.values("CLIENT.md", client, CLIENT_VALUES, optional=CLIENT_OPTIONAL)
         if client.get("slug") != self.root.name:
             self.block("CLIENT.md", "slug", "%s in a folder named %s" % (client.get("slug"), self.root.name),
                        "the folder name: a slug is never renamed")
@@ -1957,20 +1962,77 @@ def occupied(root):
     return ("CLIENT.md", "folder", "the folder %s is not empty: %s" % (root.name, ", ".join(present[:6])),
             "a new or empty client folder") if present else None
 
+INDEX_FILE, HEX32 = "<home>/clients-index.json", re.compile(r"[0-9a-f]{32}")
+
+def looked_at(path, name):
+    """Whether a home path exists, by os.stat as leak_lint.py's path_kind does (WP4's R36). A path that cannot be
+    looked at stops the run, naming `name` only and never another client's folder (WP4's X30)."""
+    try:
+        os.stat(str(path))
+        return True
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError as exc:
+        raise mc.CannotRun((name, mc.WHOLE_FILE, "cannot be looked at (%s), so init cannot tell whether the slug is "
+                            "already used" % (exc.strerror or type(exc).__name__),
+                            "a home readable by the user who runs record.py, then run init again"))
+
+def index_keys(home):
+    """The keys of <home>/clients-index.json, none while there is no index, read under the home mutex when that
+    mutex exists, as leak_lint.py's reader does. An index that cannot be read, or is not clients-index/1 with
+    32-hex keys, or that writes a key twice in one object (WP4's R55, read as the lint reads it), stops the run: an
+    index init cannot trust cannot prove a slug free."""
+    path = home / "clients-index.json"
+    if not looked_at(path, INDEX_FILE):
+        return set()
+    held = looked_at(home / ".work" / "record.mutex", INDEX_FILE)
+    with mc.record_mutex(home) if held else contextlib.nullcontext():
+        try:
+            data = mc.strict_json(path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, ValueError, mc.RepeatedKey):
+            data = None
+    entries = data.get("entries") if isinstance(data, dict) and data.get("schema") == "clients-index/1" else None
+    if not isinstance(entries, dict) or not all(HEX32.fullmatch(key) for key in entries):
+        raise mc.CannotRun((INDEX_FILE, mc.WHOLE_FILE, "the index of client records cannot be read as clients-index/1, "
+                            "so init cannot tell whether the slug is already used", "the index as leak_lint.py index "
+                            "wrote it: restore the last copy from <home>/local/backup/, then run init again"))
+    return set(entries)
+
+def slug_used(home, root, slug):
+    """R39: the `slug` refusal while another client holds the slug: a folder of that name under <home>/archive/, or
+    under <home>/clients/ other than this init's own folder, or the slug's key in the index, which outlives an
+    archived folder the user has removed (WP4's R35). It names the slug typed and nothing of the other client."""
+    for folder in ("clients", "archive"):
+        twin = home / folder / slug
+        if looked_at(twin, "<home>/%s/" % folder) and (folder == "archive" or twin.resolve() != root.resolve()):
+            break
+    else:
+        if mc.slug_key(slug) not in index_keys(home):
+            return None
+    return ("CLIENT.md", "slug", "the slug %s is already used by another client record under the home, open or "
+            "archived, and a slug belongs to one client for good" % slug, "a slug no client record has used: choose "
+            "another slug, then run init again")
+
+def init_folder(record, slug):
+    """The folder init writes: --record when given, else <home>/clients/<slug>/."""
+    return record or mc.home() / "clients" / slug
+
 def cmd_init(record, args):
     """C39 to C44, G43, G56: the record shell and strand 001 from the templates (CLIENT.md, log.md, account.json and
     a platform or hybrid strand's build.json, all unbound), the folder's own CLAUDE.md, a .gitignore only on the
-    GitHub archive path, and the first lock through mmb_common's lease primitives; the A11 fields stay unanswered."""
+    GitHub archive path, and the first lock through mmb_common's lease primitives; the A11 fields stay unanswered.
+    A slug another client record holds, open, archived or only indexed, is refused (R39)."""
     slug, output = args.slug, args.output_class or OUTPUT_CLASS.get(args.kind, "")
     refuse(None if SLUG.fullmatch(slug) and len(slug) <= 40 else (
                "CLIENT.md", "slug", "%r breaks the slug rule" % slug,
                "lowercase ASCII words joined by hyphens, at most 40 characters"),
            None if one_line(args.name) else ("CLIENT.md", "name", "no client name in one line", "the client's name"))
-    root = record or mc.home() / "clients" / slug
+    home = mc.home()
+    root = init_folder(record, slug)
     archive = (mc.read_settings() or {}).get("archive", "local")
     refuse(None if root.name == slug else ("CLIENT.md", "slug", "%s in a folder named %s" % (slug, root.name),
                                            "the folder's name: a slug is never renamed"),
-           occupied(root), *strand_reasons(root, args.topic, args.title, args.kind, args.reason, output, "none"))
+           slug_used(home, root, slug), occupied(root), *strand_reasons(root, args.topic, args.title, args.kind, args.reason, output, "none"))
     client = fill("CLIENT.md", {"slug": slug, "name": args.name})
     files = {"CLIENT.md": client, "log.md": fill("log.md", {"client": slug}), "CLAUDE.md": CLIENT_CLAUDE,
              "account.json": fill_json("account.json", {"client_slug": slug})}
@@ -1993,6 +2055,117 @@ def cmd_init(record, args):
                "files": sorted(mc.relative(root, p) for p in root.rglob("*")
                                if p.is_file() and p.relative_to(root).parts[0] != ".work")}
 
+def cmd_client_rename(root, args):
+    """R40: the client's name changes in CLIENT.md and the old name is appended to `former_names` once, no entry
+    ever dropped, so leak_lint.py still knows this record's index entry as its own and keeps every other record
+    walled against the old name. A record-level `decision` entry logs it; the slug never changes."""
+    path = root / "CLIENT.md"
+    with mc.record_mutex(root):
+        refuse_newer(root)
+        fields, _, text = read_doc(root, path)
+        old, new = (fields.get("name") or "").strip(), (args.name or "").strip()
+        former = mc.former_names(fields.get("former_names"))
+        refuse(None if one_line(new) and ";" not in new else (
+                   "CLIENT.md", "name", "no new name in one line without a semicolon",
+                   "the client's new name, one line, with no ; since former_names joins names with it"),
+               None if one_line(old) and ";" not in old else (
+                   "CLIENT.md", "name", "the current name is not one line without a semicolon, so it cannot be kept "
+                   "in former_names", "a current name of one line with no ;"),
+               ("CLIENT.md", "name", "%s is already the client's name" % new, "a name the client does not have")
+               if new and new == old else None,
+               ("CLIENT.md", "former_names", "%s is already a former name of the client" % new,
+                "a name the client has not had") if new in former else None)
+        former += [] if old in former else [old]
+        mc.write_file(path, mc.set_front_matter(text, {"name": new, "former_names": "; ".join(former)}, "CLIENT.md"),
+                      root)
+        insert_entries(root, [new_entry("-", "decision", "-", "rename", ["name: %s to %s" % (old, new),
+                                                                       "former_names: " + "; ".join(former)])])
+    return 0, {"name": new, "former_names": former}
+
+
+# R48 (WP4): a command that wrote a file the index's harvest reads runs leak_lint.py index for its record before it
+# prints, so the record's entry in <home>/clients-index.json is never left older than its files (WP4's R44).
+LINT_FILE = Path(__file__).resolve().parent / "leak_lint.py"
+LOADED = {}  # leak_lint.py, loaded once per process
+
+class Unwalked(Exception):
+    """The record could not be walked as the index walks it."""
+
+def lint_module():
+    """leak_lint.py beside this file, loaded by path in process, as tools/lint_plugin.py loads it (WP4's R41): one
+    implementation of the walk, the age test and the index, and no second process. sys.dont_write_bytecode is
+    already set, so the load leaves no cache beside the scripts (G49)."""
+    if "lint" not in LOADED:
+        spec = importlib.util.spec_from_file_location("mmb_leak_lint", str(LINT_FILE))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        LOADED["lint"] = module
+    return LOADED["lint"]
+
+def harvested_marks(lint, root):
+    """{name: (modification time, status-change time, size)} of the record's files that feed its index entry, found
+    by leak_lint.py's own walk and feeds_entry (R44), so what counts as a write here is what the index reads; any
+    change between two marks is a write, also a rewrite that leaves the newest time where it was. {} for a folder
+    not made yet (init); None when the record cannot be walked, which the index then reports."""
+    def stop(*_):
+        raise Unwalked()
+    try:
+        if not root.is_dir():
+            return {}
+        marks = {}
+        for rel, path in lint.record_walk(root.resolve(), stop, stop).items():
+            if lint.feeds_entry(rel):
+                try:
+                    info = os.stat(str(path))
+                except FileNotFoundError:
+                    continue
+                marks[rel] = (info.st_mtime_ns, info.st_ctime_ns, info.st_size)
+        return marks
+    except (Unwalked, OSError):
+        return None
+
+def index_baseline(root):
+    """(leak_lint.py or the exception that stopped its load, the record's marks before the command)."""
+    if root is None:
+        return None, None
+    try:
+        lint = lint_module()
+    except Exception as exc:  # reported after the command, which still runs
+        return exc, None
+    return lint, harvested_marks(lint, root)
+
+def index_warning(file, field, cause, expected):
+    """The warning a command carries when its record's index entry could not be kept current (exit 2)."""
+    return dict(zip(KEYS, (file, field, "this command's writes are done and kept, but this record's entry in the "
+                           "client index was not brought up to date, because %s. Until it is, other client records' "
+                           "lint may stop with exit 3, and their wall may not see what this record now holds" % cause,
+                           expected)))
+
+def keep_index(root, lint, before):
+    """After a command that succeeded: leak_lint.py index for this record when the command changed a file the
+    harvest reads, or when that cannot be told. None when nothing was owed or the index ran; else the warning.
+    record.py holds no mutex here, the record's having been released when the command returned, and index takes
+    only the home's, so the two are never held together and no lock order can invert."""
+    if isinstance(lint, BaseException):
+        return index_warning("<plugin>/scripts/leak_lint.py", mc.WHOLE_FILE, "leak_lint.py beside record.py could "
+                             "not be loaded (%s)" % type(lint).__name__, "the plugin's own leak_lint.py beside "
+                             "record.py: reinstall the plugin, then run leak_lint.py index from this record")
+    try:
+        after = harvested_marks(lint, root)
+        if before is not None and after is not None and after == before:
+            return None  # nothing the harvest reads changed: a lease refresh, a check, a read
+        code, data = lint.run_command(["--record", str(root), "index"])
+    except Exception as exc:  # run_command catches its own; this is a last guard, so the output stays one envelope
+        code, data = 3, {"error": {"field": type(exc).__name__, "problem": str(exc)}}
+    if code in (0, 2):
+        return None
+    found = {key: str(value) for key, value in (data.get("error") or {}).items() if key in KEYS and value}
+    error = dict({"file": "leak_lint.py", "field": mc.WHOLE_FILE, "problem": "no reason given",
+                  "expected": "a run of index that finishes"}, **found)
+    cause = "leak_lint.py index stopped with exit %d: %s" % (code, error["problem"].rstrip("."))
+    return index_warning(error["file"], error["field"], cause, "%s (the run meant is leak_lint.py index from this "
+                         "record; record.py also runs it after its next write)" % error["expected"])
+
 
 COMMANDS = {  # C25 and G05: the catalogue
     "status": cmd_status, "check": cmd_check, "log": cmd_log, "guard": cmd_guard,
@@ -2005,7 +2178,8 @@ COMMANDS = {  # C25 and G05: the catalogue
     "lease status": cmd_lease_status, "lease break": cmd_lease_break, "lease sync": cmd_lease_sync,
     "lease repair": cmd_lease_repair, "version open": cmd_version_open,
     "version mark": cmd_version_mark, "version condense-plan": cmd_version_condense_plan,
-    "version condense-apply": cmd_version_condense_apply, "version release": cmd_version_release}
+    "version condense-apply": cmd_version_condense_apply, "version release": cmd_version_release,
+    "client rename": cmd_client_rename}
 NO_RECORD = ("home init", "init")  # these two run where no record exists yet
 
 def build_parser():
@@ -2074,6 +2248,7 @@ def build_parser():
     groups["home init"].add_argument("--update", action="store_true")
     for flag in ("--slug", "--name", "--topic", "--title", "--kind", "--reason"):
         groups["init"].add_argument(flag, required=True)
+    groups["client rename"].add_argument("--name", required=True)
     return parser
 
 def main(argv=None):
@@ -2092,6 +2267,9 @@ def main(argv=None):
         if name not in NO_RECORD and not (root / "CLIENT.md").is_file():
             raise mc.CannotRun(("CLIENT.md", "record", "no record in the folder %s" % root.name,
                                 "a client folder holding CLIENT.md, or --record <folder>"))
+        # R48: status prints status/1 bare and never writes, and home init has no record
+        target = None if name in ("status", "home init") else init_folder(root, args.slug) if name == "init" else root
+        lint, before = index_baseline(target)
         code, payload = COMMANDS[name](root, args)
     except mc.MMBError as exc:
         emit(dict({"ok": False, "command": name}, **({"refusals": exc.findings} if exc.code == 1
@@ -2102,6 +2280,10 @@ def main(argv=None):
         emit({"ok": False, "command": name, "error": dict(zip(KEYS, ("record.py", type(exc).__name__,
               str(exc) or "an internal error with no message", "a run without an internal error")))})
         return 3
+    warning = keep_index(target, lint, before) if target is not None and code in (0, 2) else None
+    if warning:  # R48: done, with a warning (exit 2); the command's own writes stay as they are
+        payload = dict(payload, warnings=list(payload.get("warnings") or []) + [warning])
+        code = 2
     emit(payload if name == "status" else dict({"ok": code != 1, "command": name}, **payload))
     return code
 

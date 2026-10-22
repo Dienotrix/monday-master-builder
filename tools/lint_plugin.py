@@ -6,7 +6,7 @@ severity, file, line, check and message; "not present yet" for an input that doe
 not exist, so a partial tree lints. Exit 0 no errors, 1 errors, 3 could not run;
 warnings do not change the exit code. Standard library only, Python 3.9 and later.
 """
-import argparse, ast, hashlib, json, os, re, sys, unicodedata  # noqa: E401
+import argparse, ast, hashlib, importlib.util, json, os, re, sys, unicodedata  # noqa: E401
 
 PLUGIN_REL = os.path.join("plugins", "monday-master-builder")
 TEXT_EXT = {".md", ".txt", ".json", ".py", ".sh", ".yml", ".yaml", ".csv"}
@@ -18,6 +18,11 @@ PINNED = (("call-type-vocabulary", "scripts/transcript_prep.py"),
           ("permitted-constants", "scripts/transcript_measure.py"),
           ("ledger", "scripts/ledger.py"),
           ("leak", "scripts/leak_lint.py"))
+LEAK_SCRIPT, COMMON_SCRIPT = "scripts/leak_lint.py", "scripts/mmb_common.py"
+# WP4 R29, R32, R41: each region of leak_lint.py, the constant it holds, the function that derives it from shared/,
+# what one entry is called, and what the region leaves out on purpose (R29: the PDF tool name L05 bars from the script).
+SHARED_REGIONS = (("shared-words", "SHARED_WORDS", "shared_vocabulary", "word", {"pdftotext"}),
+                  ("shared-phrases", "SHARED_PHRASES", "shared_phrases", "phrase", set()))
 HANDOFF = ("Building this work happens outside this product. This record holds its scope, "
            "open questions, dependencies, access needs and next steps; it does not design or build it.")
 RESERVED = {"task-management", "project-status-report", "board-setup", "docs-collaborator",
@@ -294,6 +299,66 @@ def check_pinned(lint):
                          "`%s` embedded but not pinned in %s" % (token, RECORD_MAP))
 
 
+def load_script(path, name):
+    """A plugin script loaded by path under the given name; the caller keeps the cache from being written."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_leak_lint(lint):
+    """leak_lint.py with the tree's own mmb_common.py, so the regions are derived by the script's own functions.
+    No cache is written beside the scripts (G49), and sys.modules and sys.dont_write_bytecode are left as found."""
+    saved_flag, saved_common = sys.dont_write_bytecode, sys.modules.get("mmb_common")
+    sys.dont_write_bytecode = True
+    try:
+        sys.modules["mmb_common"] = load_script(lint.path(COMMON_SCRIPT), "mmb_common")
+        return load_script(lint.path(LEAK_SCRIPT), "lint_plugin_leak_lint")
+    finally:
+        sys.dont_write_bytecode = saved_flag
+        if saved_common is None:
+            sys.modules.pop("mmb_common", None)
+        else:
+            sys.modules["mmb_common"] = saved_common
+
+
+def check_shared_regions(lint):
+    """leak_lint.py's shared-words and shared-phrases regions equal what the shipped shared/ folder gives now."""
+    if not (lint.exists(LEAK_SCRIPT) and lint.exists("shared/")):
+        for ident in (r[0] for r in SHARED_REGIONS):
+            lint.absent(LEAK_SCRIPT if lint.exists("shared/") else "shared/", "shared-region",
+                        " (%s unchecked)" % ident)
+        return
+    lines, starts = [line.strip().lower() for line in lint.lines(LEAK_SCRIPT)], {}
+    for ident in (r[0] for r in SHARED_REGIONS):
+        start = lines.index("# pinned: " + ident) + 1 if "# pinned: " + ident in lines else None
+        if start is None or "# end pinned" not in lines[start:]:
+            lint.absent(LEAK_SCRIPT, "shared-region", " (%s unchecked)" % ident)
+        else:
+            starts[ident] = start
+    if not starts:
+        return
+    try:
+        module = load_leak_lint(lint)
+    except (Exception, SystemExit) as exc:  # a script that will not load is a finding, not a crash of the lint
+        return lint.add("error", LEAK_SCRIPT, 0, "shared-region",
+                        "could not load the script to derive its regions: %s" % type(exc).__name__)
+    for ident, constant, derive, unit, left_out in (r for r in SHARED_REGIONS if r[0] in starts):
+        try:
+            region, live = set(getattr(module, constant)), set(getattr(module, derive)(lint.path("shared")))
+        except (Exception, SystemExit) as exc:
+            lint.add("error", LEAK_SCRIPT, starts[ident], "shared-region",
+                     "`%s` could not be compared with shared/: %s" % (ident, type(exc).__name__))
+            continue
+        missing, extra = live - region - left_out, region - live
+        if missing or extra:
+            lint.add("error", LEAK_SCRIPT, starts[ident], "shared-region",
+                     "`%s` differs from shared/ as shipped: %d %s(s) missing, %d extra; run `leak_lint.py terms` "
+                     "over the changed shared/, then regenerate the region with %s()"
+                     % (ident, len(missing), unit, len(extra), derive))
+
+
 def normalise_name(text):
     """Lowercase, accents folded, letters only: the form that is hashed."""
     return "".join(c for c in unicodedata.normalize("NFKD", text).lower() if "a" <= c <= "z")
@@ -324,7 +389,7 @@ def check_personal_names(lint):
 
 CHECKS = (check_frontmatter, check_sizes, check_reference_depth, check_links, check_reserved_names,
           check_tool_names, check_emphasis, check_ids, check_consultant, check_handoff,
-          check_shared_copies, check_pinned, check_personal_names)
+          check_shared_copies, check_pinned, check_shared_regions, check_personal_names)
 
 
 def main(argv=None):
