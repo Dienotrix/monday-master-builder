@@ -1,0 +1,17 @@
+{
+  "schema": "build/2",
+  "client_slug": "",
+  "strand": "",
+  "account_ref": "../../../account.json",
+  "account_id_at_bind": "unbound",
+  "lease_epoch_at_run": null,
+  "reads_live": [],
+  "updated_at": null,
+  "approvals": [],
+  "preflight": null,
+  "runs": [],
+  "objects": {},
+  "irreversible_yes": [],
+  "departures": [],
+  "ui_steps": []
+}

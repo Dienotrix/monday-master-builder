@@ -1,0 +1,76 @@
+{
+  "schema": "account/1",
+  "client_slug": "",
+  "updated_at": null,
+  "account": {
+    "id": "unbound",
+    "slug": "unbound",
+    "name": "unbound",
+    "kind": "own",
+    "build_target": "own-account",
+    "tier": "unbound",
+    "bound_user_id": "unbound",
+    "bound_at": "unbound",
+    "builder_role": "unbound",
+    "products": []
+  },
+  "client_workspaces": {},
+  "api": {
+    "connector_ring": null,
+    "execute_code_ring": null,
+    "read_at": null
+  },
+  "change_check": {
+    "at": null,
+    "for_strand": null,
+    "ring": null,
+    "versions_seen": [],
+    "release_notes_since": "not-read",
+    "roster_diff": {
+      "added": [],
+      "removed": [],
+      "renamed": []
+    },
+    "schema_diff": [],
+    "verdict": null,
+    "approved_by_user": null
+  },
+  "native_map": {
+    "crm": {},
+    "service": {},
+    "portfolio": {}
+  },
+  "guard_index": {
+    "captured_at": null,
+    "ring": null,
+    "product_workspaces": {},
+    "account_products": [],
+    "native_board_index": {},
+    "native_board_ids_by_entity": {},
+    "template_source_ids": [],
+    "unreadable_intermediate_ids": [],
+    "template_view_ids": [],
+    "reserved_column_ids": {
+      "blank_default_exclusions": []
+    },
+    "native_default_names_and_terminology": [],
+    "portal_object_ids": {
+      "active": [],
+      "archived": []
+    },
+    "client_workspace_ids": [],
+    "build_targets_by_strand": {},
+    "lease": {
+      "strand": null,
+      "epoch": 0,
+      "session_label": null,
+      "heartbeat_at": null
+    },
+    "record_provenance": {
+      "coverage": null,
+      "staleness_budget_days": 7
+    }
+  },
+  "live_objects": {},
+  "prior_builds": []
+}
