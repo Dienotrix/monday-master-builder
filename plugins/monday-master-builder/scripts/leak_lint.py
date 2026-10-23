@@ -165,176 +165,181 @@ STOP_WORDS = frozenset(("mr", "mrs", "ms", "mx", "dr", "prof", "sir", "ceo", "cf
 # shared_vocabulary() only after `terms` over the changed shared/ has passed against the list below.
 SHARED_WORDS = frozenset("""
 03z 07z 1r1 1r4 20m 25k 30z 42z 45k 90k 9a a1 a11 a12 a13 a14 a16 a17 a18 a19 a2 a20 a22 a23 a24 a25 a25ddc a26 a27 a3
-a38 a5 a6 a7 abandoned abc abm absence absent absolute absolutes accept acceptance accepted accepts access
+a38 a43 a5 a6 a7 abandoned abc abm absence absent absolute absolutes accept acceptance accepted accepts access
 accountproduct accountproductid acting activate activated activation active activities activity additional
 additionalproperties additions additive address addressed adds adjacent adjustment adjustments adopt adopted adopting
-adoption adopts advance adversarial advisory affecting afresh ag1 agenda agent agents aggregate agreeing agreement
-agrees ai ai1 aimed alias aliased aliases alike alikes allitems allowance allowcreatereflectioncolumn allowlist
+adoption adopts advance adversarial advisory affecting afresh ag ag1 agenda agent agents aggregate agreeing agreement
+agrees ai ai1 aimed aiquery alias aliased aliases alike alikes allitems allowance allowcreatereflectioncolumn allowlist
 allowmultipleitems allows aloud alternative alternatives amended amendment amendments amz anchor anchors answers
 anthropic api apis app appeared appearing appears append appended appendix appends application applies approver approves
-approving apps arbitrary architecture archive archived archives archiving argument arithmetic array arrives artefact
-artifact asc ascii asks asr assembled assert asserted asserting assertions asserts assessment assessments asset assetid
-assets assigns assistant assume assumed assuming assumption assumptions async asynchronous atomic attachment attempt
-attempting attempts attendees attribute attributed attributes attribution audience audit audited auditor auth author
-authoring authorisation authorising authoritative authority auto automatic automationids automationspage awaits axes
-axis b b1 backchannel backed background backlog backs backslash backticked backticks backup bak balance ban band bands
-banner bare baseline batch batches battery bc bcalls bclients bcues bearing becoming begins behave behaviour belonged
-belongs berry bespoke bill billable bind binding binds binputs bits bl blank bleed blind block blocked blockers blockids
-blocking blocklist blocks blueprint bmmb bn bo boardautomation boardid boardids boardkind boardname boardrelationvalue
-boards2 boards5 bold bom booked borderline bound boundaries boundary bp br bracketed breach breaking breaks brief
-briefing broader broken bs bstrands budget budgeted budgets bug buildable builder building builtwithai bulk bundle
-bypass bypassed byte bytes c c1 c101 c11 c2 c3 c4 c46 c4c4c4 c5 c51 c92 calculated calendar calibration callback
-camelcase campaigns candidate candidates canonical cap capabilities capability capped caps capture captured cards
-careless carries carrying cascade casing catalog catalogue catalogues catches categories category caution cautious
-caveat caveats ceiling cell cells cent center chain chains changing channel character characters chart chat cheaper
-checkable checkbox checklist checks checksum chooses chosen chunk chunks citation cite cites claim claimed claims
-clarifying clash classes classic classification classified classifies classify classifying claude clause clean cleanly
-cleanup clearance cleared clearing clears click clock clone closeout closes closing cloud co coarse code coerced coexist
-collaborators collapsed colleague colleagues collections collide colliding collision colon color2 colors
-columnvalueexception com combination comma command commas commercial commercials commit commitment commitments committed
-compaction companion companions compare compared compares compete completes completion complexity compose composite
-compound computed computer computes concept conclude concrete concurrency concurrent condense condensed conditions
-confidence confidentiality confidently config configuration configure configured confirm confirmation confirmed confirms
-conflict conflicts connect connected connecting connection connector connects consecutive consequence consistent
-consolidation constant constants constraint constraints consultancy consume consumes consumption contain container
-containers containment contains contamination contended content contention contents context continues contract
-contradictions contradicts control controlled convenience conversation conversion convert converted converting copied
-copies copy copying core corrected correcting correction corrections correctly corroborating corroboration corruption
-cost costs count counted counter counting counts coverage covers cowork cr crash crashed crc32 createquestioninput
-creates creating creation creationprompt creator creators credential credentials credit credits criteria criterion crlf
-cross crosstalk csat cue cues currency cursor custom cutoff cygwin d d1 d11 d2 d24 d3 d5 damaged damaging dataset
-datasourcelayoutconfigs date0 date2 date20 date4 date6 date8 dated db db1 dd ddthh de deactivate deactivated
-deactivation deals dec decides decisions decisive default defaults defect defence deferred defers define defined
-definition definitions definitive deixis delayed delete deleted deletes deletion deliberately deliverables delivered
-delivery delta demo demonstrated demonstration demotes density denylist depart departed departs departure departures
-dependants dependencies dependency depends deprecated depth derive derived derives desc descendant descendants
-descending described describes description deserves designed desired desk despite destination destroys destructive
-detect detected detection detectnativeboards detector detectors diagrams dialect died dies diff diffed differ difference
-differently differs diffs digest digested digests digit digits dimension dir directly directory disabled disagree
-disagreement disagrees discipline disciplined discovers discovery disk dismissed dispatch displaced display displayed
-displaytype disputed disqualifies distance distinct distinctive distribution disturb dive documentation documented docx
-domain dossier downgraded downstream draft drafter drafting drafts drawn drift driving dropdown drops dual dummy dumps
-dup duplicate duplicateboardtype duplicated duplicates duplication duration e earliest echo echoes edge edges edit
-editable edited editor edits element elements elevated eleven email1 email9 email95 embedded embeds emitted emotional
-employee enabled endings enforce enforced enforces engagement enrolled ensure enter entered enters entirely entities
-entitlement entity entries entry enum enumerate enumerated enumerates environment environments epoch equality equalled
-equals erases error errors established estimate estimated estimates etiquette evaluate evaluated evidence ewh examples
+approving apps arbitrary architecture archive archived archives archiving argument arguments arithmetic array arrives
+artefact artifact asc ascii aside asks asr assembled assert asserted asserting assertions asserts assessment assessments
+asset assetid assets assignment assigns assistant assume assumed assuming assumption assumptions async asynchronous
+atomic attachment attempt attempting attempts attendees attribute attributed attributes attribution audience audit
+audited auditor auth author authoring authorisation authorising authoritative authority auto automatic automationids
+automationspage awaits axes axis b b1 b3 backchannel backed backfill background backlog backs backslash backticked
+backticks backup bak balance ban band bands banner bare baseline batch batches battery bc bcalls bclients bcues bearing
+becoming begins behave behaviour belong belonged belongs berry bespoke bill billable bind binding binds binputs bits bl
+blank bleed blind block blocked blockers blockids blocking blocklist blocks blueprint bmmb bn bo boardautomation boardid
+boardids boardkind boardname boardrelationvalue boards2 boards5 bold bom booked borderline bound boundaries boundary bp
+br bracketed brackets breach breaking breaks brief briefing broader broken bs bstrands budget budgeted budgets bug
+buildable builder building builtwithai bulk bundle button bypass bypassed byte bytes c c1 c101 c11 c2 c3 c4 c46 c4c4c4
+c5 c51 c7 c92 calculated calendar calibration callback camelcase campaigns candidate candidates canonical cap
+capabilities capability capped caps capture captured cards careless carries carrying cascade casing catalog catalogue
+catalogues catches categories categorise categorize categorized category caution cautious caveat caveats ceiling cell
+cells cent center chain chains changing channel character characters chart chat cheaper checkable checkbox checklist
+checks checksum chooses chosen chunk chunks citation cite cites claim claimed claims clarifying clash classes classic
+classification classified classifies classify classifying claude clause clean cleanly cleanup clearance cleared clearing
+clears click clicked clock clone closeout closes closing cloud co coarse code coerced coexist collaborators collapsed
+colleague colleagues collections collide colliding collision colon color2 colors columnvalueexception com combination
+comma command commas commercial commercials commit commitment commitments committed compaction companion companions
+compare compared compares comparing compete completes completion complexity compose composite compound computed computer
+computes concept conclude concrete concurrency concurrent condense condensed conditions confidence confidentiality
+confidently config configuration configure configured confirm confirmation confirmed confirms conflict conflicts connect
+connected connecting connection connector connects consecutive consequence consistent consolidation constant constants
+constraint constraints consultancy consume consumes consumption contain container containers containment contains
+contamination contended content contention contents context continues contract contradictions contradicts control
+controlled convenience conversation conversion convert converted converting copied copies copy copying core corrected
+correcting correction corrections correctly corroborating corroboration corruption cost costs count counted counter
+counting counts coverage covers cowork cr crash crashed crc32 createquestioninput creates creating creation
+creationprompt creator creators credential credentials credit credits criteria criterion crlf cross crosstalk csat cue
+cues currency cursor custom cutoff cygwin d d1 d11 d2 d24 d3 d5 damaged damaging dataset datasourcelayoutconfigs date0
+date2 date20 date4 date6 date8 dated db db1 dd ddthh de deactivate deactivated deactivation deals dec decides decisions
+decisive decoded default defaulted defaults defect defence deferred defers define defined definition definitions
+definitive deixis delayed delete deleted deletes deletion deliberately deliverables delivered delivery delta demo
+demonstrated demonstration demotes density denylist depart departed departs departure departures dependants dependencies
+dependency depends deprecated depth derive derived derives desc descendant descendants descending described describes
+description deserves designed desired desk despite destination destroys destructive detect detected detection
+detectnativeboards detector detectors diagrams dialect died dies diff diffed differ difference differently differs diffs
+digest digested digests digit digits dimension dir directly directory disabled disagree disagreement disagrees
+discipline disciplined discovers discovery disk dismissed dispatch displaced display displayed displaytype disputed
+disqualifies distance distinct distinctive distribution disturb dive documentation documented docx domain dossier
+downgraded downstream draft drafter drafting drafts drawn drift driving dropdown drops dual dummy dumps dup duplicate
+duplicateboardtype duplicated duplicates duplication duration dynamic e earliest echo echoes edge edges edit editable
+edited editor edits element elements elevated eleven email1 email9 email95 embedded embeds emitted emotional employee
+enabled endings enforce enforced enforces engagement enrolled ensure enter entered enters entirely entities entitlement
+entity entries entry enum enumerate enumerated enumerates environment environments epoch equality equalled equals erases
+error errors escaped escapes established estimate estimated estimates etiquette evaluate evaluated evidence ewh examples
 excavated exceed exceeds exclude excluded excludes excluding exclusion exclusions exclusive execute executed executing
-execution exempt exemptions exist existed existence existing exists exit expansion expectation expires expiry explicit
-explicitly export exporting exports expose exposed exposes exposure express expresses expression ext extend extended
-extends extensions external extract extracted extras f f1 facing facts fail failed failing fails failure fallback
-falling falls false families feature featureboardview feed feeds fees fence fenced fetch fetches fewer fewest fictional
-fields figures fills filter filterable filtered filtering filters finalize finance finding findings fingerprint
-fingerprints finishes fire fired fires firm fit fixes fixing fixture fixtures fk flag flagged flags flagship flat
-flatten flexibility flips floating floored floors flow fm fm1 focused folded folderid follower follows forbids forecast
-foreseeable forgeable fork forks format formed formtoken formula formula13 formula17 formula9 formulas formulavalue
-forty fourteen fraction fragment frame framing freeze freezes frequency fresh freshly frozen fully function fused g g01
-g02 g03 g04 g05 g06 g07 g08 g09 g1 g10 g100 g101 g102 g103 g104 g105 g106 g107 g108 g11 g12 g13 g14 g15 g150 g151 g152
+execution exempt exemptions exist existed existence existing exists exit expansion expectation expert expires expiry
+explicit explicitly export exporting exports expose exposed exposes exposure express expresses expression ext extend
+extended extends extensions external extract extracted extras f f1 facing facts fail failed failing fails failure
+fallback falling falls false families feature featureboardview feed feeds fees fence fenced fetch fetches fewer fewest
+fictional fields figures fills filter filterable filtered filtering filters finalize finance finding findings
+fingerprint fingerprints finishes fire fired fires firm fit fixes fixing fixture fixtures fk flag flagged flags flagship
+flat flatten flexibility flips floating floored floors flow fm fm1 focused folded folderid follower follows forbids
+forecast foreseeable forgeable forget fork forks format formed formtoken formula formula13 formula17 formula9 formulas
+formulavalue forty fourteen fraction fragment frame framing freeze freezes frequency fresh freshly frozen fully function
+fused g g01 g02 g03 g04 g05 g06 g07 g08 g09 g1 g10 g100 g101 g102 g103 g104 g105 g106 g107 g108 g11 g110 g111 g112 g113
+g114 g115 g116 g12 g13 g130 g131 g132 g133 g134 g135 g136 g137 g138 g14 g140 g141 g142 g143 g144 g145 g15 g150 g151 g152
 g153 g154 g155 g156 g157 g158 g159 g16 g160 g161 g162 g17 g18 g19 g2 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31 g32
 g33 g34 g35 g36 g37 g38 g39 g40 g41 g42 g43 g44 g45 g46 g47 g48 g49 g50 g51 g52 g53 g54 g55 g56 g57 g58 g59 g60 g61 g62
 g63 g64 g65 g66 g67 g68 g69 g70 g71 g72 g73 g74 g75 g76 g77 g78 g79 g80 g81 g82 g83 g84 g85 g86 g87 g88 g89 g90 g91 g92
 g93 g94 g95 g96 g97 g98 g99 gains gantt gap gaps gate gated gates generalised generate generated generates generation
 generations generic genuine genuinely github gitignore global glossary goals gotcha gotchas governance governs gql grade
-graded graders grades grammar grant grants granularity graphql grew grid grouped grouping grows guard guarded guards
-guideline h h1 h2 halves handed handful handing handle handled handles handling handoff harm harvested hash hashed
-hashes headed header headers heading headings headline headquarters headroom heartbeat hedge hedged helper helpers
-heuristics hex hh hhmm hidden hide hides hiding hierarchy highest hit hits holder holding homophone homophones honest
-honestly honoured honours hook hooks hop hops host hosted html http human hurts hybrid hyphen hyphenated hyphens
-hypothesis hypothetical ib ib1 identical identification identified identifier identifiers identifies identify identity
-idle ids ignore ignored ignores image images imitating imitation immediate immediately impact implausible implement
-implemented implements import impossible improvise improvised inactive inaudible inbound incident incidents
-includedeprecated incoming incomplete inconclusive increments incumbents indent indentation indented independence
-independent independently index indistinguishable industry infer inference inferred info ingested inherit inherited
-inherits init initialnumber injected injects inline inner input inputs insensitively insert inserts insights install
-installation installed installs instance instances instruction instructions instrument int intake integer integration
-intended intent inter interim intermediate intermediates internal interrupted interruption intersect intro introduced
-introspection introspects intune invalid invalidcolumntypeexception invented inventories inventory invisible invitation
-invites invoices invoke ip ir irreversible isactive itemsquerygroup itr itsm j jamf jan joined joinery joins json judge
-jul k k7q2 kanban kb keeping keyed keys kinds knowledge l l1 l14 l142 l15 l17 l2 labelled lacked lacking lacks ladder
-lagging landed landing lands lapses largest larkmoor lasts latest laughs layer layers lead leading leads leaf leak
-leaning leanings lease leaving ledger leftover legacy legacyautomations legal legitimate legitimately length lessons
-letters levels lf lies lifecycle likewise limit limited limits lineage linked linking lint linted listed listing lists
-listview literal lives load loc locally location locations lock locked locks log logged logic login logo logs lone
-longer lookalike lookup loop loses lower lowercase lowest lst mac machine machines maintenance malformed manage
-mandatory manifest manual map mapped mapping maps margins mark markdown marked marker markers marketing marks massive
-master match matchable matched matcher matchers matches matching material math matrix matters max maximum maxitems mb
-mcp md meaning measure measurements measures mechanism median medium members membership memory mentioned merely merged
-merges messenger meta metadata metered microsoft mid migration min minimum minted minus mirror mirrored mirroring
-mirrors mirrorvalue misclassified misleading misleads mismatch misplaced misread misses missing missinglabel mix mixed
-mixes mixing mk mkmcsv7h mkmvd0p6 mkrmrgz6 mm mm3gb9sn mm3jtrd mm3jtrd0 mm73h0ss mmb mmd mode model moderate modified
-modifier modifiers modifies modify monotonic moving msys2 multi multiple multipliers multiply mutation mutations mutex n
-n0 n10 n11 n12 n1a n1b n2 n3 n4 n5 n6 n7 n8 n9 named namespace naming narrated narration narrow narrowed narrows native
-nativeness natives nearest nested nesting neutral newer newest newlines nickname nn nnn noise non nonexistent nonsense
-normalisation normalised notice notifications notified notifies notify notifying noun nov null numbered numbering
-numeric o object objection objections objects objectstate objecttype observation observed obtainable occur offers offset
-older omit omits omitted omitting ones onward op opening operating operation operational operations opportunities
-opportunity opposite opps ops option optional optionally options oracle ordered ordinal ordinary org organisation origin
-original outcome outcomes output outright overflow overlay overridden override overrides oversized overview overviews
-overwrite overwrites overwriting owned ownership owning owns p p1 p10 p14 p50 p90 package padded paged paging paid pain
-pains pair pairs palette paragraph parameter params paraphrase parent parentfolderid parentitemid parents park parked
-parking parse parsed parses parsing partial partner partway passes passing password paste patched path paths pattern
-patterns pause paused payload payloads pays pdf pending people0 peoplevalue percent percentile perform performed
-permanent permission permissioned permissions permitted persist personal persons personsandteams pf pf1 phonetic phrase
-picks pin pinned pins pipe pitch pj pj1 pkg placed placeholder placement plain plaintext planner planted plants platform
-plugin plural plus png poc pointed pointer pointers pointing poll polled pooled portal portals portfolio portfolios
-positions positive positives possessive possibly practical pre precision predates predicted prefix prefixes preflight
+graded graders grades grammar grant granted granting grants granularity graphql grew grid grouped grouping grows guard
+guarded guardrails guards guideline h h1 h2 halves handed handful handing handle handled handles handling handoff harm
+harvested hash hashed hashes headed header headers heading headings headline headquarters headroom heartbeat hedge
+hedged helper helpers heuristics hex hh hhmm hidden hide hides hiding hierarchy highest hit hits holder holding
+homophone homophones honest honestly honoured honours hook hooks hop hops host hosted html http human hurts hybrid
+hyphen hyphenated hyphens hypothesis hypothetical ib ib1 identical identification identified identifier identifiers
+identifies identify identity idle ids ignore ignored ignores image images imitating imitation immediate immediately
+impact implausible implement implemented implements import impossible improve improvise improvised inactive inaudible
+inbound incident incidents includedeprecated incoming incomplete inconclusive increments incumbents indent indentation
+indented independence independent independently index indistinguishable industry infer inference inferred info ingested
+inherit inherited inherits init initialnumber injected injects inline inner input inputs ins insensitively insert
+inserts insights install installation installed installs instance instances instruction instructions instrument int
+intake integer integration integrations intended intent inter interim intermediate intermediates internal interrupted
+interruption intersect intro introduced introspection introspects intune invalid invalidcolumntypeexception invented
+inventories inventory invisible invitation invites invoices invoke ip ir irreversible isactive itemsquerygroup itr itsm
+j j1 jamf jan joined joinery joins json judge jul k k7q2 kanban kb keeping keyed keys kinds knowledge l l1 l14 l142 l15
+l17 l2 labelled lacked lacking lacks ladder lagging landed landing lands lapses largest larkmoor lasts latest laughs
+layer layers lead leading leads leaf leak leaning leanings lease leaving ledger leftover legacy legacyautomations legal
+legitimate legitimately length lessons letters levels lf lies lifecycle likewise limit limited limits lineage linked
+linking lint linted listed listing lists listview literal lives load loc locally location locations lock locked locks
+log logged logic login logo logs lone longer lookalike lookup loop loses lower lowercase lowest lst m mac machine
+machines maintenance malformed manage mandatory manifest manual map mapped mapping maps margins mark markdown marked
+marker markers marketing marks massive master match matchable matched matcher matchers matches matching material math
+matrix matters max maximum maxitems mb mcp md meaning measure measured measurements measures mechanism median medium
+members membership memory mentioned merely merged merges messenger meta metadata metered microsoft mid migration min
+minimum minted minus mirror mirrored mirroring mirrors mirrorvalue misclassified misleading misleads mismatch misplaced
+misread misses missing missinglabel mix mixed mixes mixing mk mkmcsv7h mkmvd0p6 mkrmrgz6 mm mm3gb9sn mm3jtrd mm3jtrd0
+mm73h0ss mmb mmd mode model moderate modified modifier modifiers modifies modify monotonic moving msys2 multi multiple
+multipliers multiply mutation mutations mutex n n0 n10 n11 n12 n1a n1b n2 n3 n4 n5 n6 n7 n8 n9 named namespace naming
+narrated narration narrow narrowed narrows native nativeness natives nearest nested nesting neutral newer newest
+newlines nickname nn nnn node noise non nonexistent nonsense normalisation normalised notice notification notifications
+notified notifies notify notifying noun nov null numbered numbering numeric o object objection objections objects
+objectstate objecttype observation observed obtainable occur offerings offers offset older omit omits omitted omitting
+ones onward op opening operating operation operational operations opportunities opportunity opposite opps ops option
+optional optionally options oracle ordered ordinal ordinary org organisation origin original outcome outcomes output
+outright overflow overlay overridden override overrides oversized overview overviews overwrite overwrites overwriting
+owned ownership owning owns p p1 p10 p14 p50 p90 package padded paged paging paid pain pains pair pairs palette
+paragraph parameter params paraphrase parent parentfolderid parentitemid parents park parked parking parse parsed parses
+parsing partial participants partner partway passes passing password paste patched path paths pattern patterns pause
+paused payload payloads pays pdf pending people0 peoplevalue percent percentile perform performed permanent permission
+permissioned permissions permitted persist personal persons personsandteams pf pf1 phonetic phrase picks pin pinned pins
+pipe pitch pj pj1 pkg placed placeholder placement plain plaintext planner planted plants platform plugin plural plus
+png poc pointed pointer pointers pointing poll polled pooled portal portals portfolio portfolios positions positive
+positives possessive possibly posted poster posters practical pre precision predates predicted prefix prefixes preflight
 prep prerequisites presence presented presenter presents preset pressure presumed pretooluse preview previous pricing
 primitive primitives printed prints prior private privileged probability probable probe probed probes probing proceeds
 produced produces products profile progress progressive projectboardid projectid promise promised promoted prompt proof
 properly properties property proposal propose proposed proposes proposing prose prospect protect protected protection
 protects prototype provably prove proved proven provenance proves proving provisional provisioned pub publication
-publish published punctuation purple purpose py python pyyaml q q1 q2 q4 qa qi qualified qualifier qualifies quantity
-quarantined quarter queries query querying queued quota quotas quoted r r0 r1 r10 r11 r12 r2 r3 r4 r5 r6 r7 r8 r9 rag
-raise raised raises ramp ran random randomly range rank ranks rate ratelimit rates rating raw rc re reachable reaches
-reaching reactions readable reader readiness realised reasoned rebind rebuild rebuilds rebuilt recap recapture receiver
-receives recency recheck rechecked recipe recipient recipients recognises recolour recommends recomputed recon reconcile
-reconciled reconciliation reconnect reconstruct reconstructable recorded recording recovery recreate recurred redact
-redacted redaction redactions redone ref reference referenced references reflect reflection reflections refresh
-refreshed refreshes refs refusal refuse refused refuses refusing regardless regenerated regenerates regex regexes region
-register registers regular reject rejected rejection rejects rejoined relabel relabelling relate relates relation
-relation21 relation6 relations relationship relative relays release released releases reliable relied remain remaining
-remark remarks remembered removable removal removes rename renamed renames renaming rendered rendering renderings
-renders renumber reordered rep repair repaired repairs repeat repeated repeating repeats replace replaced replacement
-replaces replacing repointed repository represent reproduced requested requesting requestor require required
-requirements requires research researched resembles resend resending resent reservation reserve reserved reset reshaped
-residual resolvable resolve resolved resolves resolving resource resourcenotfoundexception response responses restate
-restated restates resting restore restoring restrict restrictions restricts rests resume resumed resumes retained
-retention retired retried retries retry retrying returned returning returns reusable reuse reused reveal revealed
-reverse reviewed revise revision revisited rewrite rewrites rewritten richest rights ring rings rise risk risky roadmap
-roles roll rolled rolls rollup rollups root roster rotates roughly route routes routinely routing row rows rp rubric
-ruled runtime runtimes s s0 safely safety sales sample sandbox sanitised sat satellite satellites scaffolding scale
-scaled scan scanned scenario scenarios schema schemas scope scoped scoping scratch screen script scripts search seat
-seconds secret section sections sector seed seeded seeding seeds sees segment segments select selected selecting selects
-seller semicolons sending sentence sentences sep separable separate separated separately separates separator separators
-sequence sequences serial serve served server serves services serving session sessions setting settings settled settles
-settling setup severity sha sha256 shaped shapes share shareable shared sharing shas shell ship shipped ships shortcut
-shortens shouldcheckifstatusisnot showing sibling sides signal signals signature signatures signed silence silent
-silently singleselect singular site sits sizes skills skip skipped skips sku sky sla slice slot slug slugs smaller
-smallest snake snapshot snapshots softened software solution sop sorted sortedquestionslist sound source sources span
-spanning spans speaker speakers speaking spec specific specifically speech spell spelled spelling spellings spells split
-spoke spoken spoofable spoofing spot spots sq1 ss ssz stable stakeholder stakeholders stakes stale staleness stamp
-stamped standalone standing stands starting stated statement statements states staticimage statistic statistics status95
-stays stem stems stops storage store stored stores str straight strand strands stray strengths strictest strictly string
-strings stripped strips strongest structural structure structured stuck style sub subagent subcommand submission
-subscriber subscribers substituted subtasks succeed succeeds success successful suffix suffixed suffixes suggests suite
-sum summaries summariser summary summed superseded superseding supplied supported surface surfaced surfaces surprise
-survey survive survives suspect swallow swallowed sweep switch switched switches symbol symptom sync synced
-synchronously syntax systems t1 tab tables tabs tactics tagged tail takeover taker target targeted targets tax technical
-terminal terminologies terminology tested testing tests text text7 textf2ihoymv texts theme thinnest thirteen thread
-threshold thresholds throwaway ticket tickets tidied tie tied tier tiers ties timed timeout timestamp timestamps timing
-title titled titles tl token tokens tool tools topic torn touched touches tracking3 trailing trajectory transcript
-transcripts transfer transient trap travel travelling travels treat treated treats trigger triggers trimmed trimming
-trusted trusting ts ttp twentieth twenty twice twin txt tying typed types u u1 ui unaddressed unambiguous unanswered
-unarchive unassigned unattributable unauthorized unbound unbuilt uncertain unchanged unchecked unclaimed unclear
-unconfirmed unconnected undecided undeclared underscore undetectable undo undone unfiltered unintended union unique
-units unknown unlock unmade unmet unordered unprepared unpriced unprobed unproved unqualified unread unreadable
-unrecognized unrecorded unrecoverable unrelated unrequested unresolved unsettled unsourced unsupported untargeted
-untested unverified unwired updated updatequestioninput updatequestionorder upload ups upside url urls usable usage
-usedatasettemplate usemlstemplate userprofile utc utf uuid v v0 v1 v2 v3 valid validate validates validation values
+publish published publishing pulse punctuation purple purpose py python pyyaml q q1 q2 q4 qa qi qualified qualifier
+qualifies quantity quarantined quarter queries query querying queued quota quotas quoted r r0 r1 r10 r11 r12 r2 r3 r4 r5
+r6 r7 r8 r9 rag raise raised raises ramp ran random randomly range rank ranks rate ratelimit rates rating raw rc re
+reachable reaches reaching reactions readable reader readiness realised reasoned rebind rebuild rebuilds rebuilt recap
+recapture receiver receives recency recheck rechecked recipe recipes recipient recipients recognises recolour recommends
+recomputed recon reconcile reconciled reconciliation reconnect reconstruct reconstructable recorded recording recovery
+recreate recurred redact redacted redaction redactions redone ref reference referenced references reflect reflection
+reflections refresh refreshed refreshes refs refusal refuse refused refuses refusing regardless regenerated regenerates
+regex regexes region register registers registration regular reject rejected rejection rejects rejoined relabel
+relabelling relate relates relation relation21 relation6 relations relationship relative relays release released
+releases reliable relied remain remaining remark remarks remembered removable removal removes rename renamed renames
+renaming rendered rendering renderings renders renumber reordered rep repair repaired repairs repeat repeated repeating
+repeats replace replaced replacement replaces replacing repointed repository represent reproduced requested requesting
+requestor require required requirements requires research researched resembles resend resending resent reservation
+reserve reserved reset reshaped residual resolvable resolve resolved resolves resolving resource
+resourcenotfoundexception response responses restate restated restates resting restore restoring restrict restrictions
+restricts rests resume resumed resumes retained retention retired retried retries retry retrying returned returning
+returns reusable reuse reused reveal revealed reverse reviewed revise revision revisited rewrite rewrites rewritten
+richest rights ring rings rise risk risky roadmap roles roll rolled rolls rollup rollups root roster rotates roughly
+route routes routinely routing row rows rp rubric ruled runtime runtimes s s0 safely safety sales sample sandbox
+sanitised sat satellite satellites scaffolding scale scaled scan scanned scenario scenarios scheduled schedulerconfig
+schema schemas scope scoped scoping scratch screen script scripts search searched seat seconds secret section sections
+sector seed seeded seeding seeds sees segment segments select selected selecting selects seller semicolons sending
+sentence sentences sep separable separate separated separately separates separator separators sequence sequences serial
+serve served server serves services serving session sessions setting settings settled settles settling setup severity
+sha sha256 shaped shapes share shareable shared sharing shas shell ship shipped ships shortcut shortens
+shouldcheckifstatusisnot showing sibling sides signal signals signature signatures signed silence silent silently
+singleselect singular site sits sizes skills skip skipped skips sku sky sla slice slot slug slugs smaller smallest snake
+snapshot snapshots softened software solution sop sorted sortedquestionslist sound source sources span spanning spans
+speaker speakers speaking spec specific specifically speech spell spelled spelling spellings spells split splits spoke
+spoken spoofable spoofing spot spots sq1 ss ssz stable stakeholder stakeholders stakes stale staleness stamp stamped
+standalone standing stands starting stated statement statements states staticimage statistic statistics status95 stays
+stem stems stops storage store stored stores str straight strand strands stray strays strengths strictest strictly
+string strings stripped strips strongest structural structure structured stuck style sub subagent subcommand submission
+subscribe subscriber subscribers substituted subtasks succeed succeeds success successful suffix suffixed suffixes
+suggests suite sum summaries summarise summariser summarize summary summed superseded superseding supplied supported
+surface surfaced surfaces surprise survey survive survives suspect swallow swallowed sweep switch switched switches
+switching symbol symptom sync synced synchronously syntax systems t1 tab tables tabs tactics tagged tail takeover taker
+target targetcolumnid targeted targets tax technical templated terminal terminologies terminology tested testing tests
+text text7 textf2ihoymv texts theme thinnest thirteen thread threshold thresholds throwaway ticket tickets tidied tie
+tied tier tiers ties timed timeout timestamp timestamps timing title titled titles tl token tokens tone tool tools topic
+torn touched touches touching tracking3 trailing trajectory transcript transcripts transfer transient translate trap
+travel travelling travels treat treated treats trigger triggers trimmed trimming trusted trusting ts ttp twentieth
+twenty twice twin txt tying typed types u u1 ui unaddressed unambiguous unanswered unarchive unassigned unattributable
+unauthorized unbound unbuilt uncertain unchanged unchecked unclaimed unclear unconfirmed unconnected undecided
+undeclared underscore undetectable undo undone unfiltered unintended union unique units unknown unlike unlock unmade
+unmet unordered unprepared unpriced unprobed unproved unqualified unread unreadable unrecognized unrecorded
+unrecoverable unrelated unrequested unresolved unset unsettled unsourced unsupported untargeted untested unverified
+unwired updated updatequestioninput updatequestionorder upload ups upside url urls usable usage usedatasettemplate
+usemlstemplate userprofile utc utf uuid uuids v v0 v1 v2 v3 valid validate validates validation validations values
 vanish vanishes variable variables variant variants varied varies vary vb1 vendor verb verbally verbatim verbs verdict
-verification verified verifies verify version versions versus viewer viewkind visibility visible visual vnrm
+verification verified verifies verify version versions versus viewer viewkind visibility visible visit visual vnrm
 vocabularies vocabulary void voids volume vx w w1 w2 waits wakes walked walking walkthrough warn warning warnings warns
-weakest wearing web webhook webhooks wedge wedges wf1 wh1 whichever whitelist whitespace widened wider widget widgets
+weakest wearing web webhook webhooks wedge wedges wf wf1 wh1 whichever whitelist whitespace widened wider widget widgets
 width widths windows wins withouttitle woken won workaround workflowdraftid workflowobjectid workforms workspaceid worse
 worst worth wp1 wp2 wp4 wps wrapped wrapper writer writers ws wsl x xxxx y yyyy yyyymmdd yyyymmddthhmmssffffffz z z0 za
 zero zone
@@ -349,7 +354,7 @@ zero zone
 # X26's own small stop list; a shared/ word on its own no longer drops it. tests/unit/test_leak_wall.py compares this
 # list with the shipped shared/ folder; regenerate it with shared_phrases() as SHARED_WORDS is regenerated.
 SHARED_PHRASES = frozenset(p.strip() for p in """
-a start, a tickets, a za, amz expires, api and ui, api version, b and c, b tickets, battery and gantt, c it,
+a start, a tickets, a za, amz expires, an ai, api and ui, api version, b and c, b tickets, battery and gantt, c it,
 calendar and gantt, call lessons, chart and battery, crlf and cr, crm and service, csat survey, csat survey and service,
 d and r, d and r h, dashboard and app, dd hh, dd n, doc comments, e and crm, families b, families b and c, family e,
 form and app, gantt and snapshot, group title, http put, in progress, joinery ops, larkmoor joinery,
@@ -358,9 +363,9 @@ one json, only table, priority and planned, priority and planned timeline, probe
 r a, r b, r c, r d, r d and r, r e, r f, r g, r h, r i, r j, r k, ratelimit policy, real call, real call lessons,
 sales activities, sales crm, sales rep, sales targets, serial number, service contacts, service portal, service sla,
 status and date, subitems and timeline, subitems of tickets, submission viewer, survey and service,
-survey and service contacts, template center, the mcp, the portal, the service, the service sla, ticket id, to do,
-vibe and ai, web form, where sla, word and pdf, work management, workforms submission, workforms submission viewer,
-x amz, x amz expires, yyyy mm, yyyy mm dd, yyyy mm dd hh, yyyy mm dd n, yyyy mm ddthh,
+survey and service contacts, template center, the ai, the crm, the mcp, the portal, the service, the service sla,
+ticket id, to do, vibe and ai, web form, where sla, word and pdf, work management, workforms submission,
+workforms submission viewer, x amz, x amz expires, yyyy mm, yyyy mm dd, yyyy mm dd hh, yyyy mm dd n, yyyy mm ddthh,
 yyyymmdd hhmm,
 """.split(",") if p.strip())
 # end pinned
@@ -2799,6 +2804,9 @@ class Check:
                             if is_id:
                                 self.id_hit(variant, match, row)
                                 continue
+                            if row.cls == "pain-ids" and ELEMENT_KEY_HEAD.search(
+                                    variant.text, max(0, match.start() - 12), match.start()):
+                                continue  # A42 (R80): the column part of an element key (`B3.C9`) is no pain id
                             s, e = variant.span(match.start(), match.end())
                             self.hit("term", row.cls, "block", s, e, PROBLEMS["term"][0] % (row.cls, row.where()),
                                      PROBLEMS["term"][1])
@@ -2809,6 +2817,8 @@ class Check:
         kind = id_kind(variant.text, match.start(), match.end())
         if kind == "decimal":
             return
+        if re.sub(r"\D", "", match.group(0)) in getattr(self.run, "own_ids", ()):
+            return  # A43 (R81): in a workflow request, the record's own user and objects are arguments, not leaks
         s, e = variant.span(match.start(), match.end())
         if kind == "date":
             self.hit("split-figure", None, "warn", s, e, "a date written as eight digits, or an id that reads as one",
@@ -4638,6 +4648,29 @@ def phone_object(value):
         isinstance(value["countryShortName"], str) and bool(COUNTRY_CODE.fullmatch(value["countryShortName"]))
 
 
+# A42 (R80): the head of an element key, a board or account-level element and its number and a dot, right before a
+# match; a key qualified with its strand (`001:B3.C9`) still meets its own row of the pain-ids class.
+ELEMENT_KEY_HEAD = re.compile(r"(?<![\w:])(?:DB|PF|PJ|AG|WF|VB|SQ|WH|W|F|B|D|A|U)\d{1,3}\.$", re.IGNORECASE)
+
+
+def json_decoded(value, depth=0):
+    """A42 (R79): the text of a payload string that holds JSON, written from the parsed value with every key and string
+    as it is, so an escape (\\n, \\t, \\u00e9) reads as the character it stands for and never as letters beside a number
+    (`\\n15` as N15). JSON held in a string inside it is rendered the same way, up to three levels."""
+    if isinstance(value, str):
+        if depth < 3 and value.strip()[:1] in ("{", "["):
+            try:
+                return json_decoded(json.loads(value), depth + 1)
+            except ValueError:
+                pass
+        return '"%s"' % value
+    if isinstance(value, dict):
+        return "{%s}" % ", ".join("%s: %s" % (json_decoded(str(k), 3), json_decoded(v, depth)) for k, v in value.items())
+    if isinstance(value, list):
+        return "[%s]" % ", ".join(json_decoded(v, depth) for v in value)
+    return json.dumps(value)
+
+
 def payload_units(file, data, strand, seq, sample=False):
     """X22, Y08: every string, every object key and every number at every depth, a string holding JSON walked as
     JSON as well; a digit-only value under a structural id key is marked structural, and so (A33, R66) is an object
@@ -4698,6 +4731,8 @@ def payload_units(file, data, strand, seq, sample=False):
                     stack.append((path + "<json>", inner, depth + 1, False, place))
                 if isinstance(inner, (dict, list, str)):
                     unit.joins = False  # G19 (R53): the strings walked inside it join in its place
+                    unit.text = json_decoded(inner)  # A42 (R79): the raw string is read with its escapes decoded
+                    unit.line_starts = [0] + [i + 1 for i, c in enumerate(unit.text) if c == "\n"]
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
             text = str(value) if isinstance(value, int) else repr(value)
             unit = Unit(file, text, (seq, len(units)), field=path, strand=strand, kind="number",
@@ -4812,11 +4847,28 @@ def cmd_scan(run):
     return outcome(run)
 
 
+def own_ids(run, folder):
+    """A43 (R81): the monday ids this record holds as its own, which a workflow request names as arguments: the bound
+    user's id (`account.json`) and the numeric ids of the strand's ledger rows (its boards, folder, workspace, doc,
+    workflow). A file that cannot be read gives none, so every id blocks as before."""
+    found = set()
+    for path, pick in ((run.root / "account.json", lambda d: [(d.get("account") or {}).get("bound_user_id")]),
+                       (folder / "solution" / "build.json", lambda d: [o.get("id") for o in (d.get("objects") or {})
+                                                                         .values() if isinstance(o, dict)])):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        found |= {str(i) for i in pick(data) if isinstance(i, str) and DIGIT_RUN.fullmatch(i) and len(i) >= 6}
+    return found
+
+
 def cmd_payload(run):
     run.locate()
     args = run.args
-    strand_folder(run, args.strand)
+    folder = strand_folder(run, args.strand)
     run.strand = args.strand
+    run.own_ids = own_ids(run, folder) if args.kind == "workflow" else set()  # A43 (R81)
     rel, path = inside_record(run, args.file, "--file")
     if not path.is_file():
         raise cannot(rel, "--file", "the payload is not a file", "the tool input written as one JSON file")

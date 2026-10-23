@@ -6,6 +6,9 @@ intent` reads, under the record mutex, and prints what it changed. It never ship
 release lint. Run it after `ledger.py bind` and before `ledger.py run start`.
 
     python3 tools/dev_test_workspace.py --record <client folder> --strand 001 --workspace <id> [--product core]
+
+Without `--product`, a workspace the record already knows keeps its product, and a new one is `core`; a product that
+differs from the one the record holds is refused (demo 4, build note 4: the CRM test workspace was nearly relabelled).
 """
 import sys
 
@@ -27,7 +30,7 @@ def target(record, strand, workspace, product):
         raise SystemExit("--workspace: digits with no leading zero, the id monday gives")
     if not re.fullmatch(r"\d{3}", strand):
         raise SystemExit("--strand: the three-digit short id, such as 001")
-    if product not in ("core", "crm", "service"):
+    if product not in (None, "core", "crm", "service"):
         raise SystemExit("--product: core, crm or service")
     path = record / "account.json"
     with mc.record_mutex(record):
@@ -35,6 +38,12 @@ def target(record, strand, workspace, product):
         if str((account.get("account") or {}).get("id")) in ("None", "unbound"):
             raise SystemExit("account.json is not bound yet: run ledger.py bind first")
         index = account.setdefault("guard_index", {})
+        kinds = index.get("product_workspaces") or {}
+        have = kinds.get(workspace)
+        if product is None:
+            product = have or "core"
+        elif have and have != product:
+            raise SystemExit("--product: the record holds this workspace as %s, and a workspace keeps its product" % have)
         ids = index.setdefault("client_workspace_ids", [])
         if workspace not in ids:
             ids.append(workspace)
@@ -43,7 +52,6 @@ def target(record, strand, workspace, product):
         entry.setdefault("folder_ids", [])
         if workspace not in entry["workspace_ids"]:
             entry["workspace_ids"].append(workspace)
-        kinds = index.get("product_workspaces") or {}
         kinds[workspace] = product
         index["product_workspaces"] = kinds
         mc.write_file(path, mc.json_text(account), record)
@@ -55,7 +63,7 @@ def main(argv=None):
     parser.add_argument("--record", required=True)
     parser.add_argument("--strand", required=True)
     parser.add_argument("--workspace", required=True)
-    parser.add_argument("--product", default="core")
+    parser.add_argument("--product", default=None)
     args = parser.parse_args(argv)
     result = target(Path(args.record).resolve(), args.strand, args.workspace, args.product)
     print(json.dumps({"ok": True, "written": "account.json", **result}, ensure_ascii=False))

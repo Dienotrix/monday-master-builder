@@ -2163,6 +2163,84 @@ class A39Test(Base):
                 self.assertTrue(self.found(found, rule, cls, "block"), found["findings"])
 
 
+class A42Test(Base):
+    """A42 (R79, R80): a payload value that holds JSON is read with its escapes decoded, and the column part of an
+    element key is no pain id. Each loosening has a control that still blocks."""
+
+    VISITS = {"long_text_mm8c1": {"text": "Visit on 2 October: samples asked for.\n15 October: samples arrived."}}
+
+    # R79: escapes are read as what they stand for
+
+    def test_A42_R79_an_escaped_line_break_before_a_date_is_not_a_pain_id(self):
+        accented = {"long_text_mm8c1": {"text": "Café counter\tS1 shelf? No: 3 shelves.\n9 cases."}}
+        for data in ({"board_id": 73100482, "items": [{"item_name": "Sterling Gear Works", "column_values":
+                                                       json.dumps(self.VISITS)}]},
+                     {"board_id": 73100482, "column_values": json.dumps(json.dumps(self.VISITS))},
+                     {"board_id": 73100482, "column_values": json.dumps({"text_1": "Line one\n12 crates"})}):
+            with self.subTest(data=data):
+                code, found = self.payload(data, "item_batch")
+                self.assertEqual((code, found["findings"]), (0, []))
+        code, found = self.payload({"board_id": 73100482, "column_values": json.dumps(accented, ensure_ascii=True)})
+        self.assertEqual([f["match"] for f in self.found(found, "term", "pain-ids")], ["S1", "S1"])  # the real one
+
+    def test_A42_R79_a_pain_id_inside_json_still_blocks_in_the_value_and_the_decoded_string(self):
+        data = {"board_id": 73100482, "column_values": json.dumps({"long_text": {"text": "Pain\nP3 is solved."}})}
+        code, found = self.payload(data)
+        self.assertEqual(code, 1, found["findings"])
+        self.assertEqual({f["field"] for f in self.found(found, "term", "pain-ids", "block")},
+                         {"$.column_values", "$.column_values<json>.long_text.text"})
+
+    # R80: an element key is not a pain id
+
+    def test_A42_R80_an_element_key_in_a_payload_passes(self):
+        for data in ({"B3.C9": "Visit on 2 October."}, {"key": "B1.C4", "keys": ["B4.C10", "b3.c7", "DB1.W2"]},
+                     {"prompt": "From {pulse.B3.C7} draft one line."}):
+            with self.subTest(data=data):
+                code, found = self.payload(data)
+                self.assertEqual((code, found["findings"]), (0, []))
+
+    def test_A42_R80_a_pain_id_alone_after_a_dot_or_in_a_qualified_key_still_blocks(self):
+        for text, match in (("Column C9 is new.", "C9"), ("See 001:B3.C9 there.", "001:B3.C9"), ("x.C9 here", "C9"),
+                            ("P3 and B3.C9", "P3")):
+            with self.subTest(text=text):
+                code, found = self.payload({"description": text})
+                self.assertEqual(code, 1, found["findings"])
+                self.assertIn(match, [f["match"] for f in self.found(found, "term", "pain-ids", "block")])
+
+
+class A43Test(Base):
+    """A43 (R81): in a workflow request, the ids the record holds as its own pass, the bound user's and those of the
+    strand's ledger rows; every other id still blocks there, and every id still blocks in any other kind of payload."""
+
+    USER, BOARD, OTHER = "93800417", "73100482", "73100499"  # none reads as a date (Y02)
+
+    def own(self):
+        write(self.root / "account.json", json.dumps({"schema": "account/1", "account": {"bound_user_id": self.USER}}))
+        write(self.root / "strands" / "001-wholesale-orders" / "solution" / "build.json", json.dumps(
+            {"schema": "build/2", "objects": {"B1": {"type": "board", "id": self.BOARD},
+                                              "B1.C1": {"type": "column", "id": "status"}}}))
+
+    def test_A43_R81_a_workflow_request_names_its_own_user_and_board_by_id(self):
+        self.own()
+        prompt = "Set step 6: board %s, the item from step 1, and notify only user %s." % (self.BOARD, self.USER)
+        code, found = self.payload({"workflowObjectId": 90300000071, "prompt": prompt}, "workflow")
+        self.assertEqual((code, found["findings"]), (0, []))
+
+    def test_A43_R81_another_id_another_kind_or_no_ledger_still_blocks(self):
+        self.own()
+        for data, kind in (({"prompt": "Notify only user %s." % self.OTHER}, "workflow"),
+                           ({"prompt": "Notify only user %s." % self.USER}, "automation"),
+                           ({"name": "Board %s" % self.BOARD}, "board")):
+            with self.subTest(kind=kind, data=data):
+                code, found = self.payload(data, kind)
+                self.assertEqual(code, 1, found["findings"])
+                self.assertTrue(self.found(found, "term", "id-patterns", "block"), found["findings"])
+        (self.root / "account.json").unlink()
+        (self.root / "strands" / "001-wholesale-orders" / "solution" / "build.json").unlink()
+        code, found = self.payload({"prompt": "Notify only user %s." % self.USER}, "workflow")
+        self.assertEqual(code, 1, found["findings"])
+
+
 class IntakeFoldTest(Base):
     """R78: a scan with no path and no draft says that no draft exists, in the exit the contract gives for nothing
     to check."""

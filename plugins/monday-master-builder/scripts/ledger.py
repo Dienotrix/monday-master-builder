@@ -61,7 +61,11 @@ LISTS = (("automation", "automations_listed"), ("workflow", "workflows_listed"),
 PROMPT_TYPES = ("agent", "ai_column", "vibe_app")
 MUST_LIST = ("workspace", "folder", "publication", "activation", "webhook")  # W42: listed under --irreversible
 INACTIVE_OK = ("agent", "workflow", "sequence", "automation", "activation")
-NO_MATCH = ("ai_column", "sequence", "webhook", "widget")  # read back not-checkable until probed (W51, K198)
+NO_MATCH = ("sequence", "webhook", "widget")  # read back not-checkable until probed (W51, K198)
+# Demo 4: an AI column's settings read back as the board's AI recipes (G-141), so it left NO_MATCH; its prompt names a
+# column as {pulse.<id>}, which the blueprint writes as {pulse.<planned column name>} before the ids exist (G-143): an
+# element key there would meet the lint's pain-id row (`C7`).
+PULSE = re.compile(r"\{pulse\.([A-Za-z0-9_.]+)\}")
 COMPANIONS = ("subitems_board_id", "doc_container_board_id", "form_board_id", "overview_board_id", "planner_board_id",
               "tasks_board_id", "folder_id")
 FIT = {"activate": ("activation",), "publish": ("publication",), "connect": ("project",), "convert": ("board",)}
@@ -110,7 +114,8 @@ IDENTITY = {"workspace": ("name", "kind"), "folder": ("name", "workspace_id"),
             "vibe_app": ("status", "is_published", "code_version"), "workflow": ("name", "state"),
             "group": ("title", "color", "position"), "column": ("id", "title", "type", "settings"),
             "view": ("name", "type", "settings"), "item_batch": ("item_ids",),
-            "publication": ("state", "is_published"), "activation": ("state", "is_published")}
+            "publication": ("state", "is_published"), "activation": ("state", "is_published"),
+            "ai_column": ("id", "ai_kind", "source_column_id", "prompt")}
 for _kind in ("subitems", "portfolio", "project"):
     IDENTITY[_kind] = IDENTITY["board"]
 # Demos' fixes, 3: list_automations names the state is_active, and the older raw read and the snapshot say active;
@@ -427,6 +432,22 @@ def prompt_block(text, key):
         if lines[n].startswith("#"):
             return None
     return None
+
+
+def job_blocks(text, key):
+    """An agent's job instructions, the blocks `### Prompt <KEY>.J1`, `.J2` and on, in order (demo 4, G-113)."""
+    blocks = []
+    while prompt_block(text, "%s.J%d" % (key, len(blocks) + 1)) is not None:
+        blocks.append(prompt_block(text, "%s.J%d" % (key, len(blocks) + 1)))
+    return blocks
+
+
+def keyed_prompt(led, row, text):
+    """An AI column's prompt as read, each {pulse.<column id>} of a column of the same board in this ledger written
+    back as {pulse.<its planned name>}, the form the frozen revision holds (demo 4, G-143)."""
+    ids = {str(r.get("id")): r.get("name") for r in led.objects.values() if r.get("type") in ("column", "ai_column")
+           and r.get("id") and r.get("name") and r.get("parent_key") == row.get("parent_key")}
+    return PULSE.sub(lambda m: "{pulse.%s}" % ids.get(m.group(1), m.group(1)), str(text))
 
 
 # Reading the record inside the mutex.
@@ -2839,6 +2860,14 @@ def verify_reasons(led, key, row, result, obj, note, rel):
             if frozen is None or normalise_prompt(obj.get("plan")) != normalise_prompt(frozen):
                 found.append((rel, field, "the plan read differs from the frozen prompt of %s" % row.get("prompt_ref"),
                               "the plan equal to the ### Prompt %s block, line endings aside" % key))
+            jobs = job_blocks(text, key) if text else []  # demo 4: a job's instructions are approved text too
+            if jobs and not isinstance(obj.get("jobs"), list):
+                found.append((rel, field, "the agent read lacks jobs, while the frozen revision plans %d" % len(jobs),
+                              "jobs from manage_agent_jobs list, each with its instructions"))
+            elif jobs and sorted(normalise_prompt((j or {}).get("instructions") or "") for j in obj["jobs"]) != sorted(
+                    normalise_prompt(j) for j in jobs):
+                found.append((rel, field, "the jobs' instructions differ from the frozen ### Prompt %s.J<n> blocks" % key,
+                              "one job per block, its instructions equal to the block, line endings aside"))
             activation = led.objects.get("%s.ACT" % key) or {}
             if str(obj.get("state")).upper() == "ACTIVE" and activation.get("status") != "verified":
                 found.append((rel, field, "the agent is active while its activation is not verified",
@@ -2854,6 +2883,26 @@ def verify_reasons(led, key, row, result, obj, note, rel):
                 is_str(obj.get("user_yes_to_difference")) and is_str(obj.get("difference"))):
             found.append((rel, field, "the delivered app differs from the request with no yes from the user",
                           "difference and user_yes_to_difference in the read, the user's own words"))
+    if kind == "ai_column":  # demo 4, G-141: the column's AI recipes, read from board_automations
+        missing = [p for p in ("ai_kind", "target_column_id", "prompt", "recipes") if p not in obj]
+        if missing and result in ("match", "mismatch"):  # a not-checkable or needs-user read may be bare
+            found.append((rel, field, "the AI column read lacks %s" % ", ".join(missing),
+                          "ai_kind, target_column_id, prompt and recipes, from the board's AI recipes"))
+        if result == "match" and not missing:
+            if not obj.get("recipes"):
+                found.append((rel, field, "no AI recipe on the board fills the column", "at least one recipe whose "
+                              "targetColumnId is the column"))
+            if row.get("id") and str(obj.get("target_column_id")) != str(row["id"]):
+                found.append((rel, field, "the recipes fill %s, while the row is the column %s" % (
+                    obj.get("target_column_id"), row["id"]), "the recipes of the row's own column"))
+            parsed = parse_ref(row.get("prompt_ref"))
+            entry = led.approval("%sr%d" % parsed[:2]) if parsed else None
+            text = led.frozen(entry)[0] if entry else None
+            frozen = prompt_block(text, key) if text else None
+            if frozen is None or normalise_prompt(keyed_prompt(led, row, obj.get("prompt"))) != normalise_prompt(frozen):
+                found.append((rel, field, "the prompt read differs from the frozen prompt of %s" % row.get("prompt_ref"),
+                              "the prompt equal to the ### Prompt %s block, each {pulse.<column id>} read as its "
+                              "element key, line endings aside" % key))
     if kind == "workflow":
         missing = [p for p in ("state", "validation") if p not in obj]
         if missing:
@@ -2934,6 +2983,9 @@ def cmd_verify(root, args):
         row["state"] = state
     elif status != "removed" and result == "match" and row.get("state") is None:
         row["state"] = "active"
+    parent_row = led.objects.get(row.get("parent_key")) if kind == "activation" else None
+    if parent_row is not None and result == "match" and row.get("state") in ("active", "inactive"):
+        parent_row["state"] = row["state"]  # demo 4: the agent is as its activation left it, for the map and switch-off
     values = {"agent": ("state", "version_id"), "vibe_app": ("status", "is_published", "code_version"),
               "workflow": ("state",)}.get(kind)
     if values:

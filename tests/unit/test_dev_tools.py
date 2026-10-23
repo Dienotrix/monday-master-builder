@@ -40,6 +40,15 @@ class DevTestWorkspaceTest(unittest.TestCase):
         self.assertNotIn(b"\r", raw)
         self.assertTrue(raw.endswith(b"}\n"))
 
+    def test_demo4_a_known_workspace_keeps_its_product_and_another_is_refused(self):
+        tool.target(self.record, "001", "10009999", "crm")
+        self.assertEqual(tool.target(self.record, "001", "10009999", None)["product"], "crm")
+        before = (self.record / "account.json").read_bytes()
+        with self.assertRaises(SystemExit):
+            tool.target(self.record, "001", "10009999", "core")
+        self.assertEqual((self.record / "account.json").read_bytes(), before)
+        self.assertEqual(tool.target(self.record, "001", "10008888", None)["product"], "core")
+
     def test_bad_input_and_an_unbound_record_are_refused_with_nothing_written(self):
         before = (self.record / "account.json").read_bytes()
         for args in (("001", "012", "core"), ("1", "10009999", "core"), ("001", "10009999", "native")):

@@ -1573,8 +1573,8 @@ class RowsTest(Base):
     def test_K163_K190_K198_K169_kinds_with_no_read_back(self):
         self.intent("B1.AI1")
         self.record("B1.AI1", "--id", "job_summary_mkab12cd")
-        self.assertIn("not-checkable", words(self.no("verify", "--key", "B1.AI1", "--result", "match", "--read",
-                                                     self.read_file("B1.AI1", {"id": "job_summary_mkab12cd"}))))
+        self.assertIn("recipes", words(self.no("verify", "--key", "B1.AI1", "--result", "match", "--read",
+                                               self.read_file("B1.AI1", {"id": "job_summary_mkab12cd"}))))  # demo 4
         self.assertIn("--note", " ".join(f["field"] for f in self.no("verify", "--key", "B1.AI1", "--result",
                                                                      "not-checkable", "--read", self.read_file(
                                                                          "B1.AI1", {"id": "x"}))))
@@ -2455,6 +2455,72 @@ class DemosTest(Base):
         self.edit_json("account.json", lambda d: d["account"].update(bound_user_id="unbound"))
         found = self.no("intent", "--key", "SQ1", "--operation", "create", "--scope", OWN_WS, "--notifies", "user")
         self.assertIn("no bound user", words(found))
+
+
+class Demo4Test(Base):
+    """Demo 4's probes of the AI layer (WP3 DECISIONS.md, "Added by demo 4"): an AI column reads back through the
+    board's AI recipes (G-141), and an agent's job instructions are approved text like its plan (G-113)."""
+
+    PROMPT = "From the notes {pulse.Ready to install} draft one line on the next step for {pulse.name}."
+    JOBS = ("On the first of the month, write the pipeline note.", "When a job is stuck, say so in one line.")
+
+    def setUp(self):
+        super().setUp()
+        self.approve(prompts=dict(PROMPTS, **{"B1.AI1": self.PROMPT, "AG1.J1": self.JOBS[0], "AG1.J2": self.JOBS[1]}))
+        self.start()
+
+    def ai_read(self, **change):
+        read = {"id": "job_summary_mkab12cd", "ai_kind": "open_block", "source_column_id": None,
+                "target_column_id": "job_summary_mkab12cd",
+                "prompt": self.PROMPT.replace("Ready to install", "notes_mkab99"),
+                "recipes": [{"id": "657600001", "trigger": "When an item is created"}]}
+        read.update(change)
+        return read
+
+    def test_demo4_1_an_ai_column_verifies_against_its_recipes_and_its_frozen_prompt(self):
+        self.intent("B1.C4")
+        self.record("B1.C4", "--id", "notes_mkab99")
+        self.intent("B1.AI1")
+        self.record("B1.AI1", "--id", "job_summary_mkab12cd")
+        for change, problem in (({"recipes": []}, "no AI recipe"), ({"target_column_id": "other_col"}, "other_col"),
+                                ({"prompt": self.PROMPT.replace("Ready to install", "other_col")}, "frozen prompt")):  # an id
+            # of no column of the board stays an id
+            self.assertIn(problem, words(self.no("verify", "--key", "B1.AI1", "--result", "match", "--read",
+                                                 self.read_file("B1.AI1", self.ai_read(**change)))))
+        lacking = {k: v for k, v in self.ai_read().items() if k != "ai_kind"}
+        self.assertIn("ai_kind", words(self.no("verify", "--key", "B1.AI1", "--result", "match", "--read",
+                                               self.read_file("B1.AI1", lacking))))
+        read = self.ai_read(prompt=self.ai_read()["prompt"] + "\r\n")  # line endings aside
+        data = self.verify("B1.AI1", read)
+        self.assertEqual((data["result"], self.row("B1.AI1")["status"]), ("match", "verified"))
+        identity = self.led.identity("ai_column", read)
+        self.assertEqual(self.row("B1.AI1")["verify"]["digest"], self.led.digest("b1.ai1", identity))
+
+    def test_demo4_2_an_agents_jobs_are_compared_with_the_frozen_job_blocks(self):
+        self.assertEqual(self.led.job_blocks(self.led.normalise_prompt(blueprint(prompts=dict(
+            PROMPTS, **{"AG1.J1": "one", "AG1.J3": "three"}))), "AG1"), ["one"])  # the blocks run from J1 unbroken
+        self.intent("AG1", "--scope", OWN_WS)
+        self.record("AG1", "--id", "90800000001")
+        self.assertIn("lacks jobs", words(self.no("verify", "--key", "AG1", "--result", "match", "--read",
+                                                  self.read_file("AG1", AGENT))))
+        one_off = [{"instructions": self.JOBS[0]}, {"instructions": self.JOBS[1] + " Always."}]
+        self.assertIn("jobs' instructions", words(self.no("verify", "--key", "AG1", "--result", "match", "--read",
+                                                          self.read_file("AG1", dict(AGENT, jobs=one_off)))))
+        jobs = [{"instructions": self.JOBS[1].replace("\n", "\r\n")}, {"instructions": self.JOBS[0] + "\n"}]
+        self.verify("AG1", dict(AGENT, jobs=jobs))  # any order, line endings aside
+        self.assertEqual(self.row("AG1")["status"], "verified")
+
+    def test_demo4_3_a_verified_activation_leaves_the_agent_row_active(self):
+        self.intent("AG1", "--scope", OWN_WS)
+        self.record("AG1", "--id", "90800000001")
+        jobs = [{"instructions": self.JOBS[0]}, {"instructions": self.JOBS[1]}]
+        self.verify("AG1", dict(AGENT, jobs=jobs))
+        self.assertEqual(self.row("AG1")["state"], "inactive")
+        self.intent("AG1.ACT", op="activate")
+        self.record("AG1.ACT", "--id", "90800000001")
+        self.verify("AG1.ACT", {"state": "ACTIVE", "is_published": None})
+        self.assertEqual((self.row("AG1.ACT")["state"], self.row("AG1")["state"]), ("active", "active"))
+        self.assertEqual(self.check()[1], set())
 
 
 LEADS, CONTACTS, TICKETS = "5678953932", "5678953938", "7819831530"  # monday's own template ids (NO 3.1 and 4.1)
