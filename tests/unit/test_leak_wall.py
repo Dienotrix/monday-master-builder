@@ -2542,5 +2542,72 @@ class A36Test(Base):
                 write(self.b / "CLIENT.md", (FIX / "records" / B / "CLIENT.md").read_text(encoding="utf-8"))
 
 
+class A39Test(Base):
+    """A39 (R76): the index publishes a record's names, not the ordinary words, codes and short generic phrases it
+    happens to capitalise. Record b plays the other demo record, with demo 3's shapes in a research note."""
+
+    NOTES = "\n".join([
+        "# Call notes", "",
+        "Recorded on Thursday at 14:02 Central, the desk's time zone.",
+        "And the CRM's own boards stay as monday installs them.",
+        "The Installed column holds the go-live date.",
+        "An AI column writes the summary.",
+        "Account ID: the key the CRM gives each account.",
+        "P2 is the second pain, and C10 and B4 are its column and board.",
+        "Officially the night desk closes at ten.",
+        "Quotes & Invoices is the native board for them.", ""])
+    WORDS = ("central", "officially", "p2", "c10", "b4")
+    FORMS = ("and the crm", "the installed", "an ai", "account id", "accountid", "c10 and b4", "and the crms",
+             "quotes invoices", "quotesinvoices")
+    TEXT = "At 14:02 Central, and the CRM's boards, the installed column, account_id, quotes_invoices and an AI agent."
+    CODE = "Pain P-2 and column C10."  # an internal id written as text: the wall passes it, the id rule still blocks
+
+    def test_A39_R76_ordinary_words_codes_and_generic_phrases_leave_the_index(self):
+        write(self.b / "research" / "2026-08-14-notes.md", self.NOTES)
+        data = self.index(self.b)
+        names = set(self.entry(B)["names"])
+        for form in self.FORMS + self.WORDS:
+            self.assertNotIn(lint.digest("n:", form), names, form)
+        for word in self.WORDS:
+            self.assertNotIn(word, data["single_words"]["words"])
+        self.assertIn(lint.digest("n:", "marlbeck freight"), names)
+        self.assertIn("dockon", data["single_words"]["words"])
+        self.index(self.a)
+        for code, found in (self.payload({"name": "Lead board", "description": self.TEXT}, "board"),
+                            self.draft(self.TEXT + "\n"), self.lint(self.a, "wall", "--text", self.TEXT),
+                            self.lint(self.a, "wall", "--text", self.CODE)):
+            self.assertEqual((code, self.walls(found)), (0, []), found["findings"])
+        folder = self.tmp / "shared copy"  # demo 3's case: terms over a folder of the plugin's own words
+        write(folder / "notes.md", "# Notes\n\n%s\n%s\n" % (self.TEXT, self.CODE))
+        code, found = self.lint(None, "terms", str(folder))
+        self.assertEqual((code, found["findings"]), (0, []))
+        code, found = self.payload({"description": self.CODE}, "board")
+        self.assertEqual((code, self.walls(found)), (1, []), found["findings"])
+        self.assertTrue([f for f in found["findings"] if f["class"] == "id-patterns"], found["findings"])
+
+    def test_A39_R76_another_clients_names_terms_and_figures_still_block(self):
+        write(self.b / "research" / "2026-08-14-notes.md", "\n".join([
+            "# Call notes", "", "So Tallowmere is down again on Mondays.", "And Brindmoor Tackle sends the nets.",
+            "The CRM is Tallowmere; Ysenne Corvath runs it, and Hollin CRM was the old one.",
+            "The Silver Lantern feed and the Account Halvery are the last two.", ""]))
+        self.both()
+        for text, match in (("Open Tallowmere today.", "Tallowmere"), ("Nets from Brindmoor Tackle.",
+                                                                       "Brindmoor Tackle"),
+                            ("Ask Ysenne Corvath.", "Ysenne Corvath"), ("Ask Ysenne.", "Ysenne"),
+                            ("Ask Hollin.", "Hollin"), ("Routes from Silver Lantern.", "Silver Lantern"),
+                            ("Open Account Halvery.", "Account Halvery"),
+                            ("Built for Marlbeck Freight.", "Marlbeck Freight"), ("Book it in Dockon.", "Dockon"),
+                            ("Ask TFM.", "TFM"), ("Ask Wendell Ayo.", "Wendell Ayo")):
+            with self.subTest(text=text):
+                code, data = self.payload({"description": text}, "board")
+                self.assertWall(data, "name", match)
+                code, data = self.lint(self.a, "wall", "--text", text)
+                self.assertWall(data, "name", match)
+        code, data = self.payload({"description": "Add the cold-chain surcharge."}, "board")
+        self.assertWall(data, "term")
+        code, data = self.payload({"description": "Fuel is 186,730 a year."}, "board")
+        self.assertWall(data, "figure")
+
+
 if __name__ == "__main__":
     unittest.main()

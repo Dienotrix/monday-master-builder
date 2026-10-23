@@ -12,7 +12,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from test_record import Base, CALL, CLOCK, FIXTURES, LABEL, S1, S2, V1, is_stdlib, make_plugin, summary_draft
+from test_record import Base, CALL, CLOCK, FIXTURES, LABEL, S1, S2, SCRIPTS, V1, is_stdlib, make_plugin, \
+    summary_draft
 import mmb_common as mc
 
 STALE, RUN = CLOCK + timedelta(minutes=90), "run-2026-11-05-1"
@@ -23,6 +24,7 @@ ANSWERS = ("--firm-name", "Example Consulting", "--firm-rendering", "Example Con
            "example-consulting", "--default-account-slug", "example-account", "--default-account-id", "10000001")
 INIT = ("--name", "Fresh Client", "--topic", "orders", "--title", "Orders", "--kind", "platform", "--reason",
         "the first call asked for one place for orders")
+TEMPLATES, MAP = SCRIPTS.parent / "templates" / "record", SCRIPTS.parent / "shared" / "record-map.md"
 
 
 class Part2(Base):
@@ -1076,6 +1078,243 @@ class IndexAfterWriteTest(Part2):
         self.assertEqual((done.returncode, data["command"], "warnings" in data), (0, "log", False), data)
         self.assertIn(self.lint.name_key("Quarrow Pine"), self.entry()["names"])
         self.assertEqual(sorted(p.relative_to(plugin).as_posix() for p in plugin.rglob("*")), before)
+
+
+class IntakeFoldTest(Part2):
+    """Demo 3's intake fold, the points that are the record's own (demo3-intake-fold.md, "Not the skills'"): the call
+    summary's budget, the build target's reason, the strand blocks, the stamps, the state word, a type correction and
+    the templates and pins the intake skills write to."""
+
+    SIX = ("seat", "relationship", "direction", "output_class", "room_shape", "money_live")
+    VALUES = ("partner-led", "new-logo", "no-show", "configured-structure", "one-to-one", "not-live")
+
+    def pinned(self, *texts):
+        """The record map's text, which must carry each of `texts`."""
+        found = MAP.read_text(encoding="utf-8")
+        for text in texts:
+            self.assertIn(text, found)
+        return found
+
+    @staticmethod
+    def part(text, heading):
+        """The lines under `heading`, to the next heading of its level or above."""
+        lines = text.split("\n")
+        start, depth = lines.index(heading) + 1, len(heading.split(" ")[0])
+        end = next((n for n in range(start, len(lines)) if re.match(r"#{1,%d} " % depth, lines[n])), len(lines))
+        return "\n".join(lines[start:end])
+
+    def summary(self, state="assumed", body="", **fields):
+        """A call summary in the call-summary/1 shape: the six type fields as `<value> <state>`, `fields` laid over
+        them (None drops one), the body after the internal line."""
+        values = dict(zip(self.SIX, ("%s %s" % (value, state) for value in self.VALUES)))
+        values.update(fields)
+        pairs = [("schema", "call-summary/1"), ("call_date", "2026-11-01"), ("call_type", "discovery")]
+        pairs += [(key, values[key]) for key in self.SIX if values.get(key) is not None]
+        pairs += [("sequence", "1"), ("package", "none"), ("provenance", "first-hand"), ("handed_over_by", "none"),
+                  ("attendees", "client: office administrator; ours: the user"), ("strands", "002"),
+                  ("updated", "2026-11-05T14:30")]
+        return self.rec.front_text(pairs) + "Internal: never client-facing\n\n" + body
+
+    def saved(self, words, kind="discovery"):
+        """The stem of a fixture transcript of `words` words, saved through add-transcript for strand 002."""
+        text = "".join("[00:%02d:%02d] Office administrator: %s\n" % (n // 60 % 60, n % 60, " ".join(["word"] * 7))
+                       for n in range(words // 10))
+        return self.ok("add-transcript", "--strand", "002", "--from", self.stage(text, "call.txt"), "--type", kind,
+                       "--date", "2026-11-01", "--fixture")["stem"]
+
+    def sized(self, count):
+        """A call summary of `count` lines: the front matter, the internal line, a heading and filler lines."""
+        head = self.summary(body="## Call type\n")
+        return head + "".join("- filler line %d\n" % n for n in range(count - len(head.splitlines())))
+
+    def budget(self, stem):
+        """The budget warning on calls/<stem>.md, or None."""
+        data = self.run_record("check")[1]
+        return next((f for f in data["warnings"] if f["file"] == "calls/%s.md" % stem and f["field"] == "budget"), None)
+
+    def length(self, stem):
+        return len(mc.read_text(self.root / "calls" / ("%s.md" % stem)).splitlines())
+
+    def test_1_a_call_summary_budget_grows_with_its_transcript_and_only_warns(self):
+        stem = self.saved(6000)  # one line per 30 words: 200
+        self.append("calls/%s.md" % stem, self.sized(200))
+        self.assertEqual(self.length(stem), 200)
+        self.assertIsNone(self.budget(stem))
+        self.append("calls/%s.md" % stem, "- one more line\n")
+        found = self.budget(stem)
+        self.assertIn("201 lines", found["problem"])
+        self.assertIn("at most 200 lines", found["expected"])
+        self.assertEqual(self.check()[:2], (2, set()))  # a warning, never a block
+        short = self.saved(900, "intro")  # below the floor: 120
+        self.append("calls/%s.md" % short, self.sized(121))
+        self.assertIn("at most 120 lines", self.budget(short)["expected"])
+        longest = self.saved(12000, "demo")  # past the ceiling: 250
+        self.append("calls/%s.md" % longest, self.sized(250))
+        self.assertIsNone(self.budget(longest))
+        self.append("calls/%s.md" % longest, "- one more line\n")
+        self.assertIn("at most 250 lines", self.budget(longest)["expected"])
+
+    def test_1_the_record_map_pins_the_budget_that_grows_with_the_transcript(self):
+        text = self.pinned("one line per 30 words of the saved transcript")
+        row = next(line for line in text.split("\n") if line.startswith("| `calls/<date>-<type>.md` |"))
+        self.assertIn("at least 120 and at most 250", row)
+
+    def test_2_init_records_the_default_build_target_with_its_reason_and_says_so(self):
+        data = self.run_at(None, "init", "--slug", "fresh-client", *INIT)[1]
+        root = self.home / "clients" / "fresh-client"
+        client = mc.front_matter(mc.read_text(root / "CLIENT.md"))
+        self.assertEqual((client["build_target"], data["build_target"]), ("own-account", "own-account"))
+        self.assertIn("user's own account", client["build_target_reason"])
+        self.assertEqual(data["build_target_reason"], client["build_target_reason"])
+        self.assertEqual(self.run_at(root, "check")[1]["warnings"], [])
+        self.assertNotIn("build_target_reason", self.fm("CLIENT.md"))  # a record written before it still checks clean
+        self.assertEqual(self.check(), (0, set(), set()))
+        self.edit_fm("CLIENT.md", build_target_reason="the user chose the client's account on the second call")
+        self.assertEqual(self.check(), (0, set(), set()))
+        shipped = (TEMPLATES / "CLIENT.md").read_text(encoding="utf-8").split("\n")
+        after = shipped[[n for n, line in enumerate(shipped) if line.startswith("build_target:")][0] + 1]
+        self.assertTrue(after.startswith('build_target_reason: ""'), after)
+
+    def test_2_the_record_map_pins_the_build_targets_reason(self):
+        text = self.pinned("(`former_names` and `build_target_reason` apart)")
+        client = self.part(text, "### `client/2`, the front matter of `CLIENT.md`")
+        self.assertIn("(`former_names` and `build_target_reason` apart)", client)
+        self.assertIn("`record.py init` writes the reason of the default", client)
+
+    def test_2_3_15_init_from_the_shipped_templates_checks_clean_with_the_new_strand_blocks(self):
+        with mock.patch.object(self.rec, "TEMPLATES", TEMPLATES):
+            data = self.run_at(None, "init", "--slug", "fresh-client", *INIT)[1]
+        root = self.home / "clients" / "fresh-client"
+        self.assertEqual(self.run_at(root, "check")[1]["warnings"], [])
+        self.assertIn("user's own account", data["build_target_reason"])
+        headings = [line for line in mc.read_text(root / "strands" / "001-orders" / "STRAND.md").split("\n")
+                    if line.startswith("## ")]
+        self.assertEqual(headings, ["## Headline and top pains", "## What this build rests on", "## Next step",
+                                    "## Open commitments", "## Links"])
+
+    def test_3_15_the_record_map_pins_the_two_strand_blocks_and_their_lines(self):
+        text = self.pinned("`## What this build rests on`", "`## Open commitments`")
+        template = (TEMPLATES / "STRAND.md").read_text(encoding="utf-8")
+        for line in ("- <what> · owner: <role> · when: <date or unknown> · from: calls/<stem>.md",
+                     "- clearance: <the clearance string>", "- assumptions: <n> in readiness.md, <n> structural"):
+            self.assertIn(line, text)
+            self.assertIn(line, template)
+
+    def test_4_check_reads_minute_and_second_stamps_as_locations(self):
+        stem = self.saved(600)
+        lines = ['- P1: late orders — [Q] "We chase it by phone" %s · office administrator\n' % at
+                 for at in ("@03:44", "@3:44", "@00:03:44", "@1:03:44")]
+        self.append("calls/%s.md" % stem, self.summary(body="## Pains\n\n" + "".join(lines)))
+        self.assertEqual(self.check(), (0, set(), set()))
+        self.append("calls/%s.md" % stem, '- P2: no stamp — [Q] "We chase it by phone" · office administrator\n')
+        self.assertEqual(self.check(), (2, set(), {("calls/%s.md" % stem, "line %d" % self.length(stem))}))
+
+    def test_4_the_record_map_pins_the_zero_hour_and_reads_minute_and_second_stamps(self):
+        text = self.pinned("`@MM:SS`")
+        self.assertIn("`@00:03:44`", next(line for line in text.split("\n") if "`@MM:SS`" in line))
+
+    def test_5_6_the_readiness_pin_carries_deferred_pains_and_connected_rows(self):
+        text = self.pinned("`deferred`", "as connected rows on <board>")
+        self.assertIn("` · deferred`", text)
+        pins = self.part(text, "## Pinned: readiness")
+        self.assertIn("`deferred`", next(line for line in pins.split("\n") if line.startswith("| `pains[]`")))
+        self.assertIn("as connected rows on <board>", pins)
+
+    def test_7_13_the_summary_templates_and_the_pinned_bodies_agree(self):
+        text = self.pinned("## Constraints", "## Agreed")
+        for name, opening in (("call-summary.md", "The body of a call summary"),
+                              ("document-summary.md", "The body of a document snapshot")):
+            template = (TEMPLATES / name).read_text(encoding="utf-8")
+            headings = [line for line in template.split("\n") if line.startswith("## ")]
+            sentence = next(line for line in text.split("\n") if line.startswith(opening))
+            self.assertEqual([h for h in re.findall(r"`(## [^`]+)`", sentence) if h in headings], headings, name)
+        flat = next(line for line in text.split("\n") if "front matter stays flat" in line)
+        self.assertIn("`## Call type`", flat)
+
+    def test_7_9_16_records_filled_from_the_new_templates_check_clean(self):
+        stem = self.saved(600)
+        filled = mc.set_front_matter((TEMPLATES / "call-summary.md").read_text(encoding="utf-8"), dict(
+            zip(self.SIX, ("%s assumed" % v for v in self.VALUES)), call_date="2026-11-01", call_type="discovery",
+            sequence="1", attendees="client: office administrator; ours: the user", strands="002"))
+        self.append("calls/%s.md" % stem, filled)
+        document = self.ok("add-document", "--strand", "002", "--title", "supplier-list", "--from",
+                           self.stage("supplier,lead time\nA,3 days\n", "s.csv"), "--fixture")
+        self.append("inputs/%s.md" % document["stem"], mc.set_front_matter(
+            (TEMPLATES / "document-summary.md").read_text(encoding="utf-8"),
+            {"title": "Supplier list", "source": document["stem"], "sha256": document["sha256"], "sequence": "1",
+             "strands": "002"}))
+        template = (TEMPLATES / "meetings.md").read_text(encoding="utf-8")
+        self.assertIn("- <YYYY-MM-DD> · <call type> · calls/<stem>.md · client: <roles>; ours: the user · strands: "
+                      "<short ids> · <first-hand or handed-over>", template)
+        meeting = "- 2026-11-01 · discovery · calls/%s.md · client: office administrator; ours: the user · " \
+                  "strands: 002 · first-hand" % stem
+        self.append("meetings.md", self.rec.set_block(mc.set_front_matter(template, {"client": "larkmoor-joinery"}),
+                                                      "## Meetings", [meeting]))
+        questions = (TEMPLATES / "open-questions.md").read_text(encoding="utf-8")
+        self.assertIn("- Q1: <the question> · kind: <conflict | technical | access | commercial | policy | ask> · "
+                      "state: <open | answered | bypassed> · who can answer: <role>", questions)
+        line = "- Q1: which supplier is late most · kind: ask · state: open · who can answer: office administrator · " \
+               "known: three suppliers · source: calls/%s.md @00:00:09" % stem
+        self.append(S2 + "/solution/open-questions.md", self.rec.set_block(mc.set_front_matter(
+            questions, {"strand": "002"}), "## Open questions", [line]))
+        self.assertEqual(self.check(), (0, set(), set()))
+
+    def test_9_16_the_record_map_pins_the_meetings_and_open_questions_lines(self):
+        text = self.pinned("`meetings.md` template", "`open-questions.md` template")
+        self.assertIn("`- <YYYY-MM-DD> · <call type> · calls/<stem>.md · client: <roles>; ours: the user · strands: "
+                      "<short ids> · <first-hand or handed-over>`", text)
+        packages = "- pkg-<YYYY-MM-DD>: <what arrived>, from <role>, ordered by <the evidence>; second-hand figures: " \
+                   "<list or none>"
+        self.assertIn("`%s`" % packages, text)
+        self.assertIn(packages, (TEMPLATES / "meetings.md").read_text(encoding="utf-8"))
+        question = "- Q1: <the question> · kind: <kind> · state: <open | answered | bypassed> · who can answer: " \
+                   "<role> · known: <what the record already holds> · source: <a file and its location, or a log " \
+                   "header>"
+        self.assertIn("`%s`" % question, text)
+        self.assertIn(question.replace("<kind>", "<conflict | technical | access | commercial | policy | ask>"),
+                      (TEMPLATES / "open-questions.md").read_text(encoding="utf-8"))
+
+    def test_10_the_readiness_headings_are_pinned_in_the_guides_order(self):
+        text = self.pinned("`## Unmet needs`")
+        order = ["## Note", "## Goals", "## Pains", "## Signals", "## Entities", "## Structure", "### Leanings",
+                 "### Patterns", "### Element per pain", "## Existing", "## Assumptions", "## Unmet needs",
+                 "## AI opportunities", "## Verdict", "## Questions"]
+        pins = self.part(text, "## Pinned: readiness")
+        self.assertEqual([t for t in dict.fromkeys(re.findall(r"`(#{2,3} [^`]+)`", pins)) if t in order], order)
+        guide = (SCRIPTS.parent / "skills" / "build-readiness" / "references" / "readiness-guide.md").read_text(
+            encoding="utf-8")
+        places = [guide.find(("**`%s`" if h.startswith("## ") else "- `%s`") % h) for h in order]
+        self.assertNotIn(-1, places)
+        self.assertEqual(places, sorted(places))
+
+    def test_12_the_state_word_is_assumed_and_proposed_still_reads(self):
+        rel = "calls/%s.md" % self.saved(600)
+        for state in ("assumed", "detected", "confirmed", "proposed"):
+            (self.root / rel).write_bytes(self.summary(state).encode("utf-8"))
+            self.assertEqual(self.check(), (0, set(), set()), state)
+        (self.root / rel).write_bytes(self.summary(seat="unresolved", money_live="not-live guessed",
+                                                   room_shape=None).encode("utf-8"))
+        self.assertEqual(self.check(), (2, set(), {(rel, "money_live"), (rel, "room_shape")}))
+
+    def test_12_the_record_map_pins_assumed_as_the_state_word(self):
+        text = self.pinned("`detected`, `assumed` or `confirmed`")
+        self.assertNotIn("`proposed`", self.part(text, "## Pinned: call-type-vocabulary"))
+        self.assertIn("reads as `assumed`", self.part(text, "## Calls, documents and the strand files"))
+
+    def test_14_a_type_correction_keeps_the_stem_and_never_saves_again(self):
+        stem = self.saved(600)
+        code, data = self.run_record("add-transcript", "--strand", "002", "--from", self.tmp / "call.txt", "--type",
+                                     "demo", "--date", "2026-11-01", "--fixture")
+        self.assertEqual(code, 1)
+        self.assertIn("calls/%s.transcript.txt" % stem, data["refusals"][0]["problem"])
+        self.assertIn("keeps the stem", data["refusals"][0]["expected"])
+        self.assertEqual(sorted(p.name for p in (self.root / "calls").glob("2026-11-01-*")),
+                         ["%s.transcript.txt" % stem])
+
+    def test_14_the_record_map_pins_the_kept_stem(self):
+        text = self.pinned("the raw file is never saved again under a new stem")
+        self.assertIn("the raw file is never saved again under a new stem", self.part(
+            text, "## Calls, documents and the strand files"))
 
 
 class Part2FrameTest(Part2):

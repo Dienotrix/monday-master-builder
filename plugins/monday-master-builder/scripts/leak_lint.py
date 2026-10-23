@@ -249,63 +249,63 @@ inherits init initialnumber injected injects inline inner input inputs insensiti
 installation installed installs instance instances instruction instructions instrument int intake integer integration
 intended intent inter interim intermediate intermediates internal interrupted interruption intersect intro introduced
 introspection introspects intune invalid invalidcolumntypeexception invented inventories inventory invisible invitation
-invites invoices invoke ip ir irreversible itemsquerygroup itr itsm j jamf jan joined joinery joins json judge jul k
-k7q2 kanban kb keeping keyed keys kinds knowledge l l1 l14 l142 l15 l17 l2 labelled lacked lacking lacks ladder lagging
-landed landing lands lapses largest larkmoor lasts latest laughs layer layers lead leading leads leaf leak leaning
-leanings lease leaving ledger leftover legacy legal legitimate legitimately length lessons letters levels lf lies
-lifecycle likewise limit limited limits lineage linked linking lint linted listed listing lists listview literal lives
-load loc locally location locations lock locked locks log logged logic login logo logs lone longer lookalike lookup loop
-loses lower lowercase lowest lst mac machine machines maintenance malformed manage mandatory manifest manual map mapped
-mapping maps margins mark markdown marked marker markers marketing marks massive master match matchable matched matcher
-matchers matches matching material math matrix matters max maximum maxitems mb mcp md meaning measure measurements
-measures mechanism median medium members membership memory mentioned merely merged merges messenger meta metadata
-metered microsoft mid migration min minimum minted minus mirror mirrored mirroring mirrors mirrorvalue misclassified
-misleading misleads mismatch misplaced misread misses missing missinglabel mix mixed mixes mixing mk mkmcsv7h mkmvd0p6
-mkrmrgz6 mm mm3gb9sn mm3jtrd mm3jtrd0 mm73h0ss mmb mmd mode model moderate modified modifier modifiers modifies modify
-monotonic moving msys2 multi multiple multipliers multiply mutation mutations mutex n n0 n10 n11 n12 n1a n1b n2 n3 n4 n5
-n6 n7 n8 n9 named namespace naming narrated narration narrow narrowed narrows native nativeness natives nearest nested
-nesting neutral newer newest newlines nickname nn nnn noise non nonexistent nonsense normalisation normalised notice
-notifications notified notifies notify noun nov null numbered numbering numeric o object objection objections objects
-objectstate objecttype observation observed obtainable occur offers offset older omit omits omitted omitting ones onward
-op opening operating operation operational operations opportunities opportunity opposite opps ops option optional
-optionally options oracle ordered ordinal ordinary org organisation origin original outcome outcomes output outright
-overflow overlay overridden override overrides oversized overview overviews overwrite overwrites overwriting owned
-ownership owning owns p p1 p10 p14 p50 p90 package padded paged paging paid pain pains pair pairs palette paragraph
-parameter params paraphrase parent parentfolderid parentitemid parents park parked parking parse parsed parses parsing
-partial partner partway passes passing password paste patched path paths pattern patterns pause paused payload payloads
-pays pdf pending people0 peoplevalue percent percentile perform performed permanent permission permissioned permissions
-permitted persist personal persons personsandteams pf pf1 phonetic phrase picks pin pinned pins pipe pitch pj pj1 pkg
-placed placeholder placement plain plaintext planner planted plants platform plugin plural plus png poc pointed pointer
-pointers pointing poll polled pooled portal portals portfolio portfolios positions positive positives possessive
-possibly practical pre precision predates predicted prefix prefixes preflight prep prerequisites presence presented
-presenter presents preset pressure presumed pretooluse preview previous pricing primitive primitives printed prints
-prior private privileged probability probable probe probed probes probing proceeds produced produces products profile
-progress progressive projectboardid projectid promise promised promoted prompt proof properly properties property
-proposal propose proposed proposes proposing prose prospect protect protected protection protects prototype provably
-prove proved proven provenance proves proving provisional provisioned pub publication publish published punctuation
-purple purpose py python pyyaml q q1 q2 q4 qa qi qualified qualifier qualifies quantity quarantined quarter queries
-query querying queued quota quotas quoted r r0 r1 r10 r11 r12 r2 r3 r4 r5 r6 r7 r8 r9 rag raise raised raises ramp ran
-random randomly range rank ranks rate ratelimit rates rating raw rc re reachable reaches reaching reactions readable
-reader readiness realised reasoned rebind rebuild rebuilds rebuilt recap recapture receiver receives recency recheck
-rechecked recipe recipient recipients recognises recolour recommends recomputed recon reconcile reconciled
-reconciliation reconnect reconstruct reconstructable recorded recording recovery recreate recurred redact redacted
-redaction redactions redone ref reference referenced references reflect reflection reflections refresh refreshed
-refreshes refs refusal refuse refused refuses refusing regardless regenerated regenerates regex regexes region register
-registers regular reject rejected rejection rejects rejoined relabel relabelling relate relates relation relation21
-relation6 relations relationship relative relays release released releases reliable relied remain remaining remark
-remarks remembered removable removal removes rename renamed renames renaming rendered rendering renderings renders
-renumber reordered rep repair repaired repairs repeat repeated repeating repeats replace replaced replacement replaces
-replacing repointed repository represent reproduced requested requesting requestor require required requirements
-requires research researched resembles resend resending resent reservation reserve reserved reset reshaped residual
-resolvable resolve resolved resolves resolving resource resourcenotfoundexception response responses restate restated
-restates resting restore restoring restrict restrictions restricts rests resume resumed resumes retained retention
-retired retried retries retry retrying returned returning returns reusable reuse reused reveal revealed reverse reviewed
-revise revision revisited rewrite rewrites rewritten richest rights ring rings rise risk risky roadmap roles roll rolled
-rolls rollup rollups root roster rotates roughly route routes routinely routing row rows rp rubric ruled runtime
-runtimes s s0 safely safety sales sample sandbox sanitised sat satellite satellites scaffolding scale scaled scan
-scanned scenario scenarios schema schemas scope scoped scoping scratch screen script scripts search seat seconds secret
-section sections sector seed seeded seeding seeds sees segment segments select selected selecting selects seller
-semicolons sending sentence sentences sep separable separate separated separately separates separator separators
+invites invoices invoke ip ir irreversible isactive itemsquerygroup itr itsm j jamf jan joined joinery joins json judge
+jul k k7q2 kanban kb keeping keyed keys kinds knowledge l l1 l14 l142 l15 l17 l2 labelled lacked lacking lacks ladder
+lagging landed landing lands lapses largest larkmoor lasts latest laughs layer layers lead leading leads leaf leak
+leaning leanings lease leaving ledger leftover legacy legacyautomations legal legitimate legitimately length lessons
+letters levels lf lies lifecycle likewise limit limited limits lineage linked linking lint linted listed listing lists
+listview literal lives load loc locally location locations lock locked locks log logged logic login logo logs lone
+longer lookalike lookup loop loses lower lowercase lowest lst mac machine machines maintenance malformed manage
+mandatory manifest manual map mapped mapping maps margins mark markdown marked marker markers marketing marks massive
+master match matchable matched matcher matchers matches matching material math matrix matters max maximum maxitems mb
+mcp md meaning measure measurements measures mechanism median medium members membership memory mentioned merely merged
+merges messenger meta metadata metered microsoft mid migration min minimum minted minus mirror mirrored mirroring
+mirrors mirrorvalue misclassified misleading misleads mismatch misplaced misread misses missing missinglabel mix mixed
+mixes mixing mk mkmcsv7h mkmvd0p6 mkrmrgz6 mm mm3gb9sn mm3jtrd mm3jtrd0 mm73h0ss mmb mmd mode model moderate modified
+modifier modifiers modifies modify monotonic moving msys2 multi multiple multipliers multiply mutation mutations mutex n
+n0 n10 n11 n12 n1a n1b n2 n3 n4 n5 n6 n7 n8 n9 named namespace naming narrated narration narrow narrowed narrows native
+nativeness natives nearest nested nesting neutral newer newest newlines nickname nn nnn noise non nonexistent nonsense
+normalisation normalised notice notifications notified notifies notify notifying noun nov null numbered numbering
+numeric o object objection objections objects objectstate objecttype observation observed obtainable occur offers offset
+older omit omits omitted omitting ones onward op opening operating operation operational operations opportunities
+opportunity opposite opps ops option optional optionally options oracle ordered ordinal ordinary org organisation origin
+original outcome outcomes output outright overflow overlay overridden override overrides oversized overview overviews
+overwrite overwrites overwriting owned ownership owning owns p p1 p10 p14 p50 p90 package padded paged paging paid pain
+pains pair pairs palette paragraph parameter params paraphrase parent parentfolderid parentitemid parents park parked
+parking parse parsed parses parsing partial partner partway passes passing password paste patched path paths pattern
+patterns pause paused payload payloads pays pdf pending people0 peoplevalue percent percentile perform performed
+permanent permission permissioned permissions permitted persist personal persons personsandteams pf pf1 phonetic phrase
+picks pin pinned pins pipe pitch pj pj1 pkg placed placeholder placement plain plaintext planner planted plants platform
+plugin plural plus png poc pointed pointer pointers pointing poll polled pooled portal portals portfolio portfolios
+positions positive positives possessive possibly practical pre precision predates predicted prefix prefixes preflight
+prep prerequisites presence presented presenter presents preset pressure presumed pretooluse preview previous pricing
+primitive primitives printed prints prior private privileged probability probable probe probed probes probing proceeds
+produced produces products profile progress progressive projectboardid projectid promise promised promoted prompt proof
+properly properties property proposal propose proposed proposes proposing prose prospect protect protected protection
+protects prototype provably prove proved proven provenance proves proving provisional provisioned pub publication
+publish published punctuation purple purpose py python pyyaml q q1 q2 q4 qa qi qualified qualifier qualifies quantity
+quarantined quarter queries query querying queued quota quotas quoted r r0 r1 r10 r11 r12 r2 r3 r4 r5 r6 r7 r8 r9 rag
+raise raised raises ramp ran random randomly range rank ranks rate ratelimit rates rating raw rc re reachable reaches
+reaching reactions readable reader readiness realised reasoned rebind rebuild rebuilds rebuilt recap recapture receiver
+receives recency recheck rechecked recipe recipient recipients recognises recolour recommends recomputed recon reconcile
+reconciled reconciliation reconnect reconstruct reconstructable recorded recording recovery recreate recurred redact
+redacted redaction redactions redone ref reference referenced references reflect reflection reflections refresh
+refreshed refreshes refs refusal refuse refused refuses refusing regardless regenerated regenerates regex regexes region
+register registers regular reject rejected rejection rejects rejoined relabel relabelling relate relates relation
+relation21 relation6 relations relationship relative relays release released releases reliable relied remain remaining
+remark remarks remembered removable removal removes rename renamed renames renaming rendered rendering renderings
+renders renumber reordered rep repair repaired repairs repeat repeated repeating repeats replace replaced replacement
+replaces replacing repointed repository represent reproduced requested requesting requestor require required
+requirements requires research researched resembles resend resending resent reservation reserve reserved reset reshaped
+residual resolvable resolve resolved resolves resolving resource resourcenotfoundexception response responses restate
+restated restates resting restore restoring restrict restrictions restricts rests resume resumed resumes retained
+retention retired retried retries retry retrying returned returning returns reusable reuse reused reveal revealed
+reverse reviewed revise revision revisited rewrite rewrites rewritten richest rights ring rings rise risk risky roadmap
+roles roll rolled rolls rollup rollups root roster rotates roughly route routes routinely routing row rows rp rubric
+ruled runtime runtimes s s0 safely safety sales sample sandbox sanitised sat satellite satellites scaffolding scale
+scaled scan scanned scenario scenarios schema schemas scope scoped scoping scratch screen script scripts search seat
+seconds secret section sections sector seed seeded seeding seeds sees segment segments select selected selecting selects
+seller semicolons sending sentence sentences sep separable separate separated separately separates separator separators
 sequence sequences serial serve served server serves services serving session sessions setting settings settled settles
 settling setup severity sha sha256 shaped shapes share shareable shared sharing shas shell ship shipped ships shortcut
 shortens shouldcheckifstatusisnot showing sibling sides signal signals signature signatures signed silence silent
@@ -317,21 +317,21 @@ stamped standalone standing stands starting stated statement statements states s
 stays stem stems stops storage store stored stores str straight strand strands stray strengths strictest strictly string
 strings stripped strips strongest structural structure structured stuck style sub subagent subcommand submission
 subscriber subscribers substituted subtasks succeed succeeds success successful suffix suffixed suffixes suggests suite
-sum summaries summariser summary summed superseded supplied supported surface surfaced surfaces surprise survey survive
-survives suspect swallow swallowed sweep switch switched switches switching symbol symptom sync synced synchronously
-syntax systems t1 tab tables tabs tactics tagged tail takeover taker target targeted targets tax technical terminal
-terminologies terminology tested testing tests text text7 textf2ihoymv texts theme thinnest thirteen thread threshold
-thresholds throwaway ticket tickets tidied tie tied tier tiers ties timed timeout timestamp timestamps timing title
-titled titles tl token tokens tool tools topic torn touched touches tracking3 trailing trajectory transcript transcripts
-transfer transient trap travel travelling travels treat treated treats trigger triggers trimmed trimming trusted
-trusting ts ttp twentieth twenty twice twin txt tying typed types u u1 ui unaddressed unambiguous unanswered unarchive
-unassigned unattributable unauthorized unbound unbuilt uncertain unchanged unchecked unclaimed unclear unconditionally
+sum summaries summariser summary summed superseded superseding supplied supported surface surfaced surfaces surprise
+survey survive survives suspect swallow swallowed sweep switch switched switches symbol symptom sync synced
+synchronously syntax systems t1 tab tables tabs tactics tagged tail takeover taker target targeted targets tax technical
+terminal terminologies terminology tested testing tests text text7 textf2ihoymv texts theme thinnest thirteen thread
+threshold thresholds throwaway ticket tickets tidied tie tied tier tiers ties timed timeout timestamp timestamps timing
+title titled titles tl token tokens tool tools topic torn touched touches tracking3 trailing trajectory transcript
+transcripts transfer transient trap travel travelling travels treat treated treats trigger triggers trimmed trimming
+trusted trusting ts ttp twentieth twenty twice twin txt tying typed types u u1 ui unaddressed unambiguous unanswered
+unarchive unassigned unattributable unauthorized unbound unbuilt uncertain unchanged unchecked unclaimed unclear
 unconfirmed unconnected undecided undeclared underscore undetectable undo undone unfiltered unintended union unique
 units unknown unlock unmade unmet unordered unprepared unpriced unprobed unproved unqualified unread unreadable
 unrecognized unrecorded unrecoverable unrelated unrequested unresolved unsettled unsourced unsupported untargeted
 untested unverified unwired updated updatequestioninput updatequestionorder upload ups upside url urls usable usage
 usedatasettemplate usemlstemplate userprofile utc utf uuid v v0 v1 v2 v3 valid validate validates validation values
-vanish vanishes variable variables variant variants varied varies vary vb1 vendor verb verbally verbatim verdict
+vanish vanishes variable variables variant variants varied varies vary vb1 vendor verb verbally verbatim verbs verdict
 verification verified verifies verify version versions versus viewer viewkind visibility visible visual vnrm
 vocabularies vocabulary void voids volume vx w w1 w2 waits wakes walked walking walkthrough warn warning warnings warns
 weakest wearing web webhook webhooks wedge wedges wf1 wh1 whichever whitelist whitespace widened wider widget widgets
@@ -343,19 +343,24 @@ zero zone
 
 # pinned: shared-phrases
 # G04 (X26 steps 5 and 6, Z12): the capitalised runs of two to four words that the plugin's own shared/*.md and
-# shared/*.txt files write, each word made of letters and a stop word, as reviewed when this list was last written.
+# shared/*.txt files write, each word made of letters and a stop word (A39, R76: or a common word beside at least one
+# stop word), as reviewed when this list was last written.
 # A run of two or more words is dropped from a digest only when it is one of these phrases, or when every word is in
 # X26's own small stop list; a shared/ word on its own no longer drops it. tests/unit/test_leak_wall.py compares this
 # list with the shipped shared/ folder; regenerate it with shared_phrases() as SHARED_WORDS is regenerated.
 SHARED_PHRASES = frozenset(p.strip() for p in """
-a tickets, a za, amz expires, api and ui, api version, b and c, b and r, b and r d, b tickets, battery and gantt, c it,
+a start, a tickets, a za, amz expires, api and ui, api version, b and c, b tickets, battery and gantt, c it,
 calendar and gantt, call lessons, chart and battery, crlf and cr, crm and service, csat survey, csat survey and service,
-dd hh, dd n, e and crm, families b, families b and c, gantt and snapshot, in progress, joinery ops, larkmoor joinery,
-larkmoor joinery ops, mm dd, mm dd hh, mm dd n, mm ddthh, native crm, native crm and service, probe p,
-products services, r a, r b, r b and r, r c, r d, r e, r f, r g, r h, r i, r j, r k, sales activities, sales crm,
-sales rep, sales targets, serial number, service portal, service sla, submission viewer, survey and service, ticket id,
-vibe and ai, work management, workforms submission, workforms submission viewer, x amz, x amz expires, yyyy mm,
-yyyy mm dd, yyyy mm dd hh, yyyy mm dd n, yyyy mm ddthh,
+d and r, d and r h, dashboard and app, dd hh, dd n, doc comments, e and crm, families b, families b and c, family e,
+form and app, gantt and snapshot, group title, http put, in progress, joinery ops, larkmoor joinery,
+larkmoor joinery ops, microsoft teams, mm dd, mm dd hh, mm dd n, mm ddthh, native crm, native crm and service, no api,
+one json, only table, priority and planned, priority and planned timeline, probe p, products services, quotes invoices,
+r a, r b, r c, r d, r d and r, r e, r f, r g, r h, r i, r j, r k, ratelimit policy, real call, real call lessons,
+sales activities, sales crm, sales rep, sales targets, serial number, service contacts, service portal, service sla,
+status and date, subitems and timeline, subitems of tickets, submission viewer, survey and service,
+survey and service contacts, template center, the mcp, the portal, the service, the service sla, ticket id, to do,
+vibe and ai, web form, where sla, word and pdf, work management, workforms submission, workforms submission viewer,
+x amz, x amz expires, yyyy mm, yyyy mm dd, yyyy mm dd hh, yyyy mm dd n, yyyy mm ddthh,
 yyyymmdd hhmm,
 """.split(",") if p.strip())
 # end pinned
@@ -612,6 +617,22 @@ SMALL_FIGURE = 100
 # payload, blueprint, sample rows too), warns instead of blocking, in every form the figure rules read, so the write
 # goes ahead and the user sees it. The client's exclusions, at any value, and other clients' figures (the wall) block.
 OWN_FIGURE_EXPECTED = "check the client's own figure is meant for their build; it is reported and kept"
+# A39 (R75): a phone column's value is digits, often eight or more, and not an id. monday takes it keyed by the
+# column's id inside column_values (create_item, change_item_column_values, an item batch), as an object of the
+# digits and a two-letter country code or as a string of the digits and, after a space, the code. Both the place
+# and the shape are needed: the column id (phone, lead_phone, contact_phone, phone_mm8k2q4z) says what the column
+# is, and the shape says the value is a number to dial, so a sentence or another key there keeps every rule.
+COLUMN_VALUES = frozenset(("columnvalues",))  # column_values or columnValues, read without underscores or case
+PHONE_COLUMN = re.compile(r"(?:[a-z]+_)?phone(?:\d+|_{1,2}[a-z0-9]+)?")
+PHONE_DIGITS = re.compile(r"\+?\d{4,15}")  # at most fifteen digits, as an international number has
+PHONE_TEXT = re.compile(r"\+?\d{4,15}(?:[ \t][A-Za-z]{2})?")
+COUNTRY_CODE = re.compile(r"[A-Za-z]{2}")
+# A39 (R77): a status or dropdown column's settings (columnSettings, settings, settings_str or defaults, as an
+# object or a string of JSON) hold a list of labels whose colour, index and position are numbers of monday's, not
+# the record's, so they raise no number warning; the label's own text is read as before.
+SETTINGS_KEYS = frozenset(("columnsettings", "settings", "settingsstr", "defaults"))
+LABEL_LISTS = frozenset(("labels",))
+LABEL_NUMBER_KEYS = frozenset(("color", "index", "position"))
 
 
 # The frame (a copy of ledger.py's, nod 2 and W91): the envelope, the refusal helper, the parser.
@@ -2645,6 +2666,8 @@ class Unit:
         self.strand, self.mode, self.kind, self.structural = strand, mode, kind, structural
         self.raw, self.labels, self.raw_json = raw, labels, False
         self.sample = sample  # A33 (R69): a value of an item batch, invented, so its numbers raise no warning
+        self.phone = False  # A39 (R75): a phone column's value in column_values, which the id row skips
+        self.label = False  # A39 (R77): a label's colour, index or position in a column's settings, never warned
         self.joins = False  # G19 (R53): whether the string is part of its payload's joined text
         self.own = (file, ("block",) if mode == "client-safe-block" else ("body", "block"))
         if mode in ("blueprint", "glossary"):
@@ -2761,7 +2784,7 @@ class Check:
                 if self.unit.mode == "terms" and row.cls != "firm":
                     continue
                 is_id = row is id_row
-                if is_id and (self.unit.structural or self.unit.raw_json):
+                if is_id and (self.unit.structural or self.unit.raw_json or self.unit.phone):  # A39 (R75)
                     continue
                 if is_id and masked is None:  # F31: only a link with a scheme hides its ids
                     masked = [Variant(mask(v.text, real_links(v.text)), v.offsets) for v in variants]
@@ -3052,8 +3075,8 @@ class Check:
                 self.hit("split-figure", None, "warn", start, end, "the client figure %s written in split form" %
                          show(figure), OWN_FIGURE_EXPECTED, file)
                 return
-        if self.unit.sample:  # A33 (R69): a sample row's numbers are invented, so none is warned as a record number
-            return
+        if self.unit.sample or self.unit.label:  # A33 (R69): a sample row's numbers are invented, and A39 (R77) a
+            return  # label colour is a setting, so neither is warned as a record number
         for figure, fprec, file, _ in record:
             if probe.matches(figure, fprec):
                 self.hit("split-figure", None, "warn", start, end, "a number of the client record written in split "
@@ -3068,8 +3091,9 @@ class Check:
                 break
         # A33 (R69): a sample row's numbers are invented (A28), so they are warned neither as record numbers nor as
         # numbers to check; its exclusions still block on them, and the client's cost figures and percentages warn
-        # on them as anywhere else in the build (A34, R70).
-        quiet = in_link or (number.plain and number.value >= 10 ** 7) or self.unit.sample
+        # on them as anywhere else in the build (A34, R70). A39 (R77): a label's colour, index or position in a status
+        # or dropdown column's settings is quiet the same way, and its exclusions and the client's cost figures stay.
+        quiet = in_link or (number.plain and number.value >= 10 ** 7) or self.unit.sample or self.unit.label
         if number.percent:
             for figure, fprec, file, _ in cost_percent:
                 if number.matches(figure, fprec):
@@ -3349,6 +3373,37 @@ UTC_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 CALENDAR_WORDS = frozenset("""monday tuesday wednesday thursday friday saturday sunday january february march april
 may june july august september october november december""".split())
 WALL_JOINERS = frozenset(("of", "and", "the", "de"))  # X26 step 2: they may join two capitalised tokens
+# A39 (R76): what an index entry does not publish as a name, though X26 step 5 keeps it. A harvested run that
+# starts or ends with one of FUNCTION_WORDS, written in lower or title case, is a sentence's words around a name
+# (And the CRM, The Installed, An AI, So Tallowmere); the name inside it is a candidate of its own. A word made
+# of one to three letters and then digits (CODE_WORD) is a key or a code of the record's own plan (P2, C10, AS1,
+# A37), not a name, and so is a run that holds one. EVERYDAY_WORDS, beside the common words and the shared/ words,
+# are the ordinary words a record capitalises without naming anything: compass and time-zone words, number words,
+# month abbreviations, holidays, the words of a transcript's header and speaker labels, and the words a speaker
+# starts a sentence with.
+FUNCTION_WORDS = frozenset("""
+a an the this that these those some any each every all both either neither no not i me my mine we us our ours you
+your yours he him his she her hers it its they them their theirs there here who whom whose what which why how where
+when whenever while whether if then than so and or but nor yet because as though although unless until since of in
+on at to for from by with into onto upon about over under after before between through during without within is are
+was were be been being am do does did has have had ill im ive id youre youll youve youd hes shes thats theres theyre
+theyll theyve weve wed dont doesnt didnt cant wont isnt arent wasnt werent wouldnt couldnt shouldnt lets whats hi
+hello hey yes oh ok okay well yeah yep
+""".split())
+CODE_WORD = re.compile(r"[a-z]{1,3}\d{1,4}")
+GENERIC_WORDS = STOP_WORDS | CALENDAR_WORDS  # titles, acronyms, days and months: a run of everyday words holding one
+EVERYDAY_WORDS = frozenset("""
+north south east west central northern southern eastern western northeast northwest southeast southwest northeastern
+northwestern southeastern southwestern midwest midwestern pacific mountain atlantic
+twelve fifteen sixteen seventeen eighteen nineteen thirty fifty sixty seventy eighty ninety billion dozen sixth
+seventh eighth ninth tenth eleventh twelfth thirtieth hundredth
+feb apr aug sept oct
+christmas thanksgiving easter halloween hanukkah diwali ramadan
+participant participants recorder hosts attendee interviewer moderator facilitator administrator
+yeah yep yup nope hi hey hiya bye goodbye sorry cheers huh hmm um uh er erm ah oops wow absolutely definitely totally
+basically literally obviously officially unofficially realistically accurately apparently seriously frankly
+understood cool lovely brilliant wonderful fantastic awesome funny thatll thatd wholl
+""".split())
 RUN_BREAK = re.compile(r"[.!?][\"'”’)\]]*\s|\n[ \t]*\n")  # a sentence end or a blank line ends a run (X27)
 # Tokens joined with no space are also fused (X27 type 3). G03: so are the halves of a word broken by a hyphen at a
 # line end, with spaces or tabs around the break, and a word broken by Markdown marks (X24 makes them separators
@@ -3568,7 +3623,9 @@ def shared_vocabulary(base=None):
 def shared_phrases(base=None):
     """G04: the phrases SHARED_PHRASES should hold for the shared/ folder as it is now: each capitalised run of two
     to four words the harvest cuts from its .md and .txt files whose every word is made of letters and is a stop
-    word (X26's small list, the rows of the folder's leak-terms.txt, or the folder's own words). Like
+    word (X26's small list, the rows of the folder's leak-terms.txt, or the folder's own words). A39 (R76): or a
+    common word, when at least one word of the run is a stop word, so a phrase the plugin writes such as monday's
+    Quotes & Invoices is no client's name either; a run of common words alone is never one. Like
     shared_vocabulary(), it serves the test and a reviewed regeneration; the lint itself never calls it."""
     base = Path(base) if base is not None else PLUGIN / "shared"
     rows = parse_list(read_bytes(base / "leak-terms.txt").decode("utf-8-sig"), SHIPPED_NAME, local=False)
@@ -3578,7 +3635,8 @@ def shared_phrases(base=None):
         if path.is_file() and path.suffix.lower() in (".md", ".txt"):
             text = read_bytes(path).decode("utf-8-sig").replace("\r\n", "\n")
             for words in harvest(text, frozenset(), frozenset(), phrases=frozenset()):
-                if len(words) > 1 and all(w.isalpha() and w in stop for w in words):
+                if len(words) > 1 and all(w.isalpha() and (w in stop or w in COMMON_WORDS) for w in words) and \
+                        any(w in stop for w in words):
                     found.add(" ".join(words))
     return found
 
@@ -3601,9 +3659,16 @@ def kept(words, stop, small, initials=False, phrases=SHARED_PHRASES):
     return (word,) if len(word) >= 3 or (len(word) == 2 and initials) else None
 
 
-def harvest(text, stop, small, alt=False, phrases=SHARED_PHRASES):
+def edge_word(token):
+    """A39 (R76): a function word at a run's edge, unless it is written in capitals as an acronym (US, IT, OR)."""
+    return token.word in FUNCTION_WORDS and not (token.upper and len(token.word) > 1)
+
+
+def harvest(text, stop, small, alt=False, phrases=SHARED_PHRASES, entry=False):
     """X26 steps 2 to 4 over one D text: the capitalised runs and their sub-runs, the acronyms and the parts of
-    every e-mail address, each kept by the filters of steps 5 and 6 (with alt, G02's second reading)."""
+    every e-mail address, each kept by the filters of steps 5 and 6 (with alt, G02's second reading). With `entry`
+    (an index entry's harvest, A39 R76), a run of two or more words that starts or ends with a function word is not
+    a candidate; its sub-run without that word still is."""
     folded = fold(text, alt=alt)
     tokens, gaps = wall_cut(text, folded)
     found, k = set(), 0
@@ -3625,6 +3690,8 @@ def harvest(text, stop, small, alt=False, phrases=SHARED_PHRASES):
         for a in range(len(run)):
             for b in range(a + 1, min(len(run), a + 4) + 1):
                 first, last = tokens[run[a]], tokens[run[b - 1]]
+                if entry and b - a > 1 and (edge_word(first) or edge_word(last)):
+                    continue
                 if first.cap and last.cap:
                     candidate = kept([tokens[x].word for x in run[a:b]], stop, small, b - a == 1 and first.upper,
                                      phrases)
@@ -3644,6 +3711,27 @@ def harvest(text, stop, small, alt=False, phrases=SHARED_PHRASES):
             if candidate:
                 found.add(candidate)
     return found
+
+
+def generic(words, stop):
+    """A39 (R76): a harvested candidate that names nothing, so an index entry does not publish it: a key or a code
+    (CODE_WORD), or a run that holds one; a single word of EVERYDAY_WORDS, or its plural; or a run whose every word
+    is an everyday one (a common word, a stop or shared/ word, a word of EVERYDAY_WORDS, a joiner, or a plural or
+    inflected form of one) and that holds a title, an acronym, a day or a month of X26 step 6 (GENERIC_WORDS:
+    Account ID, Try the CRM). The product words and the shipped rows' words are not among them, since firms name
+    themselves with work, service or management and a method row holds everyday words (store); a run of common or
+    shared/ words alone, such as Blue Harbour, Signal Path or Cold Store, stays a name (G04). Every run's sub-runs
+    are candidates of their own, so a name inside such a run stays published."""
+    if any(CODE_WORD.fullmatch(word) for word in words):
+        return True
+
+    def everyday(word):
+        return word in COMMON_WORDS or word in stop or word in EVERYDAY_WORDS or word in WALL_JOINERS or \
+            any(stem in COMMON_WORDS or stem in stop or stem in EVERYDAY_WORDS for stem in inflection_stems(word))
+
+    if len(words) == 1:
+        return words[0] in EVERYDAY_WORDS or any(stem in EVERYDAY_WORDS for stem in plural_stems(words[0]))
+    return any(word in GENERIC_WORDS for word in words) and all(everyday(word) for word in words)
 
 
 def name_digests(candidates, vocabulary_keys):
@@ -3748,7 +3836,9 @@ def build_entry(run, client, slug, former=()):
     """This record's clients-index/1 lists (X02, X25, X26): names, phonetic keys, exclusion terms and figures, and the
     sorted single words the names publish (G16, for index's output). The client's former names (R40) are published
     in X26 step 1's forms beside its name, so a renamed client stays walled under its old names for every other
-    record. A36 (R71): the names of the test workspaces the record's ledger holds as referenced are not harvested."""
+    record. A36 (R71): the names of the test workspaces the record's ledger holds as referenced are not harvested.
+    A39 (R76): nor are the runs that start or end with a function word, and generic() drops the codes, the everyday
+    words and the short generic phrases, so the entry publishes names."""
     stop, vocabulary_keys, small = wall_stop(run)
     candidates, lower = set(), set()
     referenced = referenced_workspaces(run)
@@ -3757,14 +3847,16 @@ def build_entry(run, client, slug, former=()):
         if piece and referenced:
             piece = unnamed(piece, referenced)
         if piece:
-            candidates |= harvest(piece, stop, small)
+            candidates |= harvest(piece, stop, small, entry=True)
             lower |= lower_words(piece)
             if has_alt(piece):
-                candidates |= harvest(piece, stop, small, alt=True)
+                candidates |= harvest(piece, stop, small, alt=True, entry=True)
                 lower |= lower_words(piece, alt=True)
     # G16 (R47): a harvested single word is published only when the record never writes it in lower case as prose,
     # since a real name is capitalised every time; a run keeps it, and X26 step 1's forms below are always kept.
-    candidates = {words for words in candidates if len(words) > 1 or words[0] not in lower}
+    # A39 (R76): nor is a candidate that names nothing (generic): a code, an everyday word, a short generic phrase.
+    candidates = {words for words in candidates if (len(words) > 1 or words[0] not in lower) and
+                  not generic(words, stop)}
     named = [client] + list(former)
     for value, alt in [(slug, False)] + [(v, False) for v in named] + [(v, True) for v in named if has_alt(v or "")]:
         forms = [w for w in [words_of(value, alt)] if w]  # X26 step 1: always included
@@ -4519,14 +4611,44 @@ def file_units(run, rel, path, strand, seq):
     return mode, [Unit(rel, kept, (seq, 0), strand=strand, mode=mode, raw=raw)]
 
 
+def child_place(place, key, parent):
+    """A39 (R75, R77): where the value under `key` of the object `parent` sits, for the two values the rules read by
+    their place: "values" (a column_values map, keyed by column id), "phone" (a phone column's value there),
+    "phone-number" (the digits of a phone value written as {phone, countryShortName}), "settings" (a column's settings
+    or defaults), "labels" (their label list) and "label-number" (a label's colour, index or position). None for any
+    other value, so the rules read it as before."""
+    folded = key.replace("_", "").lower()
+    if place == "values":
+        return "phone" if PHONE_COLUMN.fullmatch(key) else None
+    if place == "phone":
+        return "phone-number" if key == "phone" and phone_object(parent) else None
+    if place == "labels":
+        return "label-number" if folded in LABEL_NUMBER_KEYS else None
+    if place == "settings" and folded in LABEL_LISTS:
+        return "labels"
+    if place in ("phone-number", "label-number"):
+        return None
+    return "values" if folded in COLUMN_VALUES else "settings" if folded in SETTINGS_KEYS else None
+
+
+def phone_object(value):
+    """A39 (R75): a phone column's value as monday takes it in JSON: the digits and a two-letter country code, and
+    nothing else beside them."""
+    return isinstance(value, dict) and set(value) == {"phone", "countryShortName"} and \
+        isinstance(value["countryShortName"], str) and bool(COUNTRY_CODE.fullmatch(value["countryShortName"]))
+
+
 def payload_units(file, data, strand, seq, sample=False):
     """X22, Y08: every string, every object key and every number at every depth, a string holding JSON walked as
     JSON as well; a digit-only value under a structural id key is marked structural, and so (A33, R66) is an object
     key made only of digits, as monday keys a widget's or a mirror's settings by board id. With `sample` (A33, R69:
-    an item batch, whose values are all invented), every unit is marked sample. The walk is iterative."""
-    units, stack, count = [], [("$", data, 1, False)], 0
+    an item batch, whose values are all invented), every unit is marked sample. A39: a phone column's value in
+    column_values, in the shapes monday takes, is marked phone (R75), and a label's colour, index or position in a
+    column's settings is marked label (R77); child_place() tells the place, which a string holding JSON passes on to
+    the JSON inside it. The walk is iterative."""
+    units, stack, count = [], [("$", data, 1, False, None)], 0
     while stack:
-        path, value, depth, structural = stack.pop()
+        path, value, depth, structural, place = stack.pop()
         if depth > DEPTH_LIMIT:
             raise cannot(file, path, "the payload is nested deeper than %d levels" % DEPTH_LIMIT,
                          "a tool input of ordinary depth")
@@ -4540,16 +4662,22 @@ def payload_units(file, data, strand, seq, sample=False):
                                   kind="payload", structural=is_structural(key), sample=sample))
                 if structural_key(key) and isinstance(sub, list):
                     for index, item in enumerate(sub):
-                        pushed.append(("%s[%d]" % (sub_path, index), item, depth + 1, is_structural(item)))
+                        pushed.append(("%s[%d]" % (sub_path, index), item, depth + 1, is_structural(item), None))
                     continue
-                pushed.append((sub_path, sub, depth + 1, structural_key(key) and is_structural(sub)))
+                pushed.append((sub_path, sub, depth + 1, structural_key(key) and is_structural(sub),
+                               child_place(place, key, value)))
             stack.extend(reversed(pushed))
-        elif isinstance(value, list):
-            stack.extend(reversed([("%s[%d]" % (path, i), item, depth + 1, False) for i, item in enumerate(value)]))
+        elif isinstance(value, list):  # A39 (R77): a label list's items are labels; no other place reaches a list
+            inner = place if place == "labels" else None
+            stack.extend(reversed([("%s[%d]" % (path, i), item, depth + 1, False, inner)
+                                   for i, item in enumerate(value)]))
         elif isinstance(value, str):
             unit = Unit(file, value, (seq, len(units)), field=path, strand=strand, kind="payload",
                         structural=structural, sample=sample)
             unit.joins = not structural  # G19 (R53): a structural id is structure, as a key is
+            unit.phone = place == "phone" and bool(PHONE_TEXT.fullmatch(value)) or \
+                place == "phone-number" and bool(PHONE_DIGITS.fullmatch(value))
+            unit.label = place == "label-number" and bool(DIGIT_RUN.fullmatch(value))
             units.append(unit)
             # G06: format characters dropped first, and a JSON string literal (a text column's value) parsed too.
             stripped = "".join(c for c in value if c not in IGNORABLE and unicodedata.category(c) != "Cf").strip()
@@ -4562,15 +4690,20 @@ def payload_units(file, data, strand, seq, sample=False):
                     inner = None
                 if isinstance(inner, (dict, list)):
                     unit.raw_json = True  # F26: the walk checks every inner value, so the id rows skip the raw string
-                    stack.append((path + "<json>", inner, depth + 1, False))
+                    # A39 (R77): and a column's settings written as JSON warn on their numbers from the values walked
+                    # inside, where a label's text still warns and its colour does not; the raw string stays quiet.
+                    unit.label = place in ("settings", "labels")
+                    stack.append((path + "<json>", inner, depth + 1, False, place))
                 elif isinstance(inner, str):  # R34: its own unit; the raw string keeps every rule, the id rows too
-                    stack.append((path + "<json>", inner, depth + 1, False))
+                    stack.append((path + "<json>", inner, depth + 1, False, place))
                 if isinstance(inner, (dict, list, str)):
                     unit.joins = False  # G19 (R53): the strings walked inside it join in its place
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
             text = str(value) if isinstance(value, int) else repr(value)
-            units.append(Unit(file, text, (seq, len(units)), field=path, strand=strand, kind="number",
-                              structural=structural, sample=sample))
+            unit = Unit(file, text, (seq, len(units)), field=path, strand=strand, kind="number",
+                        structural=structural, sample=sample)
+            unit.label = place == "label-number" and isinstance(value, int)  # A39 (R77)
+            units.append(unit)
     return units
 
 
@@ -4654,9 +4787,14 @@ def cmd_scan(run):
         strand_folder(run, flag)
     targets = scan_targets(run, run.args.paths, flag)
     if not targets:  # F23 (A9.6, fail closed): a scan that judged nothing never reads as clean
-        where = run.args.paths[0].replace("\\", "/") if run.args.paths else "strands/"
-        raise cannot(where, "path", "no draft or handoff file to check", "the drafts/ or deliverables/handoff/ files "
-                     "of the strand, or the paths to check")
+        if not run.args.paths:  # R78: no path and no draft says so plainly, as the answer and not a fault of the lint
+            folder = strand_folder(run, flag).name if flag else None
+            raise cannot("strands/%s/drafts/" % folder if folder else "strands/", "path",
+                         "no draft exists for strand %s: its drafts/ and deliverables/handoff/ hold no file" % flag
+                         if folder else "no draft exists: no strand's drafts/ or deliverables/handoff/ holds a file",
+                         "the path of the file to check, passed after scan (a file under the strand's drafts/)")
+        raise cannot(run.args.paths[0].replace("\\", "/"), "path", "no draft or handoff file to check",
+                     "the drafts/ or deliverables/handoff/ files of the strand, or the paths to check")
     prepare(run)
     modes, strands = [], set()
     for seq, (rel, path, strand) in enumerate(targets):

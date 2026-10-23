@@ -4,6 +4,7 @@ slug: ""
 name: ""
 account_kind: "own"                    # own | client | sandbox
 build_target: "own-account"            # own-account | client-account | none
+build_target_reason: ""                # why this target, one line; init writes the default's reason
 monday_account_id: "unbound"
 monday_account_slug: "unbound"
 monday_bound_user_id: "unbound"

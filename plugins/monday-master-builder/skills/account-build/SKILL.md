@@ -1,6 +1,6 @@
 ---
 name: account-build
-description: Builds an approved blueprint revision into monday for one strand of a client record, element by element through the ledger and the leak lint, and reads every element back. Run it only after the user has said yes to the approval card that solution-blueprint showed, as /account-build with the strand and version, for example 001/v0.1.
+description: Builds an approved blueprint revision into monday for one strand of a client record, element by element through the ledger and the leak lint, and reads every element back. Run it only after the user has said yes to the approval card that solution-blueprint showed, as /account-build with the strand and version, for example 001/v0.1, and again with `switch-off` once the user says the demonstration is over, to turn the strand's automations off.
 disable-model-invocation: true
 ---
 
@@ -48,7 +48,16 @@ Build in phases and batch the bookkeeping: run `intent` and the payload check fo
 ## After the last write
 
 1. `ledger.py run end --strand <id> --calls-used <n>` writes the live map and releases the lease. Write each `log` entry a ledger command prints through `record.py log` as soon as it is printed.
-2. A departed element that is still live in monday, such as an automation, reaches the live map marked departed; name it in `version.md` `## Build` and in the switch-off UI step too, so the user sees it.
+2. A departed element that is still live in monday, such as an automation, reaches the live map marked departed; name it in `version.md` `## Build`, and for an automation write a UI step to switch it off in monday, since the ledger takes no write on a departed row.
 3. Set `version.md` `state` to `built` and write under `## Build` what was built, what was verified, what was not checkable and what departed; set `STRAND.md` `version_state` to `built`.
 4. Run `record.py check` and `ledger.py check --strand <id>`; both should be clean.
-5. Tell the user: a link to each board and the dashboard, what each view is for, which automations will notify them and when, the UI steps left to do, and anything that did not go as planned. The audit (`solution-audit`) is the next step before the demo is shown.
+5. Tell the user: a link to each board and the dashboard, what each view is for, which automations will notify them and when, that the build switches them off when the user says the demonstration is over, the UI steps left to do, and anything that did not go as planned. The audit (`solution-audit`) is the next step before the demo is shown.
+
+## Switching the automations off
+
+Automations are live from the moment they exist. When the user says the demonstration is over, or asks for them off, the build switches them off itself: `manage_automations` deactivate works on an automation the API made, and `list_automations` reads the state back as `is_active` (G-65). It is one short run through the write path.
+
+1. Take the lease and start a run, as in "Before the first write", step 6; there are no UI steps to write.
+2. For each automation row that is `verified` and `active`: `intent --operation update --notifies user`, the payload check on `{"action": "deactivate", "workflowId": "<id>"}` with `--kind automation`, `manage_automations` deactivate, `record --id <the same id>`, a `list_automations` read on its board, and `verify --result match` when the read shows `is_active` false. The ledger then holds the row `inactive`.
+3. A departed automation takes no `intent`, so it stays a UI step for the user; name it.
+4. `run end`, the log entries, `record.py check` and `ledger.py check --strand <id>`. Tell the user which automations are off, and that one is turned on again the same way with `activate`.

@@ -26,7 +26,19 @@ Internal: never client-facing
 
 ## Headline and top pains
 
+## What this build rests on
+<!-- build-readiness writes this block: the clearance, the count of assumptions in readiness.md and how many are
+structural, then one line per structural assumption as readiness.md writes it, without its question:
+- clearance: <the clearance string>
+- assumptions: <n> in readiness.md, <n> structural
+- <statement> [kind: <leaning | board-architecture | automation-condition>; state: <assumed | accepted>] -->
+
 ## Next step
+
+## Open commitments
+<!-- call-intake writes this block: one line per commitment still open, newest call first. A line leaves the
+block only on evidence that the commitment was kept, from a later input or the user:
+- <what> · owner: <role> · when: <date or unknown> · from: calls/<stem>.md -->
 
 ## Links
 

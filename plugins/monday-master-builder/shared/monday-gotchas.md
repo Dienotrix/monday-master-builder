@@ -209,11 +209,11 @@ Claim: raw `create_widget` has a `filter` argument (ItemsQueryGroup) and accepte
 
 ## 9. Automations and workflows (G-65 to G-69)
 
-## G-65 · Automations made through the API cannot be switched off through the API
-- Claim: for an automation made by `create_automation`, `manage_automations` returned USER_UNAUTHORIZED for deactivate (twice) and activate (once), even for the creator, and it stayed active; the only automation mutation is `delete_board_automation`, untested; an automation left by an interrupted run stayed live.
-- Surface: `create_automation`, `manage_automations`; raw `board_automations`. Ring: release_candidate 2026-10.
-- Do instead: the automations table is approved once as a list (A1) and built last; every row carries a switch-off-in-monday handoff step; a wrong automation is never patched with a second one; on resume, list automations on every touched board (A§9.5); U-01 confirms the switch-off works for the person who follows it.
-- Evidence: executed with read-back (active true, `updated_at` unchanged), 2026-09-11 (automations-workflows; recheck-2 agrees).
+## G-65 · Automations made through the API can be switched off and on through the API
+- Claim: for an automation made by `create_automation`, `manage_automations` deactivate returned `isActive: false` and activate `isActive: true`, and `list_automations` read back `is_active` false and then true, the definition unchanged and `updated_at` moved each time. The probe of 2026-09-11 had USER_UNAUTHORIZED for both verbs, even for the creator; the connector has changed since. Rows under `list_automations`' `legacyAutomations`, made the older way, take neither verb. Delete was not tried, since the plugin deletes nothing.
+- Surface: `create_automation`, `manage_automations`, `list_automations`; raw `board_automations`. Ring: release_candidate 2026-10.
+- Do instead: the automations table is approved once as a list (A1) and built last; a demonstration's automations are switched off by the build, through the write path, when the user says the demonstration is over (account-build); a departed automation, which the ledger no longer writes, is switched off in monday as a UI step; a wrong automation is never patched with a second one; on resume, list automations on every touched board (A§9.5). In a client's account the handoff still says how to switch each one off in monday, because the client has to be able to.
+- Evidence: executed with read-back after each verb, 2026-10-22 (a probe board in a test workspace, one automation notifying only the user, left switched off), superseding the result of 2026-09-11 (automations-workflows; recheck-2).
 - Probe: sandbox write, recipe P-G65 in probe-catalog.md.
 - Impact: high. Status: confirmed.
 
@@ -433,7 +433,7 @@ A claims block, not a gotcha: the per-entry fields above do not apply to it. `de
 4. Never answer a cascade edit with an unqualified yes. Instead: "a label or column change reaches everything that depends on it; we read the dependants live and change it as a listed step" [G-22, G-23, A§9.4].
 5. Never state a nesting depth. Instead: state the consequence — a parent's values become roll-ups of its leaves, filters return top-level items only, and forms cannot ask about the calculated columns [G-75, G-76, G-82, G-88].
 6. Never make an "as long as the names match" integration claim, including identifier matching by domain or name. Instead: name the id the two sides share and how it is read back; names decide nothing [G-07, G-42, G-97].
-7. Never promise an automation as maintenance-free. Instead: "it is live from the moment it exists, and switching it off is a step in monday that we hand over" [G-65, A1].
+7. Never promise an automation as maintenance-free. Instead: "it is live from the moment it exists, and we switch it off when you no longer need it; the handoff shows how to do that in monday" [G-65, A1].
 8. Never quote a scale number that was not read live on the client's own account at prep, and never a roadmap statement that a limit will rise. Instead: say where the practical ceiling comes from in their workflow and offer to read the live limit [G-04, G-90].
 9. Never answer a permissions question with a views answer. Instead: "a filtered view hides, it does not restrict, and it is one careless edit from showing everything"; board-level permissions are proved by a read, everything below is checked by eye [G-87, G-108].
 10. Never state a file-count or file-size limit, and never "the limits are massive". Instead: the mechanism and its two known edges — an upload URL that lasts 15 minutes and no way to delete an asset — because no probe measures the rest [G-58, G-59].

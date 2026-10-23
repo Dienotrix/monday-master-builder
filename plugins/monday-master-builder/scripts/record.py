@@ -40,7 +40,7 @@ ABSOLUTE = re.compile(r"(?<![^\s\"'(])(?:[A-Za-z]:[\\/]|\\\\[^\\\s]+\\|~/|/(?:Us
 LINK = re.compile(r"\]\(<?([^)\s>]+)>?\)")
 MARKER = re.compile(r"\[(?:Q|Q\?|Q/side|Q/recon|Q/doc|X|E|I|A)\]")
 QUOTE = re.compile(r"\[(?:Q|Q\?|Q/side|Q/recon|Q/doc|X)\]")
-LOCATION = re.compile(r"@\d{1,2}:\d{2}:\d{2}|\bcues? \d+|\bL\d+|\bparagraph \d+|§ ?\d+|\bp\. ?\d+|\bregion\b")
+LOCATION = re.compile(r"@\d{1,2}:\d{2}(?::\d{2})?|\bcues? \d+|\bL\d+|\bparagraph \d+|§ ?\d+|\bp\. ?\d+|\bregion\b")
 INTERNAL_ID = re.compile(r"\b\d{3}:[A-Z]+\d|\b\d{3}/v\d+\.\d+|\b\d{8}-\d{4}-[a-z0-9]{4}\b|\brun-\d{4}-\d{2}-\d{2}-\d+"
                          r"|\bG-\d{2,3}\b")
 
@@ -70,7 +70,9 @@ DATE, NONE_DATE, NONE_VERSION = (r"\d{4}-\d{2}-\d{2}", "YYYY-MM-DD"), (r"none|\d
     (r"none|v\d+\.\d+", "none | vX.Y")
 CLIENT_VALUES = {  # G15: client/2 in its order, with each value set or form (None: any one-line string)
     "schema": None, "slug": None, "name": None, "account_kind": one_of("own", "client", "sandbox"),
-    "build_target": one_of("own-account", "client-account", "none"), "monday_account_id": None,
+    "build_target": one_of("own-account", "client-account", "none"),
+    "build_target_reason": None,  # intake fold 2: optional, why the target is what it is; init writes the default's
+    "monday_account_id": None,
     "monday_account_slug": None, "monday_bound_user_id": None, "monday_bound_at": None, "monday_tier": None,
     "monday_tier_read_at": None, "monday_tier_source": one_of("preflight", "client statement", "unread"),
     "products_in_scope": (r"(core|crm|service)(,(core|crm|service))*", "core, crm or service, comma-joined"),
@@ -85,7 +87,9 @@ CLIENT_VALUES = {  # G15: client/2 in its order, with each value set or form (No
     "updated": None,
     # R40: optional and last, where the writer appends it; a record written before it reads as having none
     "former_names": (r"(?:[^;]*[^;\s][^;]*(?:;[^;]*[^;\s][^;]*)*)?", "empty, or earlier names joined by ; with none empty")}
-CLIENT_OPTIONAL = ("former_names",)
+CLIENT_OPTIONAL = ("former_names", "build_target_reason")
+TARGET_REASON = {"own-account": "the default: a proof of concept is built in the user's own account until the user "
+                                "names another target"}
 STRAND_VALUES = {  # G16; the stage is checked against the ladder of the strand's kind
     "schema": None, "strand": None, "slug": None, "title": None, "kind": one_of(*OUTPUT_CLASS),
     "output_class": one_of(*OUTPUT_CLASS.values()), "opened": DATE, "opened_reason": None,
@@ -115,6 +119,9 @@ BUDGETS = (  # G44: (path pattern, lines, KB), warnings; SUMMARY.md past 120 and
     ("strands/*/solution/structure-inventory.md", 200, 0), ("strands/*/versions/*/version.md", 150, 0),
     ("strands/*/versions/*/audit*.md", 200, 0), ("strands/*/versions/*/build-notes.md", 250, 0),
     ("strands/*/drafts/*-admin-prerequisites.md", 60, 0), ("strands/*/close-out.md", 60, 0))
+CALL_BUDGET = (120, 30, 250)  # intake fold 1: a call summary's lines: the floor, transcript words a line, the ceiling
+TYPE_FIELDS = ("seat", "relationship", "direction", "output_class", "room_shape", "money_live")
+TYPE_STATES = ("detected", "assumed", "confirmed", "proposed")  # intake fold 12: proposed, the first word, is assumed
 SUMMARY_HEADINGS = ("## What the work was", "## Pains it served", "## What was built", "## What the client confirmed",
                     "## What must not be broken", "## Cost of change, in the client's words",
                     "## Ownership and switch-off at close", "## Backlog seeds carried forward", "## Dates")
@@ -481,6 +488,7 @@ class Check:
             self.raw_inputs()
             self.references()
             self.text_rules()
+            self.call_types()
             self.budgets()
             self.settings()
             if client is not None:
@@ -837,7 +845,7 @@ class Check:
                     self.block(rel, where, "%s in a draft" % mark.group(0), "drafts free of markers and internal ids")
                 elif cites and QUOTE.search(line) and not LOCATION.search(line):
                     self.warn(rel, where, "a quote marker with no location", "a location on the same line: @HH:MM:SS, "
-                              "cue N, L<n>, paragraph <n>, §<n>, p.<n> or region")
+                              "@MM:SS, cue N, L<n>, paragraph <n>, §<n>, p.<n> or region")
             if not drafts and next((line for line in body.split("\n") if line.strip()), "") != INTERNAL:
                 self.warn(rel, "Internal", "the first line after the front matter is not the internal line", INTERNAL)
         for rel, path in self.files:
@@ -857,6 +865,31 @@ class Check:
         except mc.Refusal:
             self.warn(rel, where, "the link %s leaves the record" % target, "a link to a file inside the record")
 
+    def call_types(self):
+        """Intake fold 12 and 13: each of a call summary's six type-header fields reads `<value> <state>` or
+        `unresolved`, its signals and candidates being the body's; `proposed`, the state word first pinned, reads as
+        `assumed`, so a summary written with it passes. A missing or other value is a warning."""
+        for rel, (fields, _, _) in sorted(self.docs.items()):
+            if not (rel.startswith("calls/") and fields.get("schema") == "call-summary/1"):
+                continue
+            for key in TYPE_FIELDS:
+                words = (fields.get(key) or "").split()
+                if fields.get(key) != "unresolved" and not (len(words) == 2 and words[1] in TYPE_STATES):
+                    self.warn(rel, key, "the field is missing" if key not in fields else "%r is not a value and its "
+                              "state" % fields[key], "the value and its state, detected, assumed or confirmed, or "
+                              "unresolved with its candidates and fallback under ## Call type")
+
+    def budget(self, rule, rel):
+        """(lines, how the figure was reached) of a file's budget. Intake fold 1: a call summary beside its saved
+        transcript has one line per 30 words of it, at least 120 and at most 250."""
+        transcript = self.root / (rel[:-len(".md")] + ".transcript.txt") if rule[0] == "calls/*.md" else None
+        if transcript is None or not transcript.is_file():
+            return rule[1], ""
+        low, per, high = CALL_BUDGET
+        words = len(transcript.read_bytes().decode("utf-8", "replace").split())
+        return max(low, min(high, words // per)), " (one line per %d words of %s, at least %d and at most %d)" % (
+            per, mc.relative(self.root, transcript), low, high)
+
     def budgets(self):
         """C138 to C140, G44: size budgets warn; SUMMARY.md past 120 and the live map past 400 lines block."""
         total, strands = 0, {}
@@ -870,10 +903,10 @@ class Check:
             rule = next((rule for rule in BUDGETS if fnmatch.fnmatchcase(rel, rule[0])), None)
             if rule is None:
                 continue
-            lines = len(mc.read_text(path, rel).splitlines())
-            if lines > rule[1] or (rule[2] and size > rule[2] * 1024):
+            lines, (most, how) = len(mc.read_text(path, rel).splitlines()), self.budget(rule, rel)
+            if lines > most or (rule[2] and size > rule[2] * 1024):
                 self.warn(rel, "budget", "%d lines, %.1f KB" % (lines, size / 1024.0),
-                          "at most %d lines%s" % (rule[1], ", %d KB" % rule[2] if rule[2] else ""))
+                          "at most %d lines%s%s" % (most, ", %d KB" % rule[2] if rule[2] else "", how))
             limit = 120 if rule[0] == "strands/*/SUMMARY.md" else 400 if rel == "live/live-map.md" else None
             if limit and lines > limit:
                 self.block(rel, "budget", "%d lines" % lines, "at most %d lines: blocking past it" % limit)
@@ -1132,7 +1165,9 @@ def cmd_add(root, args, transcript):
                (place, "extension", "the file has no extension", "a file extension") if not extension else None,
                (place, "extension", "an email arrives as pasted text or a screenshot, not %s" % extension,
                 ", ".join(EMAIL_EXTENSIONS)) if kind == "email" and extension not in EMAIL_EXTENSIONS else None,
-               (same, "sha256", "these bytes are saved already as %s" % same, "a file not saved before") if same else None,
+               (same, "sha256", "these bytes are saved already as %s" % same, "a file not saved before" + (
+                   "; a corrected call type keeps the stem: call_type changes in the summary and the correction is "
+                   "logged" if transcript else "")) if same else None,  # intake fold 14: a raw file is saved once
                (place, "came_with", "%s is not a saved email input" % came, "inputs/<an email saved before>")
                if came and (kind != "document" or saves.get(came, {}).get("input_kind") != "email") else None,
                (place, "redactions", "%d" % args.redactions, "zero or more") if args.redactions < 0 else None,
@@ -2041,6 +2076,11 @@ def cmd_init(record, args):
                                            "the folder's name: a slug is never renamed"),
            slug_used(home, root, slug), occupied(root), *strand_reasons(root, args.topic, args.title, args.kind, args.reason, output, "none"))
     client = fill("CLIENT.md", {"slug": slug, "name": args.name})
+    # Intake fold 2: the target the template gives comes with its reason, written and printed, never silently; the
+    # key is appended when a template predates it. A skill that records another target rewrites both through guard.
+    target = mc.front_matter(client)["build_target"]
+    reason = mc.front_matter(client).get("build_target_reason") or TARGET_REASON.get(target, "")
+    client = mc.set_front_matter(client, {"build_target_reason": reason}, "templates/record/CLIENT.md")
     files = {"CLIENT.md": client, "log.md": fill("log.md", {"client": slug}), "CLAUDE.md": CLIENT_CLAUDE,
              "account.json": fill_json("account.json", {"client_slug": slug})}
     if archive == "github":
@@ -2054,11 +2094,12 @@ def cmd_init(record, args):
             mc.write_file(root / name, data, root)
         mc.lease_init(root)
         insert_entries(root, [new_entry("-", "created", "-", slug, ["record created; build target %s; archive %s" % (
-            mc.front_matter(client)["build_target"], archive)])])
+            target, archive)])])
         folder = place_strand(root, "001", args.topic, args.kind, args.reason, strand)
         if build:
             mc.write_file(folder / "solution" / "build.json", build, root)
     return 0, {"slug": slug, "strand": "001", "folder": mc.relative(root, folder), "archive": archive,
+               "build_target": target, "build_target_reason": reason,
                "files": sorted(mc.relative(root, p) for p in root.rglob("*")
                                if p.is_file() and p.relative_to(root).parts[0] != ".work")}
 

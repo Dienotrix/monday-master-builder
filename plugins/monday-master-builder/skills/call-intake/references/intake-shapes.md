@@ -9,12 +9,12 @@ The shapes `call-intake` writes: the call summary, the document or email snapsho
 schema: "call-summary/1"
 call_date: "<YYYY-MM-DD, or unknown>"
 call_type: "<one of the thirteen labels>"
-seat: "<value> proposed"
-relationship: "<value> proposed"
-direction: "<value> proposed"
-output_class: "<value> proposed"
-room_shape: "<value> proposed"
-money_live: "<value> proposed"
+seat: "<value> assumed"
+relationship: "<value> assumed"
+direction: "<value> assumed"
+output_class: "<value> assumed"
+room_shape: "<value> assumed"
+money_live: "<value> assumed"
 sequence: "<1, 2, … or unordered>"
 package: "<none, or pkg-YYYY-MM-DD>"
 provenance: "<first-hand or handed-over>"
@@ -26,7 +26,7 @@ updated: "<YYYY-MM-DDTHH:MM>"
 Internal: never client-facing
 ```
 
-A header field the signals cannot settle reads `"unresolved"`. `proposed` is the pinned word for the best guess intake carries on with; the user's correction makes it `confirmed`. The guard sets `updated`.
+A header field the signals cannot settle reads `"unresolved"`. `assumed` is the pinned word for the best guess intake carries on with; the user's correction makes it `confirmed`. The guard sets `updated`. The call summary starts from `templates/record/call-summary.md`.
 
 Then these level-2 headings, in this order. A section the input says nothing about keeps its heading and reads "Nothing in this input.", so the readiness check sees the gap.
 
@@ -87,16 +87,26 @@ Then:
 - `## Goals`, `## Pains`, `## Constraints`, `## Signals`, `## Entities`, `## Current tools`, `## Figures`, `## Open questions`, `## Conflicts` and the client-safe block, as in a call summary. Quotes are `[Q/doc]` and cite `inputs/<stem>.md §3.2`, `p.4`, `message 2 paragraph 3` or `image region top left`. Desired-state sections feed goals and the requirement trace, never the current-state picture.
 - `## Attachments`, for an email: the snapshots of any attachment the user added with it.
 
-A document adds no `meetings.md` line.
+The snapshot starts from `templates/record/document-summary.md`. A document adds no `meetings.md` line.
 
 ## The `meetings.md` line
 
-`meetings.md` opens with `schema: "meetings/1"`, `client: "<slug>"` and `updated` in its front matter, then the internal line. Under `## Meetings`, newest first, one line per call:
+`meetings.md` starts from `templates/record/meetings.md` and opens with `schema: "meetings/1"`, `client: "<slug>"` and `updated` in its front matter, then the internal line. Under `## Meetings`, newest first, one line per call:
 
 ```
 - <date> · <call type> · calls/<stem>.md · client: <roles>; ours: the user · strands: <ids> · <first-hand or handed-over>
 ```
 
 When a package arrives, a line under `## Packages`: `- pkg-<date>: <what arrived>, from <role>, ordered by <the evidence>; second-hand figures: <list or none>`.
-</content>
-</invoke>
+
+## The seven sweep patterns
+
+Seven flaws an intake can make without noticing, each of which a build then carries. Check for each on every call. A hit is written where the pattern says, as a labelled open question or leaning with the quote it rests on, and never as a silent choice. A field that already holds the flaw is corrected as well. Where nothing in the input fits a pattern, write nothing for it: a pattern forced onto an input would be our framing labelled as the client's. A leaning names its pattern in a few words, as `pattern:` in the readiness file's leanings.
+
+1. **One row where the call describes many.** Look for a record that the call describes as several things moving on their own (a job with many parts, a batch with many items, a pursuit with many documents) while the client's current tool holds one line with one date, status or owner. Write the parts as entities with `parent:` and `moves on its own: yes`, with the quote. Do not decide the structure at intake; the readiness check turns the hit into a leaning and applies `parent-row-with-roll-up`. Example: a client says one order "goes out in two lots, a week apart", and the sheet has one ship date per order.
+2. **A pain with no element that fixes it.** Look for a pain whose wanted outcome the call never connects to anything that would deliver it, or one the call puts down to a record that has no place for it. Keep the pain and its outcome line even when nothing answers it. The readiness check's `### Element per pain` shows the gap with the verdict `none`; see [readiness-guide.md](../../build-readiness/references/readiness-guide.md).
+3. **An alias that names more than one entity, or many names for one.** Give each person, place and organisation one entry, under the name the client uses most. Fold two labels in only when the call shows they are one (a speaker introduced under a nickname, a site called by its street and by its town). Never fold two different people or places into one entry because they are named together ("the two crew leads"); the build may need them apart, as when each place has its own rule. When the call does not settle whether two names are one, keep two entries and put the question under `## Open questions`.
+4. **Our framing labelled as the client's.** Look for a list, stage set, term or requirement that traces only to the user's side (a playback, a demo, a suggestion) and not to a client's own words. Record it as the user's side's, or under `## Agreed` if the client said yes to it, never as a goal, a constraint or the client's own stages. The client's own words for their own steps stay as they said them, even when ours are tidier. See "Always" in [SKILL.md](../SKILL.md).
+5. **A shared resource with no reservation tracking.** Look for anything the client books or reuses across jobs (a crane, a crew, a van, a room, a stock of crates). Set `shared across jobs: yes` on its entity line and quote how it is booked today. Note under `## Open questions` who holds it when, and how clashes are found now, because a build that lists the resource without showing who holds it when lets it be promised twice.
+6. **An artefact that can go stale with nothing to flag it.** Look for anything produced from data that later changes (a printed ticket, a proof, a pack, a quote, a forecast, a list copied from another system). Set `goes stale: yes` on its entity line, with the quote that names the change and the failure it caused. Write the question of how the person would know it is out of date. The readiness check then asks for an element that shows it as outdated.
+7. **An expected output the input cannot support.** Write only what the input carries. A surname never spoken, a date that a weekday alone cannot fix, a talk share from a transcript whose speaker labels were shredded, a figure from a call that was not recorded: each is `unknown` or an estimate with its basis, never a figure or a name filled in. Say under `## What the input cannot see` what is missing and why, and let a figure read "by label, likely understated" where the labels are unreliable. Nothing later depends on a value the input did not carry.

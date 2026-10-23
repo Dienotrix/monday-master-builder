@@ -2074,6 +2074,126 @@ class A36Test(Base):
                 self.assertTrue(self.found(data, "exclusion", severity="block"), data["findings"])
 
 
+class A39Test(Base):
+    """A39 (R75, R77): a phone column's value is not an id, and a label colour or index in a status or dropdown
+    column's settings is not a record number. R76, the index's names, is in test_leak_wall.py, since it needs a second
+    record. The phone numbers are in the 555-01 range, which no line uses."""
+
+    PHONES = {"lead_phone": {"phone": "14195550123", "countryShortName": "US"}, "contact_phone": "4195550188 US",
+              "phone_mm8k2q4z": {"phone": "+14195550142", "countryShortName": "US"}, "phone": "4195550177"}
+
+    # R75: a phone value is not an id
+
+    def test_A39_R75_a_phone_columns_value_in_column_values_passes(self):
+        for data, kind in (
+                ({"board_id": 73100482, "items": [{"item_name": "Lakeview Pumps", "column_values":
+                                                   json.dumps(self.PHONES)}]}, "item_batch"),
+                ({"board_id": 73100482, "item_name": "Lakeview Pumps", "column_values": self.PHONES}, "generic"),
+                ({"boardId": "73100482", "itemId": "73100499", "columnValues": json.dumps(
+                    {"lead_phone": "4195550123 US", "contact_phone": json.dumps(
+                        {"phone": "4195550123", "countryShortName": "US"})})}, "generic")):
+            with self.subTest(kind=kind, data=data):
+                code, found = self.payload(data, kind)
+                self.assertEqual((code, found["findings"]), (0, []))
+        code, data = self.payload({"board_id": 73100482, "column_values": json.dumps(
+            {"lead_phone": "4195550123 US", "long_text": "Board 73100482"})})
+        self.assertEqual(code, 1, data["findings"])  # beside a phone that passes, an id in a text column blocks
+        self.assertEqual({f["field"] for f in self.found(data, "term", "id-patterns")},
+                         {"$.column_values<json>.long_text"})
+
+    def test_A39_R75_digits_written_as_text_or_outside_a_phone_columns_value_still_block(self):
+        for change in ({"item_name": "Call 4195550123"}, {"column_values": {"text_1": "4195550123"}},
+                       {"column_values": {"lead_phone": "Call 4195550123 after six"}},
+                       {"column_values": {"lead_phone": {"phone": "4195550123", "countryShortName": "USA"}}},
+                       {"column_values": {"lead_phone": {"phone": "4195550123", "countryShortName": "US",
+                                                         "note": "the depot line"}}},
+                       {"lead_phone": {"phone": "4195550123", "countryShortName": "US"}},
+                       {"column_values": {"phonetic_notes": "4195550123"}},
+                       {"description": "Ring 419 555 0123 today."}):
+            with self.subTest(change=change):
+                code, data = self.payload(dict({"board_id": 73100482}, **change))
+                self.assertEqual(code, 1, data["findings"])
+                self.assertTrue(self.found(data, "term", "id-patterns", "block"), data["findings"])
+        code, data = self.payload({"board_id": 73100482, "column_values": {"lead_phone": "91000017 US"}})
+        self.assertEqual(code, 1, data["findings"])  # the user's own account id blocks as a phone too (X06)
+        self.assertTrue(self.found(data, "seller-account", severity="block"), data["findings"])
+
+    # R77: a label colour number is not a record number
+
+    def depot(self):
+        write(self.root / "research" / "2026-09-04-depot.md", "- The depot loads 153 crates and 108 trays on a "
+                                                              "Friday.\n")
+
+    @staticmethod
+    def status(labels, key="columnSettings", text=False):
+        settings = {"labels": labels}
+        return {"board_id": 73100482, "columnType": "status", "columnTitle": "Stage",
+                key: json.dumps(settings) if text else settings}
+
+    LABELS = [{"id": 0, "label": "New", "color": 153, "index": 0}, {"id": 1, "label": "Won", "color": 108, "index": 1},
+              {"id": 2, "label": "Lost", "color": "153", "index": 108}]
+
+    def test_A39_R77_label_colours_and_indexes_in_a_columns_settings_raise_no_number_warning(self):
+        self.depot()
+        for data in (self.status(self.LABELS), self.status(self.LABELS, text=True),
+                     self.status(self.LABELS, "settings_str", True),
+                     {"board_id": 73100482, "column_type": "dropdown", "title": "Oven", "defaults": json.dumps(
+                         {"settings": {"labels": [{"id": 1, "label": "Deck oven", "color": 153, "position": 108}]}})}):
+            with self.subTest(data=data):
+                code, found = self.payload(data, "column")
+                self.assertEqual((code, found["findings"]), (0, []))
+
+    def test_A39_R77_a_number_in_a_label_or_outside_the_labels_still_warns_and_an_exclusion_or_an_id_blocks(self):
+        self.depot()
+        for data in (self.status([{"id": 0, "label": "153 crates", "color": 7, "index": 0}]),
+                     {"board_id": 73100482, "name": "Stage", "color": 153},
+                     {"board_id": 73100482, "columnSettings": {"color": 153, "labels": [{"label": "New"}]}},
+                     {"board_id": 73100482, "items": [{"item_name": "Crates", "column_values": {"labels": {
+                         "color": 153}}}]}):
+            with self.subTest(data=data):
+                code, found = self.payload(data, "column")
+                self.assertEqual(code, 2, found["findings"])
+                self.assertTrue(self.found(found, "record-number", severity="warn"), found["findings"])
+        for color, rule, cls in ((47500, "exclusion", None), ("47500", "exclusion", None),
+                                 (73100482, "term", "id-patterns")):
+            with self.subTest(color=color):
+                code, found = self.payload(self.status([{"id": 0, "label": "Hold", "color": color, "index": 0}]),
+                                           "column")
+                self.assertEqual(code, 1, found["findings"])
+                self.assertTrue(self.found(found, rule, cls, "block"), found["findings"])
+
+
+class IntakeFoldTest(Base):
+    """R78: a scan with no path and no draft says that no draft exists, in the exit the contract gives for nothing
+    to check."""
+
+    def test_17_a_bare_strand_scan_with_no_draft_says_no_draft_exists(self):
+        code, data = self.lint("scan", "--strand", "001")
+        self.assertEqual((code, data["verdict"]), (3, "could-not-run"))
+        error = data["error"]
+        self.assertEqual(error["file"], S1 + "/drafts/")
+        self.assertIn("no draft exists for strand 001", error["problem"])
+        self.assertNotIn("handoff file to check", error["problem"])
+        self.assertIn("path of the file to check", error["expected"])
+        self.assertEqual(data["inputs"], [])
+
+    def test_17_a_bare_scan_with_no_draft_anywhere_says_so_without_a_strand(self):
+        code, data = self.lint("scan")
+        self.assertEqual(code, 3)
+        self.assertIn("no draft exists", data["error"]["problem"])
+        self.assertEqual(data["error"]["file"], "strands/")
+
+    def test_17_a_scan_with_a_real_path_or_a_draft_to_find_behaves_as_before(self):
+        rel = self.draft("Orders for the office.")
+        code, data = self.lint("scan", "--strand", "001", rel)
+        self.assertEqual((code, data["findings"]), (0, []))
+        self.assertEqual(self.lint("scan", "--strand", "001")[0], 0)  # the draft is now found without a path
+        (self.root / "strands" / "002-delivery-rounds" / "drafts").mkdir()
+        code, data = self.lint("scan", S2 + "/drafts")
+        self.assertEqual(code, 3)  # a given folder that holds no file keeps R22's message
+        self.assertEqual(data["error"]["problem"], "no draft or handoff file to check")
+
+
 # 2.19 Pins (DECISIONS 4.5, Y08)
 
 class PinTest(unittest.TestCase):

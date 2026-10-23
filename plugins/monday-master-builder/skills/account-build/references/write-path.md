@@ -99,6 +99,7 @@ Conditions:
 
   In demo 3 a condition written inline ("Only if the status column Stage is Quoted") was stored as "is not" (`shouldCheckIfStatusIsNot: true`, G-161). Read that flag on every status condition; a condition stored the wrong way is a `mismatch` and departs to a UI step.
 
+- **Switching an automation off:** `manage_automations` with `action: deactivate` and `workflowId`, the id `list_automations` gives (G-65); `activate` turns it on again. Read it back with `list_automations` on its board: `is_active` false, the definition unchanged and `updated_at` moved. A row in the older read's `legacyAutomations` cannot be changed this way, and the build makes none.
 - **Dashboards and widgets:** `create_dashboard {name, workspace_id, board_ids, board_folder_id, kind}`; `create_widget` per widget, settings from `all_widgets_schema` (G-63), keyed by board id as the schema says.
 
 ## When something goes wrong

@@ -13,6 +13,8 @@ Internal: never client-facing
 
 ## The headings, in order
 
+Four of the seven sweep patterns bear on `## Entities`, `### Leanings`, `### Patterns` and `### Element per pain`: one row for many, a pain with no element, a shared resource, a stale artefact. They are set out in [intake-shapes.md](../../call-intake/references/intake-shapes.md#the-seven-sweep-patterns).
+
 **`## Note`.** One or two sentences: what the check was derived from (the summaries, by path), and that structure assertions stay provisional until the user has seen a real build. Say here when the input states no goal.
 
 **`## Goals`.** One line per goal, `G1`, `G2`, … in the order the record first shows them:
@@ -44,7 +46,7 @@ Every pain line of the summaries is carried, a second line in a theme included. 
 
 ```
 - products: <Work Management | CRM | Service>, by entity; Dev named and not built where it comes up
-- build target: <own-account | client-account> · reason: <why, from CLIENT.md, or: the record's default; the input offered <target>, see Assumptions>
+- build target: <own-account | client-account> · reason: <from CLIENT.md `build_target_reason`, or: the record's default; the input offered <target>, see Assumptions>
 - workspaces: <name> – Ops; <name> – CRM
 - native reuse: <the native boards reused, by entity, each with the client's word where it differs, or: no CRM or Service entity>; found by preflight, or installed from the native templates when the workspace is bare
 ```
@@ -101,5 +103,3 @@ One question per unresolved structural choice comes before a second variant of o
 ## Budget and checks
 
 The file stays under 250 lines. `record.py check` blocks on a `clearance` outside the three strings and `none`, warns when it differs from `STRAND.md`, and warns on a quote marker with no location on its line. No grade, score, gate name or sales verdict appears anywhere in the file.
-</content>
-</invoke>
