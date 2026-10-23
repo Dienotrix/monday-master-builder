@@ -165,7 +165,7 @@ STOP_WORDS = frozenset(("mr", "mrs", "ms", "mx", "dr", "prof", "sir", "ceo", "cf
 # shared_vocabulary() only after `terms` over the changed shared/ has passed against the list below.
 SHARED_WORDS = frozenset("""
 03z 07z 1r1 1r4 20m 25k 30z 42z 45k 90k 9a a1 a11 a12 a13 a14 a16 a17 a18 a19 a2 a20 a22 a23 a24 a25 a25ddc a26 a27 a3
-a38 a43 a5 a6 a7 abandoned abc abm absence absent absolute absolutes accept acceptance accepted accepts access
+a38 a43 a44 a5 a6 a7 abandoned abc abm absence absent absolute absolutes accept acceptance accepted accepts access
 accountproduct accountproductid acting activate activated activation active activities activity additional
 additionalproperties additions additive address addressed adds adjacent adjustment adjustments adopt adopted adopting
 adoption adopts advance adversarial advisory affecting afresh ag ag1 agenda agent agents aggregate agreeing agreement
@@ -232,32 +232,32 @@ forecast foreseeable forgeable forget fork forks format formed formtoken formula
 formulavalue forty fourteen fraction fragment frame framing freeze freezes frequency fresh freshly frozen fully function
 fused g g01 g02 g03 g04 g05 g06 g07 g08 g09 g1 g10 g100 g101 g102 g103 g104 g105 g106 g107 g108 g11 g110 g111 g112 g113
 g114 g115 g116 g12 g13 g130 g131 g132 g133 g134 g135 g136 g137 g138 g14 g140 g141 g142 g143 g144 g145 g15 g150 g151 g152
-g153 g154 g155 g156 g157 g158 g159 g16 g160 g161 g162 g17 g18 g19 g2 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30 g31 g32
-g33 g34 g35 g36 g37 g38 g39 g40 g41 g42 g43 g44 g45 g46 g47 g48 g49 g50 g51 g52 g53 g54 g55 g56 g57 g58 g59 g60 g61 g62
-g63 g64 g65 g66 g67 g68 g69 g70 g71 g72 g73 g74 g75 g76 g77 g78 g79 g80 g81 g82 g83 g84 g85 g86 g87 g88 g89 g90 g91 g92
-g93 g94 g95 g96 g97 g98 g99 gains gantt gap gaps gate gated gates generalised generate generated generates generation
-generations generic genuine genuinely github gitignore global glossary goals gotcha gotchas governance governs gql grade
-graded graders grades grammar grant granted granting grants granularity graphql grew grid grouped grouping grows guard
-guarded guardrails guards guideline h h1 h2 halves handed handful handing handle handled handles handling handoff harm
-harvested hash hashed hashes headed header headers heading headings headline headquarters headroom heartbeat hedge
-hedged helper helpers heuristics hex hh hhmm hidden hide hides hiding hierarchy highest hit hits holder holding
-homophone homophones honest honestly honoured honours hook hooks hop hops host hosted html http human hurts hybrid
-hyphen hyphenated hyphens hypothesis hypothetical ib ib1 identical identification identified identifier identifiers
-identifies identify identity idle ids ignore ignored ignores image images imitating imitation immediate immediately
-impact implausible implement implemented implements import impossible improve improvise improvised inactive inaudible
-inbound incident incidents includedeprecated incoming incomplete inconclusive increments incumbents indent indentation
-indented independence independent independently index indistinguishable industry infer inference inferred info ingested
-inherit inherited inherits init initialnumber injected injects inline inner input inputs ins insensitively insert
-inserts insights install installation installed installs instance instances instruction instructions instrument int
-intake integer integration integrations intended intent inter interim intermediate intermediates internal interrupted
-interruption intersect intro introduced introspection introspects intune invalid invalidcolumntypeexception invented
-inventories inventory invisible invitation invites invoices invoke ip ir irreversible isactive itemsquerygroup itr itsm
-j j1 jamf jan joined joinery joins json judge jul k k7q2 kanban kb keeping keyed keys kinds knowledge l l1 l14 l142 l15
-l17 l2 labelled lacked lacking lacks ladder lagging landed landing lands lapses largest larkmoor lasts latest laughs
-layer layers lead leading leads leaf leak leaning leanings lease leaving ledger leftover legacy legacyautomations legal
-legitimate legitimately length lessons letters levels lf lies lifecycle likewise limit limited limits lineage linked
-linking lint linted listed listing lists listview literal lives load loc locally location locations lock locked locks
-log logged logic login logo logs lone longer lookalike lookup loop loses lower lowercase lowest lst m mac machine
+g153 g154 g155 g156 g157 g158 g159 g16 g160 g161 g162 g163 g17 g18 g19 g2 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29 g30
+g31 g32 g33 g34 g35 g36 g37 g38 g39 g40 g41 g42 g43 g44 g45 g46 g47 g48 g49 g50 g51 g52 g53 g54 g55 g56 g57 g58 g59 g60
+g61 g62 g63 g64 g65 g66 g67 g68 g69 g70 g71 g72 g73 g74 g75 g76 g77 g78 g79 g80 g81 g82 g83 g84 g85 g86 g87 g88 g89 g90
+g91 g92 g93 g94 g95 g96 g97 g98 g99 gains gantt gap gaps gate gated gates generalised generate generated generates
+generation generations generic genuine genuinely github gitignore global glossary goals gotcha gotchas governance
+governs gql grade graded graders grades grammar grant granted granting grants granularity graphql grew grid grouped
+grouping grows guard guarded guardrails guards guideline h h1 h2 halves handed handful handing handle handled handles
+handling handoff harm harvested hash hashed hashes headed header headers heading headings headline headquarters headroom
+heartbeat hedge hedged helper helpers heuristics hex hh hhmm hidden hide hides hiding hierarchy highest hit hits holder
+holding homophone homophones honest honestly honoured honours hook hooks hop hops host hosted html http human hurts
+hybrid hyphen hyphenated hyphens hypothesis hypothetical ib ib1 identical identification identified identifier
+identifiers identifies identify identity idle ids ignore ignored ignores image images imitating imitation immediate
+immediately impact implausible implement implemented implements import impossible improve improvise improvised inactive
+inaudible inbound incident incidents includedeprecated incoming incomplete inconclusive increments incumbents indent
+indentation indented independence independent independently index indistinguishable industry infer inference inferred
+info ingested inherit inherited inherits init initialnumber injected injects inline inner input inputs ins insensitively
+insert inserts insights install installation installed installs instance instances instruction instructions instrument
+int intake integer integration integrations intended intent inter interim intermediate intermediates internal
+interrupted interruption intersect intro introduced introspection introspects intune invalid invalidcolumntypeexception
+invented inventories inventory invisible invitation invites invoices invoke ip ir irreversible isactive itemsquerygroup
+itr itsm j j1 jamf jan joined joinery joins json judge jul k k7q2 kanban kb keeping keyed keys kinds knowledge l l1 l14
+l142 l15 l17 l2 labelled lacked lacking lacks ladder lagging landed landing lands lapses largest larkmoor lasts latest
+laughs layer layers lead leading leads leaf leak leaning leanings lease leaving ledger leftover legacy legacyautomations
+legal legitimate legitimately length lessons letters levels lf lies lifecycle likewise limit limited limits lineage
+linked linking lint linted listed listing lists listview literal lives load loc locally location locations lock locked
+locks log logged logic login logo logs lone longer lookalike lookup loop loses lower lowercase lowest lst m mac machine
 machines maintenance malformed manage mandatory manifest manual map mapped mapping maps margins mark markdown marked
 marker markers marketing marks massive master match matchable matched matcher matchers matches matching material math
 matrix matters max maximum maxitems mb mcp md meaning measure measured measurements measures mechanism median medium
@@ -300,7 +300,7 @@ releases reliable relied remain remaining remark remarks remembered removable re
 renaming rendered rendering renderings renders renumber reordered rep repair repaired repairs repeat repeated repeating
 repeats replace replaced replacement replaces replacing repointed repository represent reproduced requested requesting
 requestor require required requirements requires research researched resembles resend resending resent reservation
-reserve reserved reset reshaped residual resolvable resolve resolved resolves resolving resource
+reserve reserved reset reshaped residual resizing resolvable resolve resolved resolves resolving resource
 resourcenotfoundexception response responses restate restated restates resting restore restoring restrict restrictions
 restricts rests resume resumed resumes retained retention retired retried retries retry retrying returned returning
 returns reusable reuse reused reveal revealed reverse reviewed revise revision revisited rewrite rewrites rewritten
@@ -313,26 +313,26 @@ sentence sentences sep separable separate separated separately separates separat
 serve served server serves services serving session sessions setting settings settled settles settling setup severity
 sha sha256 shaped shapes share shareable shared sharing shas shell ship shipped ships shortcut shortens
 shouldcheckifstatusisnot showing sibling sides signal signals signature signatures signed silence silent silently
-singleselect singular site sits sizes skills skip skipped skips sku sky sla slice slot slug slugs smaller smallest snake
-snapshot snapshots softened software solution sop sorted sortedquestionslist sound source sources span spanning spans
-speaker speakers speaking spec specific specifically speech spell spelled spelling spellings spells split splits spoke
-spoken spoofable spoofing spot spots sq1 ss ssz stable stakeholder stakeholders stakes stale staleness stamp stamped
-standalone standing stands starting stated statement statements states staticimage statistic statistics status95 stays
-stem stems stops storage store stored stores str straight strand strands stray strays strengths strictest strictly
-string strings stripped strips strongest structural structure structured stuck style sub subagent subcommand submission
-subscribe subscriber subscribers substituted subtasks succeed succeeds success successful suffix suffixed suffixes
-suggests suite sum summaries summarise summariser summarize summary summed superseded superseding supplied supported
-surface surfaced surfaces surprise survey survive survives suspect swallow swallowed sweep switch switched switches
-switching symbol symptom sync synced synchronously syntax systems t1 tab tables tabs tactics tagged tail takeover taker
-target targetcolumnid targeted targets tax technical templated terminal terminologies terminology tested testing tests
-text text7 textf2ihoymv texts theme thinnest thirteen thread threshold thresholds throwaway ticket tickets tidied tie
-tied tier tiers ties timed timeout timestamp timestamps timing title titled titles tl token tokens tone tool tools topic
-torn touched touches touching tracking3 trailing trajectory transcript transcripts transfer transient translate trap
-travel travelling travels treat treated treats trigger triggers trimmed trimming trusted trusting ts ttp twentieth
-twenty twice twin txt tying typed types u u1 ui unaddressed unambiguous unanswered unarchive unassigned unattributable
-unauthorized unbound unbuilt uncertain unchanged unchecked unclaimed unclear unconfirmed unconnected undecided
-undeclared underscore undetectable undo undone unfiltered unintended union unique units unknown unlike unlock unmade
-unmet unordered unprepared unpriced unprobed unproved unqualified unread unreadable unrecognized unrecorded
+singleselect singular site sits sizes sizing skills skip skipped skips sku sky sla slice slot slug slugs smaller
+smallest snake snapshot snapshots softened software solution sop sorted sortedquestionslist sound source sources span
+spanning spans speaker speakers speaking spec specific specifically speech spell spelled spelling spellings spells split
+splits spoke spoken spoofable spoofing spot spots sq1 ss ssz stable stakeholder stakeholders stakes stale staleness
+stamp stamped standalone standing stands starting stated statement statements states staticimage statistic statistics
+status95 stays stem stems stops storage store stored stores str straight strand strands stray strays strengths strictest
+strictly string strings stripped strips strongest structural structure structured stuck style sub subagent subcommand
+submission subscribe subscriber subscribers substituted subtasks succeed succeeds success successful suffix suffixed
+suffixes suggests suite sum summaries summarise summariser summarize summary summed superseded superseding supplied
+supported surface surfaced surfaces surprise survey survive survives suspect swallow swallowed sweep switch switched
+switches switching symbol symptom sync synced synchronously syntax systems t1 tab tables tabs tactics tagged tail
+takeover taker target targetcolumnid targeted targets tax technical templated terminal terminologies terminology tested
+testing tests text text7 textf2ihoymv texts theme thinnest thirteen thread threshold thresholds throwaway ticket tickets
+tidied tie tied tier tiers ties timed timeout timestamp timestamps timing title titled titles tl token tokens tone tool
+tools topic torn touched touches touching tracking3 trailing trajectory transcript transcripts transfer transient
+translate trap travel travelling travels treat treated treats trigger triggers trimmed trimming trusted trusting ts ttp
+twentieth twenty twice twin txt tying typed types u u1 ui unaddressed unambiguous unanswered unarchive unassigned
+unattributable unauthorized unbound unbuilt uncertain unchanged unchecked unclaimed unclear unconfirmed unconnected
+undecided undeclared underscore undetectable undo undone unfiltered unintended union unique units unknown unlike unlock
+unmade unmet unordered unprepared unpriced unprobed unproved unqualified unread unreadable unrecognized unrecorded
 unrecoverable unrelated unrequested unresolved unset unsettled unsourced unsupported untargeted untested unverified
 unwired updated updatequestioninput updatequestionorder upload ups upside url urls usable usage usedatasettemplate
 usemlstemplate userprofile utc utf uuid uuids v v0 v1 v2 v3 valid validate validates validation validations values
